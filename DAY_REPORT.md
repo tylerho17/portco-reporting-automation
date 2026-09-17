@@ -300,3 +300,113 @@ A few of my shell commands were blocked by the sandbox (heredocs containing brac
 5. **Chart text isn't size-checked.** Text inside the PNGs is set to 12 pt in charts.py, but check_deck.py can't measure text inside an image.
 6. **Slide 2 shows budget variances, not budget $K figures** (decision 7). If you want the $K budget on the slide, the "every number is in the metrics table" rule would need to include the input columns.
 7. **STUDY_GUIDE.md isn't updated** for the new files. That's Task 6.
+
+## Task 3: Wiring main.py (AI step + deck)
+
+### Where this started
+
+Nothing for this task existed yet. Task 2 had connected only the deck step, so a run without `--skip-ai` still stopped with "AI commentary isn't connected". I built it in 2 commits:
+
+| Commit | What |
+|---|---|
+| `f5e5bc7` | `analyze.save_analysis`: one function writes the analysis JSON for both analyze.py and main.py |
+| `d09bc80` | main.py runs the AI step and always builds the deck; tests; check_main.py |
+
+Now: **408 tests pass** (397 before, 11 new), and all 5 check scripts print "All checks passed". I didn't call the Anthropic API or edit config.yaml or CLAUDE.md.
+
+**⚠ Read "What failed" item 1 first:** a break test of mine deleted `output/northwind_analysis.json`. I restored Claude's summary word for word, but the file's token counts are lost.
+
+### What was built
+
+**main.py: what happens to each company**
+1. Clean, metrics, flags, data gaps, Excel file: unchanged.
+2. **AI step** (skipped with `--skip-ai`):
+   - deletes the old `output/<company>_analysis.json`
+   - builds the payload and calls `analyze.analyze` (first try + one retry, as before)
+   - saves `output/<company>_analysis.json` **whether it passed or failed**
+3. **Deck:** always built.
+
+| What happened | Deck slides 1 and 5 | Result column | Analysis JSON |
+|---|---|---|---|
+| AI passed validation | AI text | `OK` | summary, run_info, payload |
+| AI failed validation after the retry | "AI summary unavailable" | `OK (AI failed)` | summary `null`, run_info (both attempts and their problems), `error`, payload |
+| API error (connection, rate limit, server...) | "AI summary unavailable" | `OK (AI failed)` | summary `null`, `error`, payload |
+| `--skip-ai` | "AI summary unavailable" | `OK (AI skipped)` | not written; an existing one is left alone |
+| Any other error (a bug) | not built | `FAILED: ...` with a traceback | the old one is already deleted |
+
+- **The terminal says why:** e.g. "✗ AI commentary: failed validation after the retry (output/northwind_analysis.json):" followed by each problem. A pass prints attempts, tokens and seconds.
+- **Before any company runs** (not with `--skip-ai`): main.py loads .env and checks for `ANTHROPIC_API_KEY`. If it's missing, main.py prints "ANTHROPIC_API_KEY isn't set: add it to .env, or run with --skip-ai" and exits 1.
+- **Under the summary table:** "⚠ AI summary unavailable for 1 company (Fernhollow): their decks show the placeholder; the reasons are in output/<company>_analysis.json".
+- **output/batch_summary.csv:** already existed (step 5). Same columns, one row per company. The Result column now reads `OK`, `OK (AI failed)`, `OK (AI skipped)` or `FAILED: ...`.
+
+**analyze.py:** `save_analysis(path, payload, summary, run_info, error)`. analyze.py's own command line uses it too, so both write the same file shape. The only change there is a new `error` field.
+
+**tests/test_main.py (9 new tests).** They run the real Northwind workbook through `run_batch` into a temporary folder, with a **fake Claude client** that returns a fixed answer and counts calls. They prove:
+- a passing answer lands on the deck and in the JSON, with 1 call
+- an answer with an invented number (555.5%) is called exactly twice (first try + retry), then the deck shows the placeholder, the result reads "OK (AI failed)", and the JSON keeps the problem. An old good analysis in the folder is replaced, not used.
+- an API error gives "OK (AI failed)", not a failed company
+- a bug inside the AI step fails the company and doesn't leave the old analysis behind
+- `--skip-ai` never calls `analyze()`, never looks for a key, and leaves an existing analysis JSON untouched
+- a missing key stops `main.py --all` before any company runs
+- the result texts, the CSV and the AI-failed warning line
+
+A guard in every test makes creating a real Anthropic client fail the test, so no test can reach the API.
+
+**tests/test_analyze.py (2 new tests):** a saved passing analysis loads in `build_deck.load_analysis`, and a saved failure gives the placeholder.
+
+**check_main.py:**
+- Still uses `--skip-ai` for every run.
+- The `main.py --all --skip-ai` process now runs with no API key and with `ANTHROPIC_BASE_URL` pointed at a dead local port. Even a bug that called Claude couldn't reach it.
+- It also checks that the run didn't write, replace or delete any company's analysis JSON.
+- **New:** `check_skip_ai_never_calls_claude` runs all 3 companies into a temporary folder, with `analyze()`, the key check and the Anthropic client each replaced by a function that stops the check if called. It then checks each deck's slide 1 headline reads exactly "AI summary unavailable" and no JSON was saved.
+- I proved both parts catch a regression by making main.py ignore `--skip-ai`: the process check failed, and so did the in-process check ("--skip-ai called analyze()").
+- **Removed:** "without --skip-ai the run fails loudly" and "if build_deck.py were missing, the deck is skipped". Both behaviors are gone (decisions 1 and 9).
+
+### Decisions I made that you didn't specify
+
+1. **"AI failed" also covers API errors**, not only validation failures. That means any `anthropic.AnthropicError`: connection, rate limit, overload, server error. The numbers on the deck are still valid, which is the reason behind decision K. Any other exception is treated as a bug: the company fails with a traceback, so a coding error can't hide behind "AI failed".
+2. **A missing API key stops the whole run up front** (exit 1) instead of giving every company "OK (AI failed)". It's a setup problem, not an AI answer problem, and the SDK reports it as a plain `TypeError` (see What failed, item 2).
+3. **"OK (AI failed)" still exits 0.** Exit code 1 stays reserved for a company with no outputs. The warning line and the Result column make the failure visible. Tell me if you'd rather a failed AI step made the run exit 1, e.g. for a scheduled job.
+4. **The analysis JSON is saved on failure too**, with `summary: null` and the reason. You can see why Claude's answer was rejected, and `build_deck.py` run later on its own gives the placeholder too. The problems were already in `run_info`; I added an `error` field with the one-line reason.
+5. **The old analysis JSON is deleted before the AI step starts.** That matches Task 2's rule for decks: a crash never leaves last run's file looking current. The cost is that a crash loses an analysis that was paid for, which is exactly what happened to me today (What failed, item 1). Tell me if you'd rather keep the old file until the new one is saved.
+6. **`--skip-ai` leaves an existing analysis JSON alone** and still builds the placeholder deck, as the task says. `python build_deck.py data/northwind.xlsx` can still put the saved AI text on a deck.
+7. **"OK" means the AI text is actually on the deck.** The deck checks the analysis again (Task 2 decision 6). If a passing analysis were ever rejected there, the result reads "OK (AI failed)" and the terminal prints the deck's reason. This shouldn't happen, since both checks run on the same numbers seconds apart.
+8. **The CSV columns didn't change.** The Result column carries the AI status. There's no column for why the AI failed: that's in the terminal and the JSON.
+9. **Removed the "not connected yet" guard and the "build_deck.py missing" skip** (`NotWiredError`, `BUILD_DECK_PATH`, "OK (AI + deck skipped)"). main.py imports build_deck.py at the top, so if that file were missing main.py couldn't even start: the skip could never happen.
+10. **`run_batch` and `run_company` gained `client` and `output_dir` arguments,** used only by tests and checks: a fake Claude client and a temporary folder. The command line always uses the real client and `output/`.
+11. **No `--model` option on main.py.** It uses analyze.py's default, claude-sonnet-5, the recommendation from the model comparison.
+12. **Per-company terminal line on a pass:** attempts, input/output tokens and seconds. No cost in dollars: Task 4 records that.
+13. **Paths inside the project print as `output/...`; others print in full** (`shown_path`). A temporary folder isn't inside the project, and the old `relative_to` call would have crashed on it.
+14. **The AI-on paths are proven in pytest with a fake client, not in check_main.py.** The task says checks must use `--skip-ai`.
+
+### What failed and how I fixed it
+
+All 3 are logged in LEARNINGS.md.
+
+1. **I deleted the real `output/northwind_analysis.json`.**
+   - **How:** to prove check_main.py catches a `--skip-ai` regression, I temporarily made main.py ignore `--skip-ai` and ran the check. That run used the real output/ folder. The AI step deleted the old analysis first (decision 5), then stopped on the missing key. No API call was made. main.py was restored right away (confirmed identical).
+   - **Noticed when:** check_deck.py failed with "No such file". output/ isn't in git, and the v1/v2 files are older prompt versions that fail today's length limits.
+   - **Restored:**
+     - Claude's summary: recovered word for word from a Task 2 session transcript that had printed it. It passes today's validation.
+     - Payload: rebuilt from today's workbook.
+     - `run_info` (tokens, seconds): lost, so it's `null`.
+     - A `restored_note` field in the file says all of this.
+   - **Result:** check_deck.py passes again. Slide 1 shows the same headline ("Runway has fallen to 11.0 mo against a 12.0 mo threshold...").
+   - **Lesson:** deliberate breaks go into a temporary folder. My second break test did.
+2. **A missing API key isn't an Anthropic error.** I tried it against a dead local address before writing the code. The SDK raises a plain `TypeError`, and only when the request is sent, so every company would have shown as a code bug. Fixed by checking the key before the batch (decision 2).
+3. **Two of my new tests were wrong at first.**
+   - The "no old analysis left behind" test passed even with the delete line removed, because there was no old file. It now writes one first; proved by removing the line.
+   - A test looked for "987654.3", but the validator prints it as "987654". Changed the number to 555.5.
+
+Also: the sandbox blocked a few shell commands (a heredoc with braces, a `for` loop, `sed`, and `env -u`). I used the Edit tool, one command per script, or small scripts in /tmp run with `.venv/bin/python`. No effect on the code.
+
+### Unresolved
+
+1. **`output/northwind_analysis.json` is a restoration** (What failed, item 1). The AI text is genuine and validated, but its token counts are gone and its payload was rebuilt. Task 4's live run replaces it.
+2. **The real Claude call through main.py has never run.** Everything AI-on is proven with a fake client that returns the same shape as `client.messages.parse`. Task 4's live run is the first real test. If a real response differs from the fake (e.g. a new stop reason), the existing checks in `analyze.call_claude` still apply.
+3. **Running the checks overwrites real outputs** (this was already true before this task):
+   - check_main.py's last `main.py` run is the broken-workbook test, so `output/batch_summary.csv` ends up holding one "Broken" row
+   - every deck in output/ gets the placeholder
+   - Run `python main.py --all` (or `--skip-ai`) yourself afterwards for the real CSV. Moving check outputs to a temporary folder would need an `--output-dir` option on main.py; tell me if you want it.
+4. **Companies run one after another.** At ~36 s per Sonnet call (model comparison), 275 companies would take about 2.75 hours. Running them in parallel is a later step.
+5. **Exit code on "OK (AI failed)"** (decision 3) and **delete-first** (decision 5) are judgment calls worth a look.
