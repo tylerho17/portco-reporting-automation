@@ -12,24 +12,27 @@ the commentary has nowhere to go until there is a deck, so no API money is spent
 --skip-ai skips step 4 even once the deck exists.
 
 One company failing never stops the batch. The run ends with a summary table
-(company, flags tripped, data gaps, result) and exits with code 1 if any company failed.
+(company, flags tripped, data gaps, result), also saved as output/batch_summary.csv, a warning
+if companies end on different quarters, and exit code 1 if any company failed.
 
 Run: python main.py data/northwind.xlsx
      python main.py --all --skip-ai
 """
 
 import argparse
+import csv
 import sys
 import traceback
 from pathlib import Path
 
 from clean import clean_workbook
 from excel_output import save_metrics_workbook
-from metrics import MISSING, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config
+from metrics import CANNOT_EVALUATE, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config, metric_reasons
 
 PROJECT_DIR = Path(__file__).parent
 DATA_DIR = PROJECT_DIR / "data"
 BUILD_DECK_PATH = PROJECT_DIR / "build_deck.py"
+SUMMARY_CSV_PATH = PROJECT_DIR / "output" / "batch_summary.csv"
 
 # Errors caused by a bad input file (clean.py raises ValueError with a clear message; a missing
 # or unreadable file raises OSError). Anything else is probably a bug, so its traceback is printed.
@@ -100,14 +103,14 @@ def run_company(workbook_path, config, skip_ai):
           f"budget row: {budget_label}")
 
     metrics = compute_metrics(actuals)
-    flags = evaluate_flags(metrics, config)  # latest quarter
+    flags = evaluate_flags(metrics, metric_reasons(actuals, metrics), config)  # latest quarter
     gaps = data_gaps(actuals, metrics, flags)
     result = {
         "company": company_name(workbook_path),
         "quarter": flags[0]["quarter"],
         "flags_total": len(flags),
         "tripped": [flag["flag"] for flag in flags if flag["status"] == TRIP],
-        "cannot_evaluate": [flag["flag"] for flag in flags if flag["status"] == MISSING],
+        "cannot_evaluate": [flag["flag"] for flag in flags if flag["status"] == CANNOT_EVALUATE],
         "gap_count": len(gaps),
         "blank_quarters": blank_quarters(actuals),
     }
@@ -195,6 +198,45 @@ def print_summary(results):
     print(f"\n{len(results) - failed} of {len(results)} companies succeeded")
 
 
+CSV_HEADERS = ["Company", "Latest quarter", "Flags tripped", "Flags total", "Cannot evaluate", "Data gaps",
+               "Blank quarters", "Result"]
+
+
+def csv_row(result):
+    """One company as CSV cells: counts as plain numbers (so a spreadsheet can sort them), blanks if it failed."""
+    if result["error"]:
+        return [result["company"], "", "", "", "", "", "", result_text(result)]
+    return [result["company"], result["quarter"], len(result["tripped"]), result["flags_total"],
+            len(result["cannot_evaluate"]), result["gap_count"], ", ".join(result["blank_quarters"]),
+            result_text(result)]
+
+
+def write_summary_csv(results, path=SUMMARY_CSV_PATH):
+    """Save the summary table as a CSV file (overwritten each run). Returns the path."""
+    path = Path(path)
+    path.parent.mkdir(exist_ok=True)
+    with open(path, "w", newline="") as file:  # newline="": the csv module writes its own line endings
+        writer = csv.writer(file)
+        writer.writerow(CSV_HEADERS)
+        writer.writerows(csv_row(result) for result in results)
+    return path
+
+
+def quarter_mismatch_warning(results):
+    """A warning line if the successful companies don't all end on the same quarter, else None.
+
+    Not a failure: a company can be a quarter behind. But comparing them side by side needs care.
+    """
+    companies_by_quarter = {}  # quarter -> company names, in the order first seen
+    for result in results:
+        if not result["error"]:
+            companies_by_quarter.setdefault(result["quarter"], []).append(result["company"])
+    if len(companies_by_quarter) <= 1:
+        return None
+    groups = "; ".join(f"{quarter}: {', '.join(names)}" for quarter, names in companies_by_quarter.items())
+    return f"⚠ Companies end on different quarters ({groups}) - compare them with care"
+
+
 # ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------
@@ -219,6 +261,10 @@ def main(argv=None):
         return 1
     results = run_batch(paths, load_config(), args.skip_ai)
     print_summary(results)
+    warning = quarter_mismatch_warning(results)
+    if warning:
+        print(warning)
+    print(f"Summary saved: {write_summary_csv(results).relative_to(PROJECT_DIR)}")
     return 1 if any(result["error"] for result in results) else 0
 
 

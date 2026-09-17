@@ -11,6 +11,8 @@ Checks:
 4. If build_deck.py appears before main.py calls it, companies fail loudly instead of
    quietly skipping the deck.
 5. --all ignores Excel's "~$" lock files and anything that isn't .xlsx.
+6. The batch also writes output/batch_summary.csv with the same counts, and prints no
+   quarter warning when every company ends on the same quarter.
 
 No API calls: every run uses --skip-ai, and main.py never calls Claude while build_deck.py
 doesn't exist anyway.
@@ -18,6 +20,7 @@ doesn't exist anyway.
 Run: python check_main.py  -> prints "All checks passed" or stops at the first failure.
 """
 
+import csv
 import io
 import subprocess
 import sys
@@ -32,7 +35,7 @@ import main
 from check_companies import COMPANIES, expected_gaps
 from clean import clean_workbook
 from excel_output import output_path
-from metrics import MISSING, TRIP, compute_metrics, load_config
+from metrics import CANNOT_EVALUATE, TRIP, compute_metrics, load_config
 
 PROJECT_DIR = Path(__file__).parent
 EXPECTED_OK = "OK (AI + deck skipped)"
@@ -67,8 +70,8 @@ def story_flags_text(company):
     """Expected 'Flags tripped' cell, counted from the company's story in check_companies.py."""
     statuses = list(company["expected_flags"].values())
     text = f"{statuses.count(TRIP)} of {len(statuses)}"
-    if statuses.count(MISSING):
-        text += f", {statuses.count(MISSING)} cannot evaluate"
+    if statuses.count(CANNOT_EVALUATE):
+        text += f", {statuses.count(CANNOT_EVALUATE)} cannot evaluate"
     return text
 
 
@@ -129,7 +132,26 @@ def check_batch_run():
             f"Summary row wrong.\nExpected: {expected}\nGot:      {rows[company['name']]}"
         excel = output_path(company["answer_key"].OUTPUT_PATH)
         assert excel.exists() and excel.stat().st_mtime >= started - 1, f"{excel} wasn't saved by this run"
+    check_summary_csv(started)
+    assert "⚠" not in process.stdout, "All three companies end on Q2 2026, so there should be no quarter warning"
     return rows
+
+
+def check_summary_csv(started):
+    """output/batch_summary.csv was written by this run: one row per company, counts from each story."""
+    path = main.SUMMARY_CSV_PATH
+    assert path.exists() and path.stat().st_mtime >= started - 1, f"{path} wasn't saved by this run"
+    with open(path, newline="") as file:
+        rows = {row["Company"]: row for row in csv.DictReader(file)}
+    assert set(rows) == {company["name"] for company in COMPANIES}, f"CSV companies: {sorted(rows)}"
+    for company in COMPANIES:
+        statuses = list(company["expected_flags"].values())
+        row = rows[company["name"]]
+        expected = {"Latest quarter": "Q2 2026", "Flags tripped": str(statuses.count(TRIP)),
+                    "Flags total": str(len(statuses)), "Cannot evaluate": str(statuses.count(CANNOT_EVALUATE)),
+                    "Result": EXPECTED_OK}
+        got = {key: row[key] for key in expected}
+        assert got == expected, f"CSV row for {company['name']}.\nExpected: {expected}\nGot:      {got}"
 
 
 def check_failure_does_not_stop_batch(folder, config):

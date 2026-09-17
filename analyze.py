@@ -26,8 +26,9 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
 
 from clean import clean_workbook
-from metrics import (MISSING, PASS, TRIP, compute_metrics, data_gaps, evaluate_flags,
-                     format_value, load_config, runway_at_next_budget)
+from metrics import (CANNOT_EVALUATE, INPUT_LABELS, METRIC_LABELS, MISSING_INPUT, PASS, REASON_DISPLAY, TRIP,
+                     compute_metrics, data_gaps, display_value, evaluate_flags, flag_status_text, format_value,
+                     load_config, metric_reasons, runway_at_next_budget, runway_context_label)
 
 DEFAULT_MODEL = "claude-sonnet-5"
 MAX_ATTEMPTS = 2           # first try + one retry
@@ -58,74 +59,48 @@ class BoardSummary(BaseModel):
 # 2. The payload: the facts Claude sees, already formatted as text
 # ---------------------------------------------------------------------------
 
-# Column -> label shown to Claude. Raw inputs first, then computed metrics.
-INPUT_LABELS = {
-    "net_burn": "Net burn ($K)",
-    "ending_cash": "Ending cash ($K)",
-}
-METRIC_LABELS = {
-    "ending_arr": "Ending ARR ($K)",
-    "net_new_arr": "Net new ARR ($K)",
-    "nrr": "NRR (annualized)",
-    "grr": "GRR (annualized)",
-    "gross_margin": "Gross margin",
-    "arr_qoq": "ARR growth QoQ",
-    "arr_yoy": "ARR growth YoY",
-    "revenue_qoq": "Revenue growth QoQ",
-    "revenue_yoy": "Revenue growth YoY",
-    "pipeline": "Pipeline ($K)",
-    "pipeline_qoq": "Pipeline growth QoQ",
-    "fcf_margin": "FCF margin",
-    "rule_of_40": "Rule of 40",
-    "burn_multiple": "Burn multiple",
-    "burn_vs_budget": "Net burn vs budget",
-    "net_new_arr_vs_budget": "Net new ARR vs budget",
-    "arr_vs_budget": "Ending ARR vs budget",
-    "cac_payback_months": "CAC payback",
-    "runway_months": "Runway at current burn",
-}
-STATUS_LABELS = {TRIP: "TRIPPED", PASS: "passed", MISSING: MISSING}
+# Labels (INPUT_LABELS, METRIC_LABELS) come from metrics.py, so every output uses the same words.
+STATUS_LABELS = {TRIP: "TRIPPED", PASS: "passed"}  # a flag that can't be evaluated shows its reason instead
 
 
 def input_trend(actuals, column):
-    """One raw input across all quarters, e.g. {"Q3 2024": "2,400", ...}."""
-    return {q: "data missing" if pd.isna(v) else format_value(column, v)
+    """One raw input across all quarters, e.g. {"Q3 2024": "2,400", ...}. A blank input is data missing."""
+    return {q: REASON_DISPLAY[MISSING_INPUT] if pd.isna(v) else format_value(column, v)
             for q, v in actuals[column].items()}
 
 
-def metric_trend(metrics, gaps, column):
-    """One metric across all quarters. Distinguishes a data gap from 'no prior period'."""
-    trend = {}
-    for quarter, value in metrics[column].items():
-        if quarter in gaps.get(column, []):
-            trend[quarter] = "data missing"
-        elif pd.isna(value):
-            trend[quarter] = "n/a (no prior period)"  # e.g. YoY in the first 4 quarters
-        else:
-            trend[quarter] = format_value(column, value)
-    return trend
+def metric_trend(actuals, metrics, reasons, column):
+    """One metric across all quarters: its value, or why there isn't one (data missing / no prior period / n/m)."""
+    return {quarter: display_value(actuals, metrics, reasons, column, quarter) for quarter in metrics.index}
 
 
-def describe_flag(flag, config):
+def flag_status(flag):
+    """'TRIPPED', 'passed', or 'cannot evaluate — <reason>'."""
+    return flag_status_text(flag) if flag["status"] == CANNOT_EVALUATE else STATUS_LABELS[flag["status"]]
+
+
+def describe_flag(flag, config, actuals, metrics, reasons):
     """One flag as text: name, status, value, threshold."""
     if flag["metric"] is None:  # the combo rule has no single value
         size = config["combo_lookback_quarters"]
-        return {"flag": flag["flag"], "status": STATUS_LABELS[flag["status"]],
+        return {"flag": flag["flag"], "status": flag_status(flag),
                 "value": "see NRR and Pipeline trends",
                 "rule": f"NRR down and pipeline up at every step over the last {size} quarters"}
-    return {"flag": flag["flag"], "status": STATUS_LABELS[flag["status"]],
-            "value": format_value(flag["metric"], flag["value"]),
+    return {"flag": flag["flag"], "status": flag_status(flag),
+            "value": display_value(actuals, metrics, reasons, flag["metric"], flag["quarter"]),
             "threshold": format_value(flag["metric"], flag["threshold"])}
 
 
 def build_payload(company, actuals, next_budget, config):
     """Run the step 2 math and package every fact Claude may use, formatted as text."""
     metrics = compute_metrics(actuals)
-    flags = evaluate_flags(metrics, config)
+    reasons = metric_reasons(actuals, metrics)
+    flags = evaluate_flags(metrics, reasons, config)
     gaps = data_gaps(actuals, metrics, flags)
+    runway = runway_at_next_budget(actuals, next_budget)
 
     trends = {label: input_trend(actuals, column) for column, label in INPUT_LABELS.items()}
-    trends.update({label: metric_trend(metrics, gaps, column) for column, label in METRIC_LABELS.items()})
+    trends.update({label: metric_trend(actuals, metrics, reasons, column) for column, label in METRIC_LABELS.items()})
 
     return {
         "company": company,
@@ -134,11 +109,12 @@ def build_payload(company, actuals, next_budget, config):
         # Counts are computed here so Claude quotes them instead of counting.
         "flags_tripped": sum(f["status"] == TRIP for f in flags),
         "flags_passed": sum(f["status"] == PASS for f in flags),
-        "flags_cannot_evaluate": sum(f["status"] == MISSING for f in flags),
+        "flags_cannot_evaluate": sum(f["status"] == CANNOT_EVALUATE for f in flags),
         "flags_total": len(flags),
-        "flags_latest_quarter": [describe_flag(f, config) for f in flags],
-        "runway_if_burn_returns_to_plan": format_value(  # latest cash at next quarter's budgeted burn
-            "runway_months", runway_at_next_budget(actuals, next_budget)),
+        "flags_latest_quarter": [describe_flag(f, config, actuals, metrics, reasons) for f in flags],
+        # latest cash at next quarter's budgeted burn
+        "runway_if_burn_returns_to_plan": (runway_context_label(runway, next_budget is not None)
+                                           or format_value("runway_months", runway)),
         "trends_by_quarter": trends,
         "data_gaps": {METRIC_LABELS.get(name, name): quarters for name, quarters in gaps.items()},
     }
@@ -161,7 +137,8 @@ Rules for numbers - an automated check enforces these, and any violation fails y
 - Use only numbers that appear in the data, written exactly as shown. Do not round or reformat them.
 - Never calculate a new number: no differences, sums, averages, ratios or percentage-point changes. To describe a change, quote the start value and the end value ("went from A to B").
 - Money figures are in $K. Quote them as shown followed by "K" (for example "$" + value + "K"); do not convert to millions.
-- Where the data says "data missing", say the data is missing. Never estimate it.
+- Keep minus signs exactly as shown: a negative value is written with its minus sign, never as a positive number with "below" or "short".
+- Where the data says "data missing", say the data is missing. Never estimate it. "n/a (no prior period)" means there is no earlier quarter to compare with, and "n/m" means the figure isn't meaningful - neither is missing data.
 
 What to write:
 - headline: one sentence, at most 25 words, with the single most important takeaway for the board.
@@ -181,13 +158,20 @@ Accuracy of framing:
 # 4-5. Validation
 # ---------------------------------------------------------------------------
 
-# A number: digits, optional thousands commas, optional decimals. "$27,470K" -> "27,470".
-NUMBER_PATTERN = re.compile(r"\d[\d,]*(?:\.\d+)?")
+# A number: an optional minus sign, digits with optional thousands commas, optional decimals.
+# The minus can be "-", "−" (true minus) or "–" (en dash), optionally before a "$" ("-$240K").
+# It only counts when it isn't right after a letter or digit, so "2025–2026" and "Q4 2025-Q2 2026"
+# stay ranges, not negative numbers.
+NUMBER_PATTERN = re.compile(r"(?:(?<![0-9A-Za-z])([-−–])\$?)?(\d[\d,]*(?:\.\d+)?)")
 
 
 def numbers_in(text):
-    """Every number in a piece of text, as floats. Ignores $, %, x, K, signs and commas."""
-    return {float(match.replace(",", "")) for match in NUMBER_PATTERN.findall(text)}
+    """Every number in a piece of text, as floats, with its sign. Ignores $, %, x, K and commas."""
+    numbers = set()
+    for sign, digits in NUMBER_PATTERN.findall(text):
+        value = float(digits.replace(",", ""))
+        numbers.add(-value if sign else value)
+    return numbers
 
 
 def count_sentences(text):

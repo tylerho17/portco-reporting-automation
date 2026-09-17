@@ -52,6 +52,9 @@ BUDGET_LABEL_WORDS = ("budget", "bud", "plan")
 # Quarter labels look like "Q2 2026": Q, a digit 1-4, a space, a 4-digit year.
 QUARTER_PATTERN = re.compile(r"^Q([1-4])\s+(\d{4})$")
 
+# The same quarter anywhere inside a longer label, e.g. "Q3 2026 (Budget)" or "Q3 2026 - Bud".
+QUARTER_IN_LABEL = re.compile(r"\bQ([1-4])\s+(\d{4})\b")
+
 # Number text, once "$" and spaces are removed and letters are uppercased: an optional minus,
 # digits (commas only between groups of 3, like "1,250,000"), optional decimals, optional K or M.
 # Examples that match: "12.5M", "-1.2M", "1,250K", "5,090", "850".
@@ -127,6 +130,16 @@ def parse_quarter(label):
     return int(match.group(2)), int(match.group(1))
 
 
+def next_quarter(year, q):
+    """(2025, 4) -> (2026, 1): the quarter after this one. Q4 rolls into next year's Q1."""
+    return (year, q + 1) if q < 4 else (year + 1, 1)
+
+
+def quarter_name(year, q):
+    """(2026, 1) -> 'Q1 2026'."""
+    return f"Q{q} {year}"
+
+
 def at_row(rows, i):
     """'row 7: ' for the i-th label when Excel row numbers are known, else '' (for error messages)."""
     return f"row {rows[i]}: " if rows else ""
@@ -147,10 +160,9 @@ def check_quarters_in_order(labels, rows=None):
             raise ValueError(f"{at_row(rows, i)}{error}") from None
 
     for i in range(1, len(quarters)):
-        year, q = quarters[i - 1]
-        expected = (year, q + 1) if q < 4 else (year + 1, 1)  # Q4 rolls into next year's Q1
+        expected = next_quarter(*quarters[i - 1])
         if quarters[i] != expected:
-            raise ValueError(f"{at_row(rows, i)}After {labels[i - 1]} expected Q{expected[1]} {expected[0]}, "
+            raise ValueError(f"{at_row(rows, i)}After {labels[i - 1]} expected {quarter_name(*expected)}, "
                              f"found {labels[i]} - quarters must run oldest to newest with none skipped "
                              f"or repeated (a quarter with no data still needs its own row)")
 
@@ -173,21 +185,33 @@ def excel_column(position):
     return get_column_letter(position + 1)
 
 
+def header_row_of(sheet):
+    """The row index (within the first 10 rows) holding a 'Quarter' header, or None."""
+    for row_index in range(min(10, len(sheet))):
+        cells = [normalize_header(v) for v in sheet.iloc[row_index] if not is_blank(v)]
+        if LABEL_HEADER in cells:
+            return row_index
+    return None
+
+
 def find_kpi_sheet(path):
-    """Return (sheet_name, sheet, header_row) for the tab whose header row contains 'Quarter'.
+    """Return (sheet_name, sheet, header_row) for the one tab whose header row contains 'Quarter'.
 
     Checks the first 10 rows of each tab, so title rows above the table are fine.
-    Tabs without a 'Quarter' header (like Notes) are ignored.
+    Tabs without a 'Quarter' header (like Notes) are ignored. Two or more KPI-looking tabs stop:
+    a stale copy could be picked by mistake, so we don't guess.
     """
     # Every tab, raw, no header guessing. Only a truly empty cell counts as missing: by default pandas
     # would also quietly blank out text like "n/a", "NA" or "NULL", and those must stop in parse_number.
     sheets = pd.read_excel(path, sheet_name=None, header=None, keep_default_na=False, na_values=[""])
-    for sheet_name, sheet in sheets.items():
-        for row_index in range(min(10, len(sheet))):
-            cells = [normalize_header(v) for v in sheet.iloc[row_index] if not is_blank(v)]
-            if LABEL_HEADER in cells:
-                return sheet_name, sheet, row_index
-    raise ValueError(f"No tab in {path} has a 'Quarter' header in its first 10 rows (tabs: {list(sheets)})")
+    found = [(name, sheet, header_row_of(sheet)) for name, sheet in sheets.items() if header_row_of(sheet) is not None]
+    if not found:
+        raise ValueError(f"No tab in {path} has a 'Quarter' header in its first 10 rows (tabs: {list(sheets)})")
+    if len(found) > 1:
+        names = [f"'{name}'" for name, _, _ in found]
+        raise ValueError(f"Tabs {', '.join(names[:-1])} and {names[-1]} both have a 'Quarter' header - keep one "
+                         f"KPI tab and delete or rename the others")
+    return found[0]
 
 
 def check_no_error_cells(path, sheet_name):
@@ -291,13 +315,30 @@ def is_budget_only_row(label, row_index, row, column_map):
     return True
 
 
+def check_budget_row_is_next_quarter(label, budget_row_number, last_actual_label):
+    """Stop unless the budget-only row is for the quarter right after the last actual quarter.
+
+    'Runway at next quarter's budgeted burn' would otherwise quietly use some other quarter's budget.
+    """
+    expected = quarter_name(*next_quarter(*parse_quarter(last_actual_label)))
+    match = QUARTER_IN_LABEL.search(label)
+    if not match:
+        raise ValueError(f"row {budget_row_number} ({label!r}): a budget-only row label must name its quarter, "
+                         f"e.g. '{expected} (Budget)'")
+    found = quarter_name(int(match.group(2)), int(match.group(1)))
+    if found != expected:
+        raise ValueError(f"row {budget_row_number} ({label!r}): this budget-only row is for {found}, but the "
+                         f"quarter after the last actual quarter ({last_actual_label}) is {expected} - fix the "
+                         f"label, or keep only next quarter's budget")
+
+
 def clean_sheet(sheet, header_row):
     """Turn the raw KPI tab into (actuals, next_budget). Errors say which row, column or cell to fix."""
     label_position, column_map = map_columns(sheet.iloc[header_row], header_row)
     check_no_headerless_values(sheet, header_row, [label_position, *column_map])
 
     actual_rows, row_numbers = {}, {}  # quarter label -> parsed row, quarter label -> Excel row number
-    next_budget = None
+    next_budget, budget_row_number = None, None
     for row_index, raw_row in sheet.iloc[header_row + 1:].iterrows():  # every row below the header
         if is_blank(raw_row[label_position]):
             check_unlabelled_row_is_empty(row_index, raw_row, column_map, label_position)
@@ -310,6 +351,7 @@ def clean_sheet(sheet, header_row):
                 raise ValueError(f"row {excel_row(row_index)} ({label!r}) is a second budget-only row (the first "
                                  f"is {next_budget.name!r}) - keep only next quarter's budget")
             next_budget = pd.Series({c: row[c] for c in BUDGET_COLUMNS}, name=label)
+            budget_row_number = excel_row(row_index)
         elif label in actual_rows:  # a repeated label would overwrite the earlier row without a word
             raise ValueError(f"row {excel_row(row_index)}: quarter {label!r} appears twice (also in row "
                              f"{row_numbers[label]}) - delete one of the rows")
@@ -322,6 +364,8 @@ def clean_sheet(sheet, header_row):
     actuals = pd.DataFrame.from_dict(actual_rows, orient="index", columns=STANDARD_COLUMNS)
     actuals.index.name = "quarter"
     check_quarters_in_order(list(actual_rows), list(row_numbers.values()))
+    if next_budget is not None:
+        check_budget_row_is_next_quarter(next_budget.name, budget_row_number, actuals.index[-1])
     return actuals, next_budget
 
 

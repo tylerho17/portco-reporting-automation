@@ -15,7 +15,7 @@ from clean import clean_workbook
 from compare_models import HAIKU, SONNET, parse_scores, recommend
 from make_data import BLANK_QUARTER, NEXT_QUARTER_BUDGET, OUTPUT_PATH, QUARTERS, TRUE_DATA
 from metrics import (PASS, TRIP, compute_metrics, data_gaps, evaluate_flags,
-                     load_config, runway_at_next_budget)
+                     load_config, metric_reasons, runway_at_next_budget)
 
 LATEST = "Q2 2026"
 
@@ -30,17 +30,18 @@ EXPECTED_LATEST = {
     "cac_payback_months": 2400 / (1850 * 5000 / 6660) * 12,
     "net_new_arr_vs_budget": 1660 / (26800 - 24750) - 1,
     "arr_yoy": 27470 / 19230 - 1,
+    "arr_vs_budget": 27470 / 26800 - 1,
 }
 EXPECTED_RUNWAY_AT_BUDGET = 14300 / (3300 / 3)
 
-# The Northwind story: 6 flags trip, 3 pass.
+# The Northwind story: 6 flags trip, 3 pass. Names typed by hand (the Metrics sheet labels).
 EXPECTED_FLAGS = {
     "NRR (annualized)": TRIP,
     "GRR (annualized)": PASS,
     "Burn multiple": TRIP,
-    "Burn vs budget": TRIP,
-    "Runway (months)": TRIP,
-    "CAC payback (months)": PASS,
+    "Net burn vs budget": TRIP,
+    "Runway at current burn": TRIP,
+    "CAC payback": PASS,
     "Net new ARR vs budget": PASS,
     "Rule of 40": TRIP,
     "NRR falling while pipeline rising": TRIP,
@@ -163,7 +164,7 @@ def main():
     actuals, next_budget = clean_workbook(OUTPUT_PATH)
     config = load_config()
     metrics = compute_metrics(actuals)
-    flags = evaluate_flags(metrics, config)
+    flags = evaluate_flags(metrics, metric_reasons(actuals, metrics), config)
 
     check_cleaning(actuals, next_budget)
     print("✓ Cleaning is lossless (all values match TRUE_DATA, Q1 2025 blank, budget row read)")

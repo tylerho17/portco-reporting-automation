@@ -3,10 +3,11 @@
 Output: output/<company>_metrics.xlsx with three sheets:
 - Metrics:   one row per quarter, one column per metric. Cells hold real numbers
              (ratios as decimals, e.g. 0.971); Excel number formats display them as 97.1%.
-             A cell whose flag trips in that quarter is red; a data-missing cell is gray.
-- Flags:     every flag for the latest quarter: value, threshold, status.
-             Row color: red = tripped, green = passed, gray = cannot evaluate.
-- Data gaps: every metric and flag that can't be shown because input data is missing.
+             A cell with no number says why: "data missing" (gray), "n/a (no prior period)",
+             or "n/m ..." (not meaningful). A cell whose flag trips in that quarter is red.
+- Flags:     every flag for the latest quarter: value, threshold, status (with the reason when
+             it can't be evaluated). Row color: red = tripped, green = passed, gray = cannot evaluate.
+- Data gaps: every metric and flag that can't be shown because an input it uses is blank.
 
 No math happens here. metrics.py computes everything; this file only writes and formats.
 
@@ -21,27 +22,23 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from analyze import METRIC_LABELS
 from clean import clean_workbook
-from metrics import (DOLLAR_COLUMNS, FLAG_RULES, MISSING, MONTH_COLUMNS, PASS, TRIP, compute_metrics,
-                     data_gaps, evaluate_flags, load_config, runway_at_next_budget)
+from metrics import (CANNOT_EVALUATE, DOLLAR_COLUMNS, FLAG_RULES, METRIC_LABELS, MISSING_INPUT, MONTH_COLUMNS,
+                     PASS, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config, metric_reasons,
+                     reason_text, runway_at_next_budget, runway_context_label)
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 SHEET_NAMES = ["Metrics", "Flags", "Data gaps"]
 
 # Excel can't store "no value" or infinity as a number, so those cells get words that say why.
-# "Data missing" must never look like "not meaningful" (CLAUDE.md), so each case has its own text.
-DATA_MISSING = "data missing"
-NO_PRIOR_PERIOD = "n/a (no prior period)"      # e.g. YoY in the first 4 quarters: nothing to compare with
+# The words for the three "no number" reasons come from metrics.reason_text, shared with every output.
 INFINITE_LABELS = {                            # the CLAUDE.md edge cases
     "burn_multiple": "∞ (ARR shrank)",
     "runway_months": "∞ (not burning)",
     "cac_payback_months": "∞ (never pays back)",
 }
-NO_BUDGET_ROW = "n/a (no budget row)"
-BUDGET_NOT_BURNING = "∞ (budget not burning)"
 
-STATUS_LABELS = {TRIP: "Tripped", PASS: "Passed", MISSING: "Cannot evaluate — data missing"}
+STATUS_LABELS = {TRIP: "Tripped", PASS: "Passed"}  # a flag that can't be evaluated shows its reason instead
 KIND_LABELS = {"min": "below threshold", "max": "above threshold"}  # when a flag trips
 FLAG_KINDS = {name: kind for name, _, _, kind in FLAG_RULES}      # flag name -> "min" or "max"
 
@@ -49,7 +46,7 @@ FLAG_KINDS = {name: kind for name, _, _, kind in FLAG_RULES}      # flag name ->
 STATUS_COLORS = {
     TRIP: ("FFC7CE", "9C0006"),
     PASS: ("C6EFCE", "006100"),
-    MISSING: ("D9D9D9", "404040"),
+    CANNOT_EVALUATE: ("D9D9D9", "404040"),
 }
 
 RUNWAY_CONTEXT_LABEL = "Runway at next quarter's budgeted burn (context, not a flag)"
@@ -71,32 +68,31 @@ def number_format(column):
     return "0.0%"                       # decimal 0.971 shows as 97.1%
 
 
-def cell_value(column, value, is_gap):
+def cell_value(actuals, metrics, reasons, column, quarter):
     """The number itself, or a text label when there is no usable number.
 
-    NaN -> "data missing" if it's a gap, else "no prior period".
+    No number -> the words for its reason ("data missing", "n/a (no prior period)", "n/m ...").
     Infinity -> "∞" plus the reason (e.g. burn multiple when ARR shrank).
     """
-    if math.isnan(value):
-        return DATA_MISSING if is_gap else NO_PRIOR_PERIOD
+    reason = reasons.loc[quarter, column]
+    if isinstance(reason, str):
+        return reason_text(actuals, column, quarter, reason)
+    value = metrics.loc[quarter, column]
     if math.isinf(value):
-        return INFINITE_LABELS.get(column, "∞") if value > 0 else "-∞"
+        return INFINITE_LABELS[column]  # compute_metrics only lets these three metrics be infinite
     return float(value)  # plain Python float; openpyxl writes it exactly
 
 
 def runway_context_value(runway, has_budget_row):
-    """Runway at next quarter's budgeted burn: a number, or a label saying why there isn't one.
+    """Runway at next quarter's budgeted burn: a number, or a label saying why there isn't one."""
+    return runway_context_label(runway, has_budget_row) or float(runway)
 
-    NaN has two causes: no budget row at all, or a blank input (latest cash or budgeted burn).
-    Only the first is "no budget row"; the second is "data missing".
-    """
-    if not has_budget_row:
-        return NO_BUDGET_ROW
-    if math.isnan(runway):
-        return DATA_MISSING
-    if math.isinf(runway):
-        return BUDGET_NOT_BURNING
-    return float(runway)
+
+def status_label(flag):
+    """'Tripped', 'Passed', or 'Cannot evaluate — <reason>'."""
+    if flag["status"] == CANNOT_EVALUATE:
+        return f"Cannot evaluate — {flag['reason']}"
+    return STATUS_LABELS[flag["status"]]
 
 
 # ---------------------------------------------------------------------------
@@ -128,41 +124,44 @@ def set_column_widths(sheet, widths):
 # Sheet 1: Metrics
 # ---------------------------------------------------------------------------
 
-def tripped_cells(metrics, config):
+def tripped_cells(metrics, reasons, config):
     """Every (quarter, metric column) whose flag trips in that quarter.
 
     The combo rule has no single metric cell, so it only shows on the Flags sheet.
     """
     tripped = set()
     for quarter in metrics.index:
-        for flag in evaluate_flags(metrics, config, quarter):
+        for flag in evaluate_flags(metrics, reasons, config, quarter):
             if flag["status"] == TRIP and flag["metric"] is not None:
                 tripped.add((quarter, flag["metric"]))
     return tripped
 
 
 def style_metric_cell(cell, column, is_gap, is_tripped):
-    """Number format, right alignment, and gray (data missing) or red (tripped) fill."""
+    """Number format, right alignment, and gray (data missing) or red (tripped) fill.
+
+    Only missing data is gray: "no prior period" and "not meaningful" are not problems to chase.
+    """
     cell.number_format = number_format(column)
     cell.alignment = Alignment(horizontal="right")  # text labels line up with the numbers
     if is_gap:
-        color_cell(cell, MISSING)
+        color_cell(cell, CANNOT_EVALUATE)
     elif is_tripped:
         color_cell(cell, TRIP)
 
 
-def write_metrics_sheet(sheet, metrics, gaps, config):
+def write_metrics_sheet(sheet, actuals, metrics, reasons, config):
     """One row per quarter, one column per metric, with formats and highlights."""
     columns = list(metrics.columns)
     write_header(sheet, ["Quarter"] + [METRIC_LABELS[column] for column in columns])
-    tripped = tripped_cells(metrics, config)
+    tripped = tripped_cells(metrics, reasons, config)
 
     for row_number, quarter in enumerate(metrics.index, start=2):  # row 1 is the header
         sheet.cell(row=row_number, column=1, value=quarter)
         for column_number, column in enumerate(columns, start=2):  # column A is the quarter
-            is_gap = quarter in gaps.get(column, [])
-            value = cell_value(column, metrics.loc[quarter, column], is_gap)
+            value = cell_value(actuals, metrics, reasons, column, quarter)
             cell = sheet.cell(row=row_number, column=column_number, value=value)
+            is_gap = reasons.loc[quarter, column] == MISSING_INPUT
             style_metric_cell(cell, column, is_gap, (quarter, column) in tripped)
 
     set_column_widths(sheet, [10] + [max(len(METRIC_LABELS[c]), 12) + 2 for c in columns])
@@ -175,15 +174,16 @@ def write_metrics_sheet(sheet, metrics, gaps, config):
 FLAG_HEADERS = ["Flag", "Quarter", "Value", "Threshold", "Trips when", "Status"]
 
 
-def flag_row(flag, gaps, config):
+def flag_row(flag, actuals, metrics, reasons, config):
     """One flag as a list of cell values, in FLAG_HEADERS order."""
-    status = STATUS_LABELS[flag["status"]]
+    status = status_label(flag)
     if flag["metric"] is None:  # the combo rule is a trend test with no single value
         size = config["combo_lookback_quarters"]
+        drop = config["combo_min_nrr_drop"]
         return [flag["flag"], flag["quarter"], "see NRR and Pipeline on Metrics sheet",
-                f"last {size} quarters", "NRR falls and pipeline rises at every step", status]
-    is_gap = flag["quarter"] in gaps.get(flag["metric"], [])
-    value = cell_value(flag["metric"], flag["value"], is_gap)
+                f"last {size} quarters", f"NRR falls at least {drop * 100:g} pt and pipeline rises at every step",
+                status]
+    value = cell_value(actuals, metrics, reasons, flag["metric"], flag["quarter"])
     return [flag["flag"], flag["quarter"], value, flag["threshold"],
             KIND_LABELS[FLAG_KINDS[flag["flag"]]], status]
 
@@ -209,11 +209,11 @@ def write_runway_context(sheet, runway, has_budget_row, quarter):
     cell.alignment = Alignment(horizontal="right")
 
 
-def write_flags_sheet(sheet, flags, gaps, config, runway_at_budget, has_budget_row):
+def write_flags_sheet(sheet, flags, actuals, metrics, reasons, config, runway_at_budget, has_budget_row):
     """Every flag for one quarter (the latest), colored by status, plus runway context."""
     write_header(sheet, FLAG_HEADERS)
     for flag in flags:
-        sheet.append(flag_row(flag, gaps, config))
+        sheet.append(flag_row(flag, actuals, metrics, reasons, config))
         style_flag_row(sheet, sheet.max_row, flag)
     write_runway_context(sheet, runway_at_budget, has_budget_row, flags[0]["quarter"])
     set_column_widths(sheet, [56, 10, 36, 18, 42, 32])
@@ -247,14 +247,15 @@ def write_gaps_sheet(sheet, gaps):
 def build_workbook(actuals, next_budget, config):
     """Compute metrics, flags and gaps, then write all three sheets into a new workbook."""
     metrics = compute_metrics(actuals)
-    flags = evaluate_flags(metrics, config)  # latest quarter
+    reasons = metric_reasons(actuals, metrics)
+    flags = evaluate_flags(metrics, reasons, config)  # latest quarter
     gaps = data_gaps(actuals, metrics, flags)
 
     book = Workbook()
     metrics_sheet = book.active  # a new workbook starts with one empty sheet; reuse it
     metrics_sheet.title = SHEET_NAMES[0]
-    write_metrics_sheet(metrics_sheet, metrics, gaps, config)
-    write_flags_sheet(book.create_sheet(SHEET_NAMES[1]), flags, gaps, config,
+    write_metrics_sheet(metrics_sheet, actuals, metrics, reasons, config)
+    write_flags_sheet(book.create_sheet(SHEET_NAMES[1]), flags, actuals, metrics, reasons, config,
                       runway_at_next_budget(actuals, next_budget), next_budget is not None)
     write_gaps_sheet(book.create_sheet(SHEET_NAMES[2]), gaps)
     return book

@@ -13,7 +13,9 @@ rule_of_40_min: 0.40            # below 40, growth isn't paying for the burn —
 
 # Combo rule: NRR falling while pipeline is rising = retention problem, not a sales problem.
 # Sales is filling the funnel, but existing customers are leaking, so more pipeline won't fix it.
-# Falling = NRR down in every quarter-over-quarter step in the window; rising = pipeline up in every step.
+# Falling = NRR down by at least combo_min_nrr_drop in every quarter-over-quarter step in the window;
+# rising = pipeline up in every step.
 # If any quarter in the window is missing, the result is "cannot evaluate", not False.
 nrr_falling_pipeline_rising_flag: true
-combo_lookback_quarters: 3      # last 3 quarters (2 QoQ steps): long enough to be a trend, not one bad quarter
+combo_lookback_quarters: 3      # last 3 quarters (2 QoQ steps): long enough to be a trend, not one bad quarter (minimum 2)
+combo_min_nrr_drop: 0.01        # each step must fall at least 1 point: a 0.1-point dip is noise, not a retention problem

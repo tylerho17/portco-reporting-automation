@@ -21,8 +21,8 @@ import make_data_alderpeak as alderpeak
 import make_data_fernhollow as fernhollow
 from check_northwind import QOQ_METRICS, YOY_METRICS
 from clean import clean_workbook
-from metrics import (FLAG_RULES, COMBO_FLAG_NAME, MISSING, PASS, TRIP, compute_metrics,
-                     data_gaps, evaluate_flags, load_config, runway_at_next_budget)
+from metrics import (CANNOT_EVALUATE, COMBO_FLAG_NAME, FLAG_RULES, MISSING_INPUT, PASS, TRIP, compute_metrics,
+                     data_gaps, evaluate_flags, load_config, metric_reasons, runway_at_next_budget)
 
 LATEST = "Q2 2026"
 ALL_FLAG_NAMES = [rule[0] for rule in FLAG_RULES] + [COMBO_FLAG_NAME]
@@ -67,16 +67,17 @@ FERNHOLLOW_LATEST = {
 }
 FERNHOLLOW_RUNWAY_AT_BUDGET = 3300 / (1300 / 3)
 
-# Distressed: 7 trip. Rule of 40 can't be evaluated; the combo passes because pipeline is falling.
+# Distressed: 7 trip. Rule of 40 can't be evaluated (its year-ago revenue is blank);
+# the combo passes because pipeline is falling.
 FERNHOLLOW_FLAGS = {
     "NRR (annualized)": TRIP,
     "GRR (annualized)": TRIP,
     "Burn multiple": TRIP,
-    "Burn vs budget": TRIP,
-    "Runway (months)": TRIP,
-    "CAC payback (months)": TRIP,
+    "Net burn vs budget": TRIP,
+    "Runway at current burn": TRIP,
+    "CAC payback": TRIP,
     "Net new ARR vs budget": TRIP,
-    "Rule of 40": MISSING,
+    "Rule of 40": CANNOT_EVALUATE,
     "NRR falling while pipeline rising": PASS,
 }
 
@@ -152,9 +153,12 @@ def check_latest_metrics(company, metrics, runway_budget):
 
 
 def check_flags(company, flags):
-    """Each flag's status matches the company's story."""
+    """Each flag's status matches the company's story. In these stories, can't-evaluate always means missing input."""
     statuses = {flag["flag"]: flag["status"] for flag in flags}
     assert statuses == company["expected_flags"], f"Flags wrong: {statuses}"
+    for flag in flags:
+        expected_reason = MISSING_INPUT if flag["status"] == CANNOT_EVALUATE else None
+        assert flag["reason"] == expected_reason, f"{flag['flag']}: reason {flag['reason']!r}, expected {expected_reason!r}"
 
 
 def expected_gaps(company, metric_columns):
@@ -183,16 +187,16 @@ def check_gaps(company, gaps, metric_columns):
     assert gaps == expected, f"Gaps wrong.\nExpected: {expected}\nGot:      {gaps}"
 
 
-def check_never_trips(metrics, config):
+def check_never_trips(metrics, reasons, config):
     """No flag trips in any quarter (used for the healthy company)."""
     for quarter in metrics.index:
-        tripped = [f["flag"] for f in evaluate_flags(metrics, config, quarter) if f["status"] == TRIP]
+        tripped = [f["flag"] for f in evaluate_flags(metrics, reasons, config, quarter) if f["status"] == TRIP]
         assert not tripped, f"{quarter}: healthy company tripped {tripped}"
 
 
 def count_statuses(flags):
     """Short summary like '7 trip, 1 pass, 1 cannot evaluate'."""
-    counts = [sum(f["status"] == status for f in flags) for status in (TRIP, PASS, MISSING)]
+    counts = [sum(f["status"] == status for f in flags) for status in (TRIP, PASS, CANNOT_EVALUATE)]
     return f"{counts[0]} trip, {counts[1]} pass, {counts[2]} cannot evaluate"
 
 
@@ -201,7 +205,7 @@ def check_company(company, config):
     name, answer_key = company["name"], company["answer_key"]
     actuals, next_budget = clean_workbook(answer_key.OUTPUT_PATH)
     metrics = compute_metrics(actuals)
-    flags = evaluate_flags(metrics, config)
+    flags = evaluate_flags(metrics, metric_reasons(actuals, metrics), config)
     gaps = data_gaps(actuals, metrics, flags)
 
     check_cleaning(answer_key, actuals, next_budget)
@@ -221,7 +225,8 @@ def main():
 
     # The healthy company should be clean in every quarter, not just the latest.
     actuals, _ = clean_workbook(alderpeak.OUTPUT_PATH)
-    check_never_trips(compute_metrics(actuals), config)
+    metrics = compute_metrics(actuals)
+    check_never_trips(metrics, metric_reasons(actuals, metrics), config)
     print("✓ Alderpeak: no flag trips in any quarter")
     print("All checks passed")
 

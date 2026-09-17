@@ -94,7 +94,7 @@ check_*.py and tests/   prove each step gives the right answer
 
 **Step 2: calculate** (`metrics.py`). Each metric is a small function that does column math on the whole table at once, like writing a formula in row 2 of Excel and filling it down. Ratios stay decimals (0.971, not 97.1). A blank input gives a blank result, so a missing quarter automatically spreads to every metric that uses it.
 
-**Step 3: judge** (`metrics.py` + `config.yaml`). `evaluate_flags` compares the latest quarter with each threshold. Each flag gets one of 3 answers: **trip**, **pass**, or **cannot evaluate — data missing**. The combo rule looks at the last 3 quarters: NRR falling while pipeline is rising. `data_gaps` lists every metric that is blank *because data is missing*. That's different from a metric that's blank because there's no earlier period to compare with (YoY growth in the first year).
+**Step 3: judge** (`metrics.py` + `config.yaml`). `evaluate_flags` compares the latest quarter with each threshold. Each flag gets one of 3 answers: **trip**, **pass**, or **cannot evaluate**, and "cannot evaluate" always says why: **missing input**, **no prior period** or **not meaningful**. The combo rule looks at the last 3 quarters: NRR falling (by at least 1 point each step) while pipeline is rising. `data_gaps` lists only metrics blank *because an input they use is missing*. That's different from a metric that's blank because there's no earlier period to compare with (YoY growth in the first year), or because the math is undefined (0 ÷ 0).
 
 **Step 4: output.**
 - `excel_output.py` writes a 3-sheet workbook: Metrics (red = tripped, gray = data missing), Flags, and Data gaps. It does no math.
@@ -211,9 +211,11 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 **What it's for:** every number on the board pack is calculated here. It also decides trip/pass for each flag and lists the data gaps. It never fills in a missing number.
 
 **Constants worth knowing:**
-- `TRIP = "trip"`, `PASS = "pass"`, `MISSING = "cannot evaluate — data missing"`: the three flag answers.
-- `METRIC_LOOKBACK`: how many quarters back a metric looks (QoQ metrics 1, YoY metrics and Rule of 40 4, net new ARR vs budget 1). `data_gaps` uses it.
-- `FLAG_RULES`: one line per flag: (display name, metric column, config.yaml key, "min" or "max"). Adding a flag means adding a line here plus a threshold in config.yaml.
+- `TRIP = "trip"`, `PASS = "pass"`, `CANNOT_EVALUATE = "cannot evaluate"`: the three flag answers.
+- `MISSING_INPUT`, `NO_PRIOR_PERIOD`, `NOT_MEANINGFUL`: the three reasons a value has no number. `REASON_DISPLAY` holds their words ("data missing", "n/a (no prior period)", "n/m (not meaningful)").
+- `METRIC_LABELS`, `INPUT_LABELS`: **the one label set** every output uses (printout, Excel, Claude's payload).
+- `METRIC_INPUTS`: for every metric, each (input column, quarters back) it uses. The reasons and `data_gaps` come from here. `METRIC_LOOKBACK` is derived from it (the furthest input back).
+- `FLAG_THRESHOLDS` / `FLAG_RULES`: one line per flag: (display name, metric column, config.yaml key, "min" or "max"). The display name is taken from `METRIC_LABELS`, so Flags and Metrics use the same words. Adding a flag means adding a line to `FLAG_THRESHOLDS` plus a threshold in config.yaml.
 - `DOLLAR_COLUMNS`, `MONTH_COLUMNS`: which columns are $K and which are months, for display.
 
 **Metric functions.** Each takes the clean table (`df`) and returns one value per quarter.
@@ -242,12 +244,19 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
-| `load_config(path)` | Reads config.yaml into a dictionary. | `config["nrr_min"]` → 1.0. |
-| `check_threshold(value, threshold, kind)` | NaN → MISSING. Otherwise rounds to 6 decimals, then "min" trips below the threshold and "max" trips above it. **Exactly at the threshold passes.** | Rounding matters: 3900/3250 − 1 is 0.19999999999999996 in Python. Without rounding, a burn exactly 15% over budget could trip on noise. |
-| `check_combo(metrics, config, quarter)` | Takes the last 3 quarters up to `quarter`. Not enough history, or any NRR/pipeline value missing → MISSING. Otherwise trips only if NRR fell at **every** step and pipeline rose at **every** step. | Northwind: NRR 108.0% → 102.0% → 97.1% while pipeline 10,100 → 11,200 → 12,500 → trip. Missing data is never quietly treated as a pass. |
-| `evaluate_flags(metrics, config, quarter=None)` | Loops over `FLAG_RULES`, runs `check_threshold` for each, then adds the combo rule. Defaults to the latest quarter but accepts any. Returns a list of dicts (flag, metric, quarter, value, threshold, status). | Northwind Q2 2026: 6 trip, 3 pass. |
-| `data_gaps(actuals, metrics, flags)` | For every metric, a blank value counts as a gap if the quarter **has enough history** for that metric (position ≥ lookback) **or** the quarter's own inputs are incomplete. Then adds every flag that came out MISSING. Returns `{metric or flag: [quarters]}`. | Separates "data missing" from "no prior period". ARR YoY in Q4 2024 is blank but not a gap (no year-ago quarter exists). ARR YoY in Q1 2026 **is** a gap (Q1 2025 exists but is blank). |
-| `format_value(column, value)` | Display text: $K with commas, "11.0 mo", "2.35x", or a %. NaN → "n/a", ∞ → "∞". | **The only place ratios become %** (plus analyze.py and excel_output.py, which reuse the same rules). |
+| `input_reason(actuals, metric, position)` | Looks at the metric's inputs (`METRIC_INPUTS`) for one quarter: any blank → missing input; an earlier quarter that doesn't exist → no prior period; else None. A blank wins. | A blank quarter's own YoY is "missing input", not "no prior period". |
+| `metric_reasons(actuals, metrics)` | A table shaped like the metrics table: each value's reason, or None. A NaN with every input present is "not meaningful". | Gross margin with revenue 0 and gross profit 0 → not meaningful, not a gap. |
+| `not_meaningful_text(actuals, metric, quarter)` | What to show instead of an n/m value: the $K figures for the two budget metrics, else "n/m (not meaningful)". | "n/m: net burn 900 vs budget 0 ($K)". |
+| `validate_config(config)` | Stops if `combo_lookback_quarters` isn't a whole number ≥ 2, or `combo_min_nrr_drop` is missing or negative. | With 1 quarter there are no steps, and `all()` of nothing is True, so the combo would always trip. |
+| `load_config(path)` | Reads config.yaml into a dictionary, then runs `validate_config`. | `config["nrr_min"]` → 1.0. |
+| `check_threshold(value, threshold, kind)` | NaN → CANNOT_EVALUATE. Otherwise rounds to 6 decimals, then "min" trips below the threshold and "max" trips above it. **Exactly at the threshold passes.** | Rounding matters: 3900/3250 − 1 is 0.19999999999999996 in Python. Without rounding, a burn exactly 15% over budget could trip on noise. |
+| `check_combo(metrics, reasons, config, quarter)` | Takes the last 3 quarters up to `quarter`. Returns **(status, reason)**. Not enough history → (cannot evaluate, no prior period); an NRR/pipeline value with no number → its reason (missing input first). Otherwise trips only if NRR fell by at least `combo_min_nrr_drop` (1 point) at **every** step and pipeline rose at **every** step. | Northwind: NRR 108.0% → 102.0% → 97.1% (−6.0, −5.0 points) while pipeline 10,100 → 11,200 → 12,500 → trip. Missing data is never quietly treated as a pass. |
+| `evaluate_flags(metrics, reasons, config, quarter=None)` | Loops over `FLAG_RULES`, runs `check_threshold` for each, then adds the combo rule. Defaults to the latest quarter but accepts any. Returns a list of dicts (flag, metric, quarter, value, threshold, status, reason). | Northwind Q2 2026: 6 trip, 3 pass. |
+| `flag_status_text(flag)` | "trip", "pass" or "cannot evaluate — missing input". | |
+| `data_gaps(actuals, metrics, flags)` | Every metric value whose reason is **missing input**, plus every flag that can't be evaluated because of a missing input. Returns `{metric or flag: [quarters]}`. | ARR YoY in Q4 2024 is blank but not a gap (no prior period). ARR YoY in Q1 2026 **is** a gap (it uses Q1 2025, which is blank). A partly blank quarter only makes gaps of the metrics that use the blank cell. |
+| `format_value(column, value)` | Display text for a real number: $K with commas, "11.0 mo", "2.35x", or a %. ∞ → "∞". | **The only place ratios become %** (plus analyze.py and excel_output.py, which reuse the same rules). |
+| `display_value(actuals, metrics, reasons, metric, quarter)` | The formatted number, or the words for its reason. | Used by the printout and Claude's payload, so they say exactly what Excel says. |
+| `runway_context_label(runway, has_budget_row)` | For runway at budget: None for a normal number, else "n/a (no budget row)", "data missing" or "∞ (budget not burning)". | |
 | `print_report(actuals, next_budget, config)` | Prints the metrics table, runway at budget, flags and data gaps. | What you see with `python metrics.py data/northwind.xlsx`. |
 
 ---
@@ -256,18 +265,18 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 **What it's for:** builds a text "payload" of already-computed facts, sends it to Claude with writing rules, validates the answer, retries once if needed, and saves the result. Run on its own with `python analyze.py data/northwind.xlsx` (**calls the API**). `main.py` doesn't call it yet.
 
-**Constants worth knowing:** `DEFAULT_MODEL = "claude-sonnet-5"` (the model comparison's pick), `MAX_ATTEMPTS = 2` (first try + one retry), `MAX_HEADLINE_WORDS = 30`, `MAX_DETAIL_WORDS = 45`, `MAX_DETAIL_SENTENCES = 2`. `METRIC_LABELS` maps column names to display names and is reused by `excel_output.py`. `SYSTEM_PROMPT` holds Claude's instructions: role, number rules, what to write, framing rules.
+**Constants worth knowing:** `DEFAULT_MODEL = "claude-sonnet-5"` (the model comparison's pick), `MAX_ATTEMPTS = 2` (first try + one retry), `MAX_HEADLINE_WORDS = 30`, `MAX_DETAIL_WORDS = 45`, `MAX_DETAIL_SENTENCES = 2`. Labels (`METRIC_LABELS`, `INPUT_LABELS`) come from `metrics.py`. `SYSTEM_PROMPT` holds Claude's instructions: role, number rules, what to write, framing rules.
 
 | Function / class | What it does, in plain English | Example / why it exists |
 |---|---|---|
 | `Point` (class) | The shape of one win or risk: a `title` and a `detail`. | "Retention slipping" / "NRR went from 108.0% to 97.1%…" |
 | `BoardSummary` (class) | The shape of the whole answer: headline, wins, risks, questions. | Passed to the API so Claude's reply must be this JSON. |
 | `input_trend(actuals, column)` | One raw input (net burn, ending cash) across all quarters, as display text. Blank → "data missing". | `{"Q3 2024": "2,400", ...}` |
-| `metric_trend(metrics, gaps, column)` | One metric across all quarters as text. Uses the gap list to say "data missing" (a gap) or "n/a (no prior period)" (nothing to compare with). | Keeps "missing" and "not meaningful" apart for Claude too. |
-| `describe_flag(flag, config)` | One flag as text: name, status (TRIPPED/passed/…), value, threshold. The combo rule gets a description instead of a value. | `{"flag": "NRR (annualized)", "status": "TRIPPED", "value": "97.1%", "threshold": "100.0%"}` |
+| `metric_trend(actuals, metrics, reasons, column)` | One metric across all quarters as text, using `display_value`: the number, "data missing", "n/a (no prior period)" or "n/m ...". | Keeps the three reasons apart for Claude too. |
+| `describe_flag(flag, config, actuals, metrics, reasons)` | One flag as text: name, status (TRIPPED / passed / cannot evaluate — reason), value, threshold. The combo rule gets a description instead of a value. | `{"flag": "NRR (annualized)", "status": "TRIPPED", "value": "97.1%", "threshold": "100.0%"}` |
 | `build_payload(company, actuals, next_budget, config)` | Runs the metrics, flags and gaps, then packages every fact Claude may use as text: flag counts, flag details, runway if burn returns to plan, all trends, data gaps. | Flag counts are computed here so Claude quotes "6 of 9" instead of counting. |
 | `payload_to_text(payload)` | Turns the payload into the exact JSON text sent to Claude. | The number check uses this same text, so "allowed numbers" = exactly what Claude saw. |
-| `numbers_in(text)` | Finds every number in a piece of text, ignoring $, %, x, K, minus signs and commas. | `"$27,470K and 97.1%"` → {27470.0, 97.1}. |
+| `numbers_in(text)` | Finds every number in a piece of text **with its sign**, ignoring $, %, x, K and commas. A `-`, `−` or `–` counts as a minus only when it isn't right after a letter or digit. | `"-$240K and 97.1%"` → {−240.0, 97.1}; `"2025–2026"` stays {2025, 2026}. So "19.0%" doesn't pass when the data says "-19.0%". |
 | `count_sentences(text)` | Counts sentences by splitting after . ! or ? followed by a space. | The decimal point in "97.1%" isn't followed by a space, so it isn't a sentence end. Known limit: "vs. " counts as one. |
 | `summary_texts(summary)` | Collects every piece of text Claude wrote into one list. | So the checks can scan everything at once. |
 | `find_ungrounded_numbers(summary, payload_text)` | Numbers in Claude's answer that don't appear anywhere in the payload. | "NRR fell 11.8 points" → 11.8 isn't in the data (Claude subtracted) → caught. |
@@ -287,20 +296,21 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 **What it's for:** writes `output/<company>_metrics.xlsx` with 3 sheets. **It does no math.** It calls the same clean → metrics → flags → gaps chain as everything else, then only writes and formats.
 
-**Constants worth knowing:** `DATA_MISSING`, `NO_PRIOR_PERIOD` and `INFINITE_LABELS` (`"∞ (ARR shrank)"`, `"∞ (not burning)"`, `"∞ (never pays back)"`) are the words written when there's no usable number. `STATUS_COLORS` holds Excel's own "Bad" red, "Good" green, plus gray.
+**Constants worth knowing:** `INFINITE_LABELS` (`"∞ (ARR shrank)"`, `"∞ (not burning)"`, `"∞ (never pays back)"`) are the words written for infinity; the words for the three "no number" reasons come from `metrics.reason_text`. `STATUS_COLORS` holds Excel's own "Bad" red, "Good" green, plus gray.
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
 | `number_format(column)` | The Excel display format for a column: `#,##0`, `0.0" mo"`, `0.00"x"` or `0.0%`. | The cell holds 0.971; Excel shows 97.1%. The number stays usable in formulas. |
-| `cell_value(column, value, is_gap)` | The number, or a word: NaN → "data missing" or "n/a (no prior period)"; ∞ → "∞ (reason)". | Excel can't store NaN or ∞, and openpyxl would silently save both as an empty cell, so "missing" and "infinite" would look the same. |
-| `runway_context_value(runway, has_budget_row)` | Same idea for runway at budget: a number, "n/a (no budget row)", "data missing" (the row exists but latest cash or budgeted burn is blank) or "∞ (budget not burning)". | Added in the Task 7 review: a blank input used to say "no budget row". |
+| `cell_value(actuals, metrics, reasons, column, quarter)` | The number, or a word: the reason's words ("data missing", "n/a (no prior period)", "n/m ..."); ∞ → "∞ (reason)". | Excel can't store NaN or ∞, and openpyxl would silently save both as an empty cell, so "missing" and "infinite" would look the same. |
+| `runway_context_value(runway, has_budget_row)` | Same idea for runway at budget (words from `metrics.runway_context_label`): a number, "n/a (no budget row)", "data missing" (the row exists but latest cash or budgeted burn is blank) or "∞ (budget not burning)". | Added in the Task 7 review: a blank input used to say "no budget row". |
 | `color_cell(cell, status)` | Fills a cell red/green/gray with matching text color. | |
 | `write_header(sheet, headers)` | Bold header row, freezes row 1 and column A. | |
 | `set_column_widths(sheet, widths)` | Sets column widths left to right. | |
-| `tripped_cells(metrics, config)` | Runs `evaluate_flags` for **every** quarter and collects each (quarter, metric) that trips. | So a Q1 2026 burn-vs-budget breach is red too, not just the latest quarter. |
-| `style_metric_cell(cell, column, is_gap, is_tripped)` | Format, right alignment, gray if data missing, else red if tripped. | Passed cells stay uncolored so the red stands out. |
-| `write_metrics_sheet(sheet, metrics, gaps, config)` | One row per quarter, one column per metric, with values, formats and highlights. | |
-| `flag_row(flag, gaps, config)` | One flag as a row: Flag, Quarter, Value, Threshold, Trips when, Status. The combo rule gets text instead of a value. | "Trips when" says "below threshold" or "above threshold", so −20.0% makes sense. |
+| `tripped_cells(metrics, reasons, config)` | Runs `evaluate_flags` for **every** quarter and collects each (quarter, metric) that trips. | So a Q1 2026 burn-vs-budget breach is red too, not just the latest quarter. |
+| `status_label(flag)` | "Tripped", "Passed" or "Cannot evaluate — <reason>". | |
+| `style_metric_cell(cell, column, is_gap, is_tripped)` | Format, right alignment, gray **only** if an input is missing, else red if tripped. | Passed, "no prior period" and "n/m" cells stay uncolored so gray means "chase this data". |
+| `write_metrics_sheet(sheet, actuals, metrics, reasons, config)` | One row per quarter, one column per metric, with values, formats and highlights. | |
+| `flag_row(flag, actuals, metrics, reasons, config)` | One flag as a row: Flag, Quarter, Value, Threshold, Trips when, Status. The combo rule gets text instead of a value. | "Trips when" says "below threshold" or "above threshold", so −20.0% makes sense. |
 | `style_flag_row(sheet, row_number, flag)` | Colors the whole row by status and formats Value and Threshold. | |
 | `write_runway_context(sheet, runway, has_budget_row, quarter)` | Adds "Runway at next quarter's budgeted burn (context, not a flag)" below the table, uncolored. | CLAUDE.md: shown as context, not flagged. |
 | `write_flags_sheet(sheet, flags, gaps, config, runway_at_budget, has_budget_row)` | Writes every flag row plus the runway context line. | |
@@ -332,6 +342,8 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `result_text(result)` | "OK", "OK (AI + deck skipped)" or "FAILED: …". | |
 | `summary_rows(results)` | One row of text per company; a failed company shows "-" for flags and gaps. | |
 | `print_summary(results)` | Prints the table with padded columns, then "3 of 3 companies succeeded". | |
+| `csv_row(result)` / `write_summary_csv(results, path)` | Saves the same summary as `output/batch_summary.csv`, with counts as plain numbers so a spreadsheet can sort them. | |
+| `quarter_mismatch_warning(results)` | "⚠ Companies end on different quarters (...)" when successful companies' latest quarters differ; None otherwise. Never fails the batch. | Comparing Q1 and Q2 numbers side by side needs care. |
 | `parse_args(argv)` | Reads the command line. Exactly one of a file path or `--all`; both or neither → usage error (exit code 2). | |
 | `main(argv)` | Parses the arguments, finds the files, runs the batch, prints the summary, returns 0 if all OK, else 1. | Exit codes let a scheduler tell from the code alone whether a run worked. |
 
@@ -404,12 +416,12 @@ Builds each Excel file, **reads it back from disk**, and compares it with the me
 | `fill_color(cell)` | A cell's fill color as 6-digit hex, or None. |
 | `is_number(value)` | True for a real number cell (not TRUE/FALSE). |
 | `same_as_saved(got, expected)` | Equal to 15 significant digits: the precision Excel itself keeps (see LEARNINGS). |
-| `excel_number(cell)` | A cell back to a metric value: number → float, "data missing" → NaN, "∞ …" → ∞. |
+| `excel_number(cell)` | A cell back to a metric value: number → float, a reason label → NaN, an **exact** ∞ label → ∞. |
 | `expected_format(column)` | The number format each kind of metric must have. |
 | `check_file(path, answer_key)` | File name and sheet order. |
-| `check_value_cell(cell, column, value, is_gap)` | One cell holds the right number or the right label, with the right format. |
-| `tripped_by_quarter(metrics, config)` | Every (quarter, metric) that trips, in every quarter. |
-| `check_metrics_sheet(sheet, metrics, gaps, config)` | Headers, quarters, every value, format and fill. |
+| `check_value_cell(cell, column, value, reason)` | One cell holds the right number, or the exact label for its reason or its ∞, with the right format. |
+| `tripped_by_quarter(metrics, reasons, config)` | Every (quarter, metric) that trips, in every quarter. |
+| `check_metrics_sheet(sheet, metrics, reasons, gaps, config)` | Headers, quarters, every value, format and fill. |
 | `check_latest_against_hand_formulas(sheet, company, metrics)` | Latest-quarter cells equal the hand formulas. |
 | `check_story_highlights(sheet, company, metrics)` | Latest-quarter red cells are exactly the flags the story says trip. |
 | `check_flag_row(...)` / `check_status_and_color(row, name, status)` | One Flags row's values, threshold, status text and row color. |
@@ -466,13 +478,13 @@ Builds each Excel file, **reads it back from disk**, and compares it with the me
 
 ### `tests/`: unit tests (pytest)
 
-Run with `python -m pytest -q` (212 tests, about 2 seconds). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
+Run with `python -m pytest -q` (338 tests, a few seconds). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
 | `test_clean.py` (81) | `write_workbook(path, labels, blank)`: a tiny workbook in pytest's temp folder. | `parse_number` (good text, real numbers, blanks → NaN, 17 kinds of unreadable text stop), `normalize_header` and `standard_column` on most of the Northwind headers, quarter labels and order (Q4 → Q1 rollover, skipped, repeated), and whole workbooks (blank row kept, missing row stops, duplicate row stops). |
-| `test_metrics.py` (78) | `table(**columns)`: a small table with only the needed columns. `values(series)`: compare with NaN allowed. `burn_table`, `cac_table`: tables for one metric. `full_actuals(blank, blank_cells)`: 8 realistic quarters with optional blanks. `combo_metrics`, `latest`, `gaps_for`: shortcuts for combo and gap tests. `TEST_CONFIG`: thresholds typed into the test file, so editing config.yaml never breaks a test. | Every metric against hand math; every CLAUDE.md edge case (∞, 0, −0.0); a missing input never becomes 0 or ∞; `check_threshold` exactly at the threshold, float noise, real misses, NaN, ∞; `check_combo` trip/pass/cannot evaluate; `data_gaps` following the QoQ/YoY rules. |
-| `test_bad_inputs.py` (53) | `good_table()`: a valid table. `set_cell`, `drop_column`, `add_column`: break one thing. `write_workbook(path, rows, empty_columns_left)`: Notes tab, title, empty row, table from row 3. `error_from`, `assert_stops_with`: run `clean_workbook` and check how the error message starts. `reorder_quarters(labels)`: quarter rows in a given order. | Broken workbooks stop with the sheet name and Excel address: missing columns, two headers with one meaning, unknown headers, quarters out of order, a budget row with actuals, unreadable text, Excel error cells. `test_good_workbook_cleans` proves the starting workbook is valid, so each failure comes from the one thing that was broken. |
+| `test_metrics.py` (158) | `table(**columns)`: a small table with only the needed columns. `values(series)`: compare with NaN allowed. `burn_table`, `cac_table`: tables for one metric. `full_actuals(blank, blank_cells)`: 8 realistic quarters with optional blanks. `combo_metrics`, `reasons_for`, `combo`, `flags_for`, `gaps_for`, `reasons_of`: shortcuts for combo, flag, gap and reason tests. `TEST_CONFIG`: thresholds typed into the test file, so editing config.yaml never breaks a test. | Every metric against hand math; every CLAUDE.md edge case (∞, 0, −0.0); a missing input never becomes 0 or ∞; `check_threshold` exactly at the threshold, float noise, real misses, NaN, ∞; `check_combo` trip/pass/cannot evaluate with its reason and the 1-point minimum; config validation; the three reasons (every input blanked one at a time must say missing input); not-meaningful budgets; `data_gaps` following the QoQ/YoY rules; the printout's words. |
+| `test_bad_inputs.py` (63) | `good_table()`: a valid table. `set_cell`, `drop_column`, `add_column`: break one thing. `write_workbook(path, rows, empty_columns_left)`: Notes tab, title, empty row, table from row 3. `error_from`, `assert_stops_with`: run `clean_workbook` and check how the error message starts. `reorder_quarters(labels)`: quarter rows in a given order. | Broken workbooks stop with the sheet name and Excel address: missing columns, two headers with one meaning, unknown headers, quarters out of order, a budget row with actuals, a budget row for the wrong quarter or with no quarter, two KPI tabs, footnote rows, unreadable text, Excel error cells. `test_good_workbook_cleans` proves the starting workbook is valid, so each failure comes from the one thing that was broken. |
 
 ---
 
@@ -518,12 +530,12 @@ With one company you can't tell whether the flags work or were tuned to produce 
 ### Design decisions
 
 **Q5. How do you handle missing data? Why not fill it in?**
-A blank cell stays blank (NaN), never 0 and never an estimate: an imputed number could reach a board as if it were real. Because any math with NaN gives NaN, a blank quarter automatically spreads to every metric that uses it: QoQ metrics for that quarter and the next, YoY for that quarter and the one 4 later. Flags that depend on a missing value say "cannot evaluate — data missing" instead of pass or fail, and every affected metric and flag is listed as a data gap.
+A blank cell stays blank (NaN), never 0 and never an estimate: an imputed number could reach a board as if it were real. Because any math with NaN gives NaN, a blank quarter automatically spreads to every metric that uses it: QoQ metrics for that quarter and the next, YoY for that quarter and the one 4 later. Flags that depend on a missing value say "cannot evaluate — missing input" instead of pass or fail, and every affected metric and flag is listed as a data gap. Edge-case rules (∞, 0) only apply when every input is present, so a blank cell can never become a red flag.
 *Point to:* `metrics.data_gaps`; CLAUDE.md "Messy data rules".
 
 **Q6. What's the difference between "data missing" and "not meaningful"?**
-YoY growth in the first year of data is blank because there's no earlier year: that's "n/a (no prior period)", not a problem. YoY in Q1 2026 is blank because Q1 2025 exists but wasn't reported: that's "data missing". Infinite values have their own reason too: burn multiple "∞ (ARR shrank)", runway "∞ (not burning)". CLAUDE.md says the two must never look alike, because a reader would draw different conclusions. `data_gaps` tells them apart by asking whether the quarter has enough history for that metric.
-*Point to:* `metrics.data_gaps`, `analyze.metric_trend`, `excel_output.cell_value`.
+YoY growth in the first year of data is blank because there's no earlier year: that's "n/a (no prior period)", not a problem. YoY in Q1 2026 is blank because Q1 2025 exists but wasn't reported: that's "data missing". A third case is "not meaningful": every input is there but the math is undefined, e.g. 0 ÷ 0, or burn vs a budget of 0 (shown with the $K figures instead). Infinite values have their own words too: burn multiple "∞ (ARR shrank)", runway "∞ (not burning)". CLAUDE.md says these must never look alike, because a reader would draw different conclusions. Each metric declares its inputs (`METRIC_INPUTS`), and `metric_reasons` checks them: a blank input → missing input; an earlier quarter that doesn't exist → no prior period; otherwise NaN → not meaningful. Only missing input is a data gap.
+*Point to:* `metrics.metric_reasons`, `metrics.data_gaps`, `metrics.display_value`, `excel_output.cell_value`.
 
 **Q7. Why store ratios as decimals and format as % only at output?**
 One representation everywhere means thresholds, comparisons and math never mix 97.1 with 0.971. Formatting happens in one place (`format_value`, or an Excel number format), so the Excel cell still holds 0.971 and works in formulas while displaying 97.1%. The Excel check deliberately tested saving 97.1 instead of 0.971, and it's caught.
@@ -534,7 +546,7 @@ The thresholds (NRR 100%, GRR 85%) are annual conventions. One quarter's expansi
 *Point to:* `metrics.nrr`, `metrics.grr`; CLAUDE.md metric definitions.
 
 **Q9. Explain the combo rule. Why "cannot evaluate" instead of False?**
-NRR falling while pipeline is rising suggests a retention problem, not a sales problem: sales keeps filling the funnel, but existing customers are leaking, so more pipeline won't fix it. It trips only if NRR fell at **every** step and pipeline rose at **every** step over the last 3 quarters. If any quarter in the window is missing, returning False would tell the board "no retention problem" when we simply don't know. So it returns "cannot evaluate". Fernhollow passes because its pipeline is falling too: that's a sales problem **and** a retention problem.
+NRR falling while pipeline is rising suggests a retention problem, not a sales problem: sales keeps filling the funnel, but existing customers are leaking, so more pipeline won't fix it. It trips only if NRR fell by at least 1 point (`combo_min_nrr_drop`) at **every** step and pipeline rose at **every** step over the last 3 quarters, so a 0.1-point wobble isn't called a retention problem. If any quarter in the window is missing, returning False would tell the board "no retention problem" when we simply don't know. So it returns "cannot evaluate". Fernhollow passes because its pipeline is falling too: that's a sales problem **and** a retention problem.
 *Point to:* `metrics.check_combo`; config.yaml comments.
 
 **Q10. Why is "exactly at the threshold" a pass, and why round before comparing?**
@@ -630,15 +642,10 @@ Four layers:
 *Point to:* `main.run_batch`, `main.describe_error`; `check_main.py`.
 
 **Q25. What would you improve or build next?**
-Next are the deck (step 4) and the README (step 6). Beyond that, several open definition questions are already logged for a decision:
-- **Burn vs budget when a company isn't burning:** burn −200 vs budget −150 comes out +33% and trips.
-- **Net new ARR vs budget when budgeted net new ARR is zero or negative:** the sign flips.
-- **The combo rule has no minimum size of decline:** a 0.1-point dip counts.
-- **`data_gaps` over-reports** a partly blank quarter in the first year.
-- **The budget-only row's label isn't checked** against the latest quarter.
+Next are the deck (step 4) and the README (step 6). A hardening pass already closed the open definition questions: burn vs a budget of 0 or less and net new ARR vs a flat plan are now "not meaningful" (not a trip), the combo rule needs a 1-point fall per step, `data_gaps` only counts a metric's own blank inputs, the budget row must be next quarter, and the batch saves `output/batch_summary.csv` and warns when companies end on different quarters.
 
-For scale: at ~36s per company, 275 companies run one at a time would take about 2.75 hours with AI, so run companies in parallel. Also save the summary table to a file, and warn if companies report different latest quarters.
-*Point to:* OVERNIGHT_REPORT "Unresolved" sections.
+For scale: at ~36s per company, 275 companies run one at a time would take about 2.75 hours with AI, so run companies in parallel.
+*Point to:* LEARNINGS.md rows A–O.
 
 ---
 
@@ -655,11 +662,11 @@ For scale: at ~36s per company, 275 companies run one at a time would take about
 **Your task:** Which 4 input cells does it come from, and which one is stored as text? Which function turns that text into a number? Which function computes NRR, and what's the formula with Northwind's numbers? Why does it trip? Where does 0.97… become "97.1%"?
 
 ### Exercise 2: Northwind runway 11.0 mo (Q2 2026)
-**Where you see it:** `TRIP  Runway (months)  11.0 mo (threshold 12.0 mo)`
+**Where you see it:** `TRIP  Runway at current burn  11.0 mo (threshold 12.0 mo)`
 **Your task:** Ending cash is typed as `"$14.3M"`. Trace exactly how `parse_number` turns that text into a number, step by step. Then compute runway. Why divide the burn by 3?
 
 ### Exercise 3: Northwind burn vs budget 20.0%
-**Where you see it:** `TRIP  Burn vs budget  20.0% (threshold 15.0%)`
+**Where you see it:** `TRIP  Net burn vs budget  20.0% (threshold 15.0%)`
 **Your task:** Which two cells, and how does the header `"Net Burn (Bud.)"` become `budget_net_burn`? What does Python actually compute for this ratio (not what a calculator shows), and which line of code handles that? Trap: the Notes tab also has 3900, 3250 and "20% over??" in row 7. Does the deck's number come from there? How do you know?
 
 ### Exercise 4: Northwind burn multiple 2.35x
@@ -679,8 +686,8 @@ For scale: at ~36s per company, 275 companies run one at a time would take about
 **Your task:** Which row of the workbook does the budget come from, and which function decides that row is budget-only? Which cash figure is used? Why is this number never flagged, even though 13.0 is close to the 12-month threshold?
 
 ### Exercise 8: two blanks that look the same
-**Where you see it:** in the `metrics.py` printout, `arr_yoy` shows `n/a` for **both** Q4 2024 and Q1 2026. In the Excel Metrics sheet (`python main.py --all --skip-ai`, then open `output/northwind_metrics.xlsx`), Q4 2024 reads "n/a (no prior period)" and Q1 2026 reads "data missing" in a gray cell.
-**Your task:** Why is each one blank? Which function decides that only one of them is a data gap, and what are the two conditions it checks? Which functions then pick the words for Excel and for Claude?
+**Where you see it:** in the `metrics.py` printout, the ARR growth YoY row reads "n/a (no prior period)" for Q4 2024 and "data missing" for Q1 2026. The Excel Metrics sheet (`python main.py --all --skip-ai`, then open `output/northwind_metrics.xlsx`) says the same, with Q1 2026 in a gray cell.
+**Your task:** Why is each one blank? Which function decides that only one of them is a data gap, and what does it check? Which function then picks the words for the printout, Excel and Claude?
 
 ### Exercise 9: the combo rule trips for Northwind
 **Where you see it:** `TRIP  NRR falling while pipeline rising`
@@ -749,8 +756,8 @@ If you get stuck for more than 20 minutes, read the original's first line, put i
 
 **New skill:** `if`/`else` logic, and why float noise matters.
 
-**Spec:** return `MISSING`, `TRIP` or `PASS` (constants already defined at the top of the file).
-- If `value` is NaN → `MISSING`.
+**Spec:** return `CANNOT_EVALUATE`, `TRIP` or `PASS` (constants already defined at the top of the file).
+- If `value` is NaN → `CANNOT_EVALUATE`.
 - Otherwise round `value` to 6 decimals.
 - `kind == "min"`: trip if the value is **below** the threshold.
 - `kind == "max"`: trip if the value is **above** the threshold.
@@ -794,35 +801,37 @@ If you get stuck for more than 20 minutes, read the original's first line, put i
 - A blank cell must be NaN, never 0.
 - `"n/a"`, `"(120)"`, `"12.5%"`, `"inf"`, `"1e3"` must all stop.
 
-**Test:** `python -m pytest -q tests/test_clean.py tests/test_bad_inputs.py` (134 tests; the second file reads real workbooks through your function)
+**Test:** `python -m pytest -q tests/test_clean.py tests/test_bad_inputs.py` (144 tests; the second file reads real workbooks through your function)
 **Then:** `python check_companies.py` (cleaning must recover every answer-key value exactly).
 
 ---
 
-### 5. `check_combo(metrics, config, quarter)` in `metrics.py`: hardest
+### 5. `check_combo(metrics, reasons, config, quarter)` in `metrics.py`: hardest
 
 **New skill:** taking a window of rows, comparing steps, and treating "can't tell" as its own answer.
 
-**Spec:** return `TRIP` if NRR fell at **every** step **and** pipeline rose at **every** step over the last `config["combo_lookback_quarters"]` quarters, ending at `quarter`. Otherwise `PASS`. Return `MISSING` if:
-- there isn't enough history for a full window, or
-- any NRR or pipeline value in the window is NaN.
+**Spec:** return a pair `(status, reason)`. `(TRIP, None)` if NRR fell by at least `config["combo_min_nrr_drop"]` at **every** step **and** pipeline rose at **every** step over the last `config["combo_lookback_quarters"]` quarters, ending at `quarter`. Otherwise `(PASS, None)`. Start with `validate_config(config)`. Return `CANNOT_EVALUATE` with a reason if:
+- there isn't enough history for a full window → `NO_PRIOR_PERIOD`, or
+- any NRR or pipeline cell in the window has a reason in `reasons` → `MISSING_INPUT` if any of them is missing input, else the first reason found.
 
 **Hints:**
 - `metrics.index.get_loc(quarter)` gives the row position of a quarter label (Q3 2024 = 0).
 - `metrics.iloc[start:end]` takes rows `start` up to but **not including** `end`. So for a window of 3 ending at position 7, you want `iloc[5:8]`.
 - `.isna().any()` → True if any value is NaN.
 - `.diff()` gives this row minus the row above. The first row of the window has nothing above it inside the window, so skip it with `.iloc[1:]`.
-- `(steps < 0).all()` → True only if every step is negative.
-- Round NRR to 6 decimals **before** `.diff()`, so a tiny float wobble doesn't count as a decline.
+- `(steps <= -min_drop).all()` → True only if every step fell at least the minimum.
+- Round **after** `.diff()` (`.round(6)`), so 1.07 − 1.08 = −0.010000000000000009 counts as exactly 1 point and a tiny float wobble doesn't count as a decline.
+- `isinstance(r, str)` tells a reason from None in the reasons table.
 
 **Traps the tests catch:**
-- A flat step counts as falling (`<= 0` instead of `< 0`).
-- Missing data returns `PASS` instead of `MISSING`.
+- A flat step, or a 0.1-point dip, counts as falling.
+- Exactly 1.0 point doesn't count (rounded before subtracting instead of after).
+- Missing data returns `PASS` instead of `CANNOT_EVALUATE`, or the wrong reason.
 - A window that's one row off.
 - Older quarters outside the window affect the result.
 - A quarter other than the latest is evaluated as if it were the latest (`test_check_combo_earlier_quarter`).
 
-**Test:** `python -m pytest -q -k check_combo` (15 tests)
+**Test:** `python -m pytest -q -k check_combo` (20 tests)
 **Then:** `python metrics.py data/northwind.xlsx` should still say `TRIP  NRR falling while pipeline rising`, and `python check_companies.py` should pass (Alderpeak's zigzag NRR must not trip in any quarter).
 
 ---
@@ -897,13 +906,13 @@ If you get stuck for more than 20 minutes, read the original's first line, put i
 1. **Why each is blank:** `arr_yoy = growth(ending_arr, 4)`.
    - **Q4 2024** is the 2nd row. `.shift(4)` points above the top of the table, where nothing exists → NaN.
    - **Q1 2026** points at **Q1 2025**, the blank quarter: its ending ARR is NaN, and NaN math gives NaN.
-2. **`metrics.data_gaps`** counts a NaN as a gap if **either**:
-   - **has_history:** the quarter's position ≥ `METRIC_LOOKBACK["arr_yoy"]` (4). Q4 2024 is position 1 → no. Q1 2026 is position 6 → **yes**.
-   - **incomplete:** the quarter's **own** inputs have a blank. Q4 2024 → no. (That's why Q1 2025 itself is also a gap, even though it's only position 2.)
+2. **`metrics.input_reason`** (called by `metric_reasons`) checks `METRIC_INPUTS["arr_yoy"]`: starting ARR and the 4 ARR flows, this quarter **and** 4 quarters back.
+   - **Any of those cells blank → missing input.** Q1 2026 looks back to Q1 2025, which is blank → **missing input**. (Q1 2025 itself: its own cells are blank → also missing input.)
+   - **Else, a needed quarter doesn't exist → no prior period.** Q4 2024 is position 1; 4 back would be position −3 → **no prior period**.
 
-   So Q4 2024 is not a gap and Q1 2026 is. `arr_yoy` gaps: Q1 2025, Q1 2026.
-3. **The words:** `excel_output.cell_value(column, value, is_gap)` → "data missing" (plus gray fill from `style_metric_cell`) or "n/a (no prior period)". For Claude, `analyze.metric_trend` makes the same choice.
-4. **Why the printout says "n/a" for both:** `metrics.print_report` passes every value straight to `metrics.format_value`, which doesn't know about gaps and turns any NaN into "n/a". `analyze.metric_trend` and `excel_output.cell_value` check the gap list **before** formatting, which is why the board-facing outputs tell the two apart. A related leftover: a "cannot evaluate" flag's value still reaches Claude as a bare "n/a" through `analyze.describe_flag` (OVERNIGHT_REPORT Task 1, unresolved item 3).
+   `data_gaps` lists only missing input, so `arr_yoy` gaps: Q1 2025, Q1 2026.
+3. **The words:** `metrics.reason_text` picks them from the reason: "data missing" or "n/a (no prior period)". `metrics.display_value` uses it for the printout and Claude's payload (`analyze.metric_trend`), and `excel_output.cell_value` for Excel, where `style_metric_cell` adds gray only for missing input.
+4. **Before the hardening pass** the printout said "n/a" for both, because it formatted every NaN without asking why (LEARNINGS row J).
 
 ### Answer 9: the combo rule trips
 
@@ -913,16 +922,16 @@ If you get stuck for more than 20 minutes, read the original's first line, put i
    - Q1 2026: 1 + 4 × (710 − 200 − 390) / 23790 = **1.0202** (102.0%)
    - Q2 2026: **0.9706** (97.1%)
 3. **Pipeline** (text cells `"$10.1M"`, `"$11.2M"`, `"$12.5M"` in N7–N9 → `parse_number`): **10,100 → 11,200 → 12,500**.
-4. **The test:** no value in the window is NaN, so it can be evaluated. NRR, rounded to 6 decimals, then `.diff()`: −0.0600, −0.0496, **all < 0**. Pipeline `.diff()`: +1,100, +1,300, **all > 0**. Both true → **trip**.
+4. **The test:** no value in the window has a reason, so it can be evaluated. NRR `.diff()`, rounded to 6 decimals: −0.0600, −0.0496, **all ≤ −0.01** (`combo_min_nrr_drop`: at least 1 point). Pipeline `.diff()`: +1,100, +1,300, **all > 0**. Both true → **trip**.
 5. **Why not Q3 2025's 108.9% peak:** the window is exactly 3 quarters (2 steps) ending at the evaluated quarter. Q3 2025 → Q4 2025 was also a decline, but that step sits outside the window. That's also why the v2 prompt rule says to describe a trend "from the peak, or from the start of the flag's lookback window".
 
 ### Answer 10: Fernhollow "7 of 9, 1 cannot evaluate"
 
 1. **The blank:** `make_data_fernhollow.py` → `BLANK_QUARTER = "Q2 2025"`. `write_kpi_sheet` writes only the label. `clean_sheet` keeps it as a row of NaN.
 2. **The flag: Rule of 40.** `rule_of_40` = `growth(revenue, 4)` + `fcf_margin`. For Q2 2026, `.shift(4)` lands on **Q2 2025**: blank. So revenue YoY is NaN, and NaN + anything = NaN.
-3. **"Cannot evaluate":** `evaluate_flags` → `check_threshold(NaN, 0.40, "min")`. The first line, `if math.isnan(value): return MISSING`, returns `"cannot evaluate — data missing"`, never a pass or a trip.
+3. **"Cannot evaluate":** `evaluate_flags` → `check_threshold(NaN, 0.40, "min")`. The first line, `if math.isnan(value): return CANNOT_EVALUATE`, never returns a pass or a trip. The flag's reason comes from `metric_reasons`: Rule of 40 uses revenue 4 quarters back, which is blank → **missing input**.
 4. **The summary text:** `main.run_company` collects `result["cannot_evaluate"] = ["Rule of 40"]`. `main.flags_text` → `"7 of 9"` + `", 1 cannot evaluate"`.
-5. **Where 20 comes from:** `data_gaps` finds 19 metric columns with a gap (every metric misses Q2 2025; QoQ ones also Q3 2025; YoY ones also Q2 2026). Then `if flag["status"] == MISSING` adds `"flag: Rule of 40": ["Q2 2026"]`: 19 + 1 = **20**. `main.blank_quarters` → Q2 2025. `main.gaps_text` → "20 metrics/flags (blank: Q2 2025)".
-6. **Bonus, burn multiple ∞:** net new ARR = 180 + 60 − 150 − 330 = **−240**, while net burn is 1650 > 0. In `burn_multiple`, `.mask((net_burn > 0) & (new <= 0), math.inf)` → ∞ (burning cash while ARR shrank). `check_threshold`: ∞ > 2.0 → trip. Excel can't store ∞, so `excel_output.cell_value` writes **"∞ (ARR shrank)"** from `INFINITE_LABELS`.
+5. **Where 20 comes from:** `data_gaps` finds 19 metric columns with a gap (every metric misses Q2 2025; QoQ ones also Q3 2025; YoY ones also Q2 2026). Then a flag that can't be evaluated **because of a missing input** is added: `"flag: Rule of 40": ["Q2 2026"]`: 19 + 1 = **20**. `main.blank_quarters` → Q2 2025. `main.gaps_text` → "20 metrics/flags (blank: Q2 2025)".
+6. **Bonus, burn multiple ∞:** net new ARR = 180 + 60 − 150 − 330 = **−240**, while net burn is 1650 > 0. In `burn_multiple`, `.mask(present & (net_burn > 0) & (new <= 0), math.inf)` → ∞ (burning cash while ARR shrank; `present` makes sure no input is blank). `check_threshold`: ∞ > 2.0 → trip. Excel can't store ∞, so `excel_output.cell_value` writes **"∞ (ARR shrank)"** from `INFINITE_LABELS`.
 
 **Why this company was designed like this:** Fernhollow's blank is exactly 4 quarters before the latest one, so the "cannot evaluate" path is exercised on real data. Northwind's blank quarter (Q1 2025) is 5 quarters back, so none of its latest-quarter flags are affected.

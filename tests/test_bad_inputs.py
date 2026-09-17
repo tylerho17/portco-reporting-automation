@@ -23,7 +23,7 @@ Run from the project folder:  python -m pytest -q
 import datetime
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from clean import ACTUAL_COLUMNS, BUDGET_COLUMNS, STANDARD_COLUMNS, clean_workbook
 
@@ -338,3 +338,70 @@ def test_unreadable_number_message_says_how_to_fix(tmp_path):
     rows = good_table()
     set_cell(rows, "Q2 2025", "revenue", "n/a")
     assert error_from(tmp_path, rows).endswith("leave the cell empty if there's no data)")
+
+
+# ---------------------------------------------------------------------------
+# Budget-only row must be next quarter (decision F)
+# ---------------------------------------------------------------------------
+
+def with_budget_label(label):
+    """good_table() with the budget-only row (row 8) relabelled."""
+    rows = good_table()
+    rows[-1][0] = label
+    return rows
+
+
+@pytest.mark.parametrize("label", ["Q2 2026 (Budget)", "Q4 2025 (Budget)", "Q1 2027 Plan"])
+def test_budget_row_for_the_wrong_quarter_stops(tmp_path, label):
+    # The last actual quarter is Q4 2025, so the budget row must be Q1 2026. Old code accepted any quarter,
+    # and "runway at next quarter's budgeted burn" would quietly use a budget for some other quarter.
+    quarter = label[:7]
+    assert_stops_with(tmp_path, with_budget_label(label),
+                      f"Sheet 'KPI Tracker', row 8 ({label!r}): this budget-only row is for {quarter}, "
+                      f"but the quarter after the last actual quarter (Q4 2025) is Q1 2026")
+
+
+def test_budget_row_without_a_quarter_stops(tmp_path):
+    assert_stops_with(tmp_path, with_budget_label("Next quarter (Budget)"),
+                      "Sheet 'KPI Tracker', row 8 ('Next quarter (Budget)'): a budget-only row label must name "
+                      "its quarter, e.g. 'Q1 2026 (Budget)'")
+
+
+@pytest.mark.parametrize("label", ["Q1 2026 (Budget)", "Q1 2026 Plan", "Q1 2026 - Bud"])
+def test_budget_row_for_next_quarter_is_fine(tmp_path, label):
+    # The three label styles used by Northwind, Alderpeak and Fernhollow.
+    _, next_budget = clean_workbook(write_workbook(tmp_path / "good.xlsx", with_budget_label(label)))
+    assert next_budget.name == label
+
+
+# ---------------------------------------------------------------------------
+# Two tabs with a Quarter header (decision G)
+# ---------------------------------------------------------------------------
+
+def test_two_kpi_tabs_stop_and_name_both(tmp_path):
+    # Old code silently used the first one. A stale copy of the KPI tab is a real risk: stop, don't guess.
+    path = write_workbook(tmp_path / "two_tabs.xlsx", good_table())
+    workbook = load_workbook(path)
+    old_copy = workbook.copy_worksheet(workbook[SHEET])
+    old_copy.title = "KPI (old)"
+    workbook.save(path)
+    with pytest.raises(ValueError) as caught:
+        clean_workbook(path)
+    assert str(caught.value).startswith("Tabs 'KPI Tracker' and 'KPI (old)' both have a 'Quarter' header")
+
+
+# ---------------------------------------------------------------------------
+# Footnote rows under the table (decision H: keep stopping)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("footnote, expected_start", [
+    ("Source: FP&A, unaudited",
+     "Sheet 'KPI Tracker', row 9: Can't read quarter label 'Source: FP&A, unaudited'"),
+    ("Budget approved by the board in March",   # contains "budget", so it looks like a second budget row
+     "Sheet 'KPI Tracker', row 9 ('Budget approved by the board in March') is a second budget-only row"),
+])
+def test_footnote_row_under_the_table_stops(tmp_path, footnote, expected_start):
+    # No code change: guessing which rows are notes could hide a real quarter. This test pins the behavior.
+    rows = good_table()
+    rows.append([footnote] + [None] * len(STANDARD_COLUMNS))
+    assert_stops_with(tmp_path, rows, expected_start)

@@ -4,11 +4,12 @@ For all three companies this builds output/<company>_metrics.xlsx, reads it back
 from disk with openpyxl, and checks:
 1. The file is where it should be, with sheets Metrics, Flags, Data gaps in that order.
 2. Metrics sheet: every cell equals the metrics table to 15 significant digits (a real
-   number, not rounded text), ratios are decimals with a % format, and NaN / infinity
-   have the right label.
+   number, not rounded text), ratios are decimals with a % format, and a value with no
+   number has the exact label for its reason ("data missing", "n/a (no prior period)",
+   "n/m ...") and every infinity has its exact "∞ (...)" label.
    Latest-quarter cells also match the hand formulas in check_companies.py.
-3. Metrics highlights: red where a flag trips in that quarter, gray where data is missing,
-   no fill anywhere else.
+3. Metrics highlights: red where a flag trips in that quarter, gray only where an input is
+   missing, no fill anywhere else.
 4. Flags sheet: name, value, threshold, status and row color match the company's story.
 5. Data gaps sheet lists exactly the gaps metrics.data_gaps found, no more and no fewer.
 
@@ -23,18 +24,30 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from analyze import METRIC_LABELS
 from check_companies import ALL_FLAG_NAMES, COMPANIES, LATEST, same_number
 from clean import clean_workbook
 from excel_output import save_metrics_workbook
-from metrics import (DOLLAR_COLUMNS, FLAG_RULES, MISSING, MONTH_COLUMNS, PASS, TRIP, compute_metrics,
-                     data_gaps, evaluate_flags, load_config, runway_at_next_budget)
+from metrics import (CANNOT_EVALUATE, DOLLAR_COLUMNS, FLAG_RULES, METRIC_LABELS, MISSING_INPUT, MONTH_COLUMNS,
+                     NO_PRIOR_PERIOD, NOT_MEANINGFUL, PASS, TRIP, compute_metrics, data_gaps, evaluate_flags,
+                     load_config, metric_reasons, runway_at_next_budget)
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 
-STATUS_TEXT = {TRIP: "Tripped", PASS: "Passed", MISSING: "Cannot evaluate — data missing"}
+# Typed out by hand (not imported from excel_output.py) so a wrong constant there can't pass its own check.
+STATUS_TEXT = {TRIP: "Tripped", PASS: "Passed"}
+REASON_WORDS = {MISSING_INPUT: "data missing", NO_PRIOR_PERIOD: "n/a (no prior period)"}
+INFINITE_TEXT = {
+    "burn_multiple": "∞ (ARR shrank)",
+    "runway_months": "∞ (not burning)",
+    "cac_payback_months": "∞ (never pays back)",
+}
 RED, GREEN, GRAY = "FFC7CE", "C6EFCE", "D9D9D9"
-STATUS_FILL = {TRIP: RED, PASS: GREEN, MISSING: GRAY}
+STATUS_FILL = {TRIP: RED, PASS: GREEN, CANNOT_EVALUATE: GRAY}
+
+
+def status_text(status, reason):
+    """'Tripped', 'Passed', or 'Cannot evaluate — <reason>'."""
+    return f"Cannot evaluate — {reason}" if status == CANNOT_EVALUATE else STATUS_TEXT[status]
 
 
 # ---------------------------------------------------------------------------
@@ -65,12 +78,12 @@ def same_as_saved(got, expected):
 
 
 def excel_number(cell):
-    """Turn a cell back into a metric value: number -> float, 'data missing' -> NaN, '∞ ...' -> inf."""
+    """Turn a cell back into a metric value: number -> float, a reason label -> NaN, an exact ∞ label -> inf."""
     if is_number(cell.value):
         return float(cell.value)
-    if cell.value == "data missing":
+    if cell.value in REASON_WORDS.values() or str(cell.value).startswith("n/m"):
         return math.nan
-    if isinstance(cell.value, str) and cell.value.startswith("∞"):
+    if cell.value in INFINITE_TEXT.values():
         return math.inf
     raise AssertionError(f"{cell.coordinate}: can't read {cell.value!r} as a metric value")
 
@@ -99,14 +112,17 @@ def check_file(path, answer_key):
     return book
 
 
-def check_value_cell(cell, column, value, is_gap):
-    """One cell holds exactly the metric value, or the right label when there's no number."""
+def check_value_cell(cell, column, value, reason):
+    """One cell holds exactly the metric value, or the exact label for why there's no number."""
     where = f"{cell.parent.title}!{cell.coordinate} ({column})"
-    if math.isnan(value):
-        expected = "data missing" if is_gap else "n/a (no prior period)"
+    if reason == NOT_MEANINGFUL:
+        assert isinstance(cell.value, str) and cell.value.startswith("n/m"), f"{where}: expected n/m, got {cell.value!r}"
+    elif isinstance(reason, str):
+        expected = REASON_WORDS[reason]
         assert cell.value == expected, f"{where}: expected {expected!r}, got {cell.value!r}"
     elif math.isinf(value):
-        assert isinstance(cell.value, str) and cell.value.startswith("∞"), f"{where}: expected ∞, got {cell.value!r}"
+        expected = INFINITE_TEXT[column]
+        assert cell.value == expected, f"{where}: expected {expected!r}, got {cell.value!r}"
     else:
         assert is_number(cell.value), f"{where}: expected a number, got {cell.value!r}"
         assert same_as_saved(cell.value, value), f"{where}: expected {float(value)!r}, got {cell.value!r}"
@@ -114,27 +130,27 @@ def check_value_cell(cell, column, value, is_gap):
         f"{where}: format {cell.number_format!r}, expected {expected_format(column)!r}"
 
 
-def tripped_by_quarter(metrics, config):
+def tripped_by_quarter(metrics, reasons, config):
     """{(quarter, metric column)} for every metric flag that trips, in every quarter."""
     return {(quarter, flag["metric"])
             for quarter in metrics.index
-            for flag in evaluate_flags(metrics, config, quarter)
+            for flag in evaluate_flags(metrics, reasons, config, quarter)
             if flag["status"] == TRIP and flag["metric"] is not None}
 
 
-def check_metrics_sheet(sheet, metrics, gaps, config):
+def check_metrics_sheet(sheet, metrics, reasons, gaps, config):
     """Headers, quarters, every value and format, and the red/gray highlights."""
     columns = list(metrics.columns)
     header = [cell.value for cell in sheet[1]]
     assert header == ["Quarter"] + [METRIC_LABELS[c] for c in columns], f"Metrics header wrong: {header}"
     assert sheet.max_row == len(metrics) + 1, f"Metrics has {sheet.max_row - 1} rows, expected {len(metrics)}"
-    tripped = tripped_by_quarter(metrics, config)
+    tripped = tripped_by_quarter(metrics, reasons, config)
 
     for row, quarter in zip(sheet.iter_rows(min_row=2), metrics.index):
         assert row[0].value == quarter, f"Metrics {row[0].coordinate}: expected {quarter}, got {row[0].value}"
         for cell, column in zip(row[1:], columns):
-            is_gap = quarter in gaps.get(column, [])
-            check_value_cell(cell, column, metrics.loc[quarter, column], is_gap)
+            is_gap = quarter in gaps.get(column, [])  # data_gaps lists missing input only
+            check_value_cell(cell, column, metrics.loc[quarter, column], reasons.loc[quarter, column])
             expected_fill = GRAY if is_gap else RED if (quarter, column) in tripped else None
             assert fill_color(cell) == expected_fill, \
                 f"Metrics {cell.coordinate} ({quarter}, {column}): fill {fill_color(cell)}, expected {expected_fill}"
@@ -158,13 +174,13 @@ def check_story_highlights(sheet, company, metrics):
     assert red == story_trips, f"{LATEST} red cells {sorted(red)}, story says {sorted(story_trips)}"
 
 
-def check_flag_row(row, name, column, config_key, company, metrics, gaps, config):
+def check_flag_row(row, name, column, config_key, company, metrics, reasons, config):
     """One metric flag row: name, quarter, value, threshold, status, and the row's color."""
     flag_cell, quarter_cell, value_cell, threshold_cell, _, status_cell = row
     status = company["expected_flags"][name]
     assert flag_cell.value == name, f"Flags {flag_cell.coordinate}: expected {name!r}, got {flag_cell.value!r}"
     assert quarter_cell.value == LATEST, f"Flags {quarter_cell.coordinate}: got {quarter_cell.value!r}"
-    check_value_cell(value_cell, column, metrics.loc[LATEST, column], LATEST in gaps.get(column, []))
+    check_value_cell(value_cell, column, metrics.loc[LATEST, column], reasons.loc[LATEST, column])
     assert threshold_cell.value == config[config_key], \
         f"Flags {threshold_cell.coordinate}: threshold {threshold_cell.value}, expected {config[config_key]}"
     assert threshold_cell.number_format == expected_format(column), f"Flags {threshold_cell.coordinate}: wrong format"
@@ -172,15 +188,15 @@ def check_flag_row(row, name, column, config_key, company, metrics, gaps, config
 
 
 def check_status_and_color(row, name, status):
-    """Status text matches, and every cell in the row has that status's fill."""
+    """Status text matches (in these stories, can't-evaluate is always missing input), and the row's fill."""
     status_cell = row[-1]
-    assert status_cell.value == STATUS_TEXT[status], \
-        f"{name}: status {status_cell.value!r}, expected {STATUS_TEXT[status]!r}"
+    expected = status_text(status, MISSING_INPUT)
+    assert status_cell.value == expected, f"{name}: status {status_cell.value!r}, expected {expected!r}"
     fills = {fill_color(cell) for cell in row}
     assert fills == {STATUS_FILL[status]}, f"{name}: row fills {fills}, expected {STATUS_FILL[status]}"
 
 
-def check_flags_sheet(sheet, company, metrics, gaps, config, runway_budget):
+def check_flags_sheet(sheet, company, metrics, reasons, config, runway_budget):
     """Every flag row, the combo row, and the runway-at-budget context line."""
     header = [cell.value for cell in sheet[1]]
     assert header == ["Flag", "Quarter", "Value", "Threshold", "Trips when", "Status"], f"Flags header wrong: {header}"
@@ -188,7 +204,7 @@ def check_flags_sheet(sheet, company, metrics, gaps, config, runway_budget):
     assert [row[0].value for row in rows] == ALL_FLAG_NAMES, f"Flag names wrong: {[r[0].value for r in rows]}"
 
     for row, (name, column, config_key, _) in zip(rows, FLAG_RULES):
-        check_flag_row(row, name, column, config_key, company, metrics, gaps, config)
+        check_flag_row(row, name, column, config_key, company, metrics, reasons, config)
     combo_name = ALL_FLAG_NAMES[-1]
     check_status_and_color(rows[-1], combo_name, company["expected_flags"][combo_name])
 
@@ -225,14 +241,15 @@ def check_company(company, config):
     name, answer_key = company["name"], company["answer_key"]
     actuals, next_budget = clean_workbook(answer_key.OUTPUT_PATH)
     metrics = compute_metrics(actuals)
-    gaps = data_gaps(actuals, metrics, evaluate_flags(metrics, config))
+    reasons = metric_reasons(actuals, metrics)
+    gaps = data_gaps(actuals, metrics, evaluate_flags(metrics, reasons, config))
 
     book = check_file(save_metrics_workbook(answer_key.OUTPUT_PATH, config), answer_key)
-    check_metrics_sheet(book["Metrics"], metrics, gaps, config)
+    check_metrics_sheet(book["Metrics"], metrics, reasons, gaps, config)
     check_latest_against_hand_formulas(book["Metrics"], company, metrics)
     check_story_highlights(book["Metrics"], company, metrics)
     print(f"✓ {name}: Metrics sheet matches the metrics table ({len(metrics)} quarters: values, formats, highlights)")
-    check_flags_sheet(book["Flags"], company, metrics, gaps, config, runway_at_next_budget(actuals, next_budget))
+    check_flags_sheet(book["Flags"], company, metrics, reasons, config, runway_at_next_budget(actuals, next_budget))
     print(f"✓ {name}: Flags sheet matches the story (values, thresholds, statuses, colors)")
     check_gaps_sheet(book["Data gaps"], gaps)
     print(f"✓ {name}: Data gaps sheet lists exactly the {len(gaps)} gaps")
