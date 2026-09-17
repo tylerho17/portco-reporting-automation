@@ -410,3 +410,86 @@ Also: the sandbox blocked a few shell commands (a heredoc with braces, a `for` l
    - Run `python main.py --all` (or `--skip-ai`) yourself afterwards for the real CSV. Moving check outputs to a temporary folder would need an `--output-dir` option on main.py; tell me if you want it.
 4. **Companies run one after another.** At ~36 s per Sonnet call (model comparison), 275 companies would take about 2.75 hours. Running them in parallel is a later step.
 5. **Exit code on "OK (AI failed)"** (decision 3) and **delete-first** (decision 5) are judgment calls worth a look.
+
+## Task 4: One live run (`main.py --all` with the real API)
+
+### Where this started
+
+Nothing for this task existed yet. Task 3's checks had all passed (408 tests, 5 check scripts). **One live run was made: all 3 companies passed, so there was no second run.** I changed no code: this run found no bugs outside the API step to fix. I didn't edit config.yaml or CLAUDE.md.
+
+### Result
+
+```
+Company     Flags tripped              Data gaps                          Result
+Alderpeak   0 of 9                     none                               OK
+Fernhollow  7 of 9, 1 cannot evaluate  20 metrics/flags (blank: Q2 2025)  OK
+Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK
+3 of 3 companies succeeded      (exit code 0)
+```
+
+**What I checked myself, not just the terminal output:**
+- **Each `output/<company>_analysis.json`:** `run_info.passed` is true, `error` is null, 1 attempt, stop reason `end_turn`, model claude-sonnet-5.
+- **I re-ran `validate_summary`** on each saved summary against its saved payload: 0 problems for all 3.
+- **Each deck has 5 slides.** Slide 1 shows Claude's headline, not the placeholder.
+- **check_deck.py passes:** for all 3 companies it says "AI text from the JSON". It's the first time Alderpeak and Fernhollow have had real analyses. Both tampered Northwind analyses still get the placeholder.
+- **The flag counts match each company's story:** Alderpeak 0, Fernhollow 7 plus 1 cannot evaluate, Northwind 6.
+
+**Headlines:**
+- **Alderpeak:** "All nine flags passed in Q2 2026, with ARR reaching $18,450K and 108.0 mo of runway, though YoY growth eased to 47.5%."
+- **Fernhollow:** "Fernhollow's growth has stalled and cash runway has shrunk to 6.0 mo, with 7 of 9 flags tripped, including burn and retention metrics."
+- **Northwind:** "Northwind's ARR growth remains strong at 42.8% YoY, but burn multiple 2.35x, runway 11.0 mo, and NRR 97.1% signal deteriorating unit economics."
+
+### Tokens and cost (also in LEARNINGS.md, "Live runs")
+
+| Company | Attempts | Input tokens | Output tokens | Seconds | Cost |
+|---|---|---|---|---|---|
+| Alderpeak | 1 | 5,335 | 2,368 | 22.5 | $0.0343 |
+| Fernhollow | 1 | 5,956 | 4,692 | 42.6 | $0.0588 |
+| Northwind | 1 | 5,915 | 3,472 | 33.1 | $0.0466 |
+| **Total** | 3 | **17,206** | **10,532** | 98.1 | **$0.1397** |
+
+- **Total: 27,738 tokens, $0.14.** On average that's $0.0466 per company, or **$12.81 per quarter for 275 companies**. The README's model comparison said $14.65.
+- **Prices:** Sonnet 5 at $2 input / $10 output per million tokens, from `compare_models.PRICES` (as of 2026-06-24).
+- **Time:** about 33 s of API time per company, or about 2.5 hours for 275 companies run one after another.
+
+### Decisions I made that you didn't specify
+
+1. **I saved a copy of the restored Northwind analysis before the run** (`output/northwind_analysis_restored_task3.json`). The run deletes the old analysis first (Task 3 decision 5). If the live run had failed, you'd still have the only validated Northwind text. The run replaced it with a real one, so the copy can be deleted.
+2. **No second run.** The task allows one more run after a fix, and there was nothing to fix. A second run only to get "better" text would cost money and prove nothing new about the code.
+3. **Cost uses the price table already in compare_models.py,** so the numbers are comparable with the README's comparison. I didn't check a newer pricing page.
+4. **Cost for 275 companies = the average of the 3 companies × 275.** A real portfolio's mix of healthy and distressed companies changes this: the distressed company used about 2x the healthy one's output tokens.
+5. **I kept a copy of this run's terminal output and CSV** (`output/day_logs/task4_live_run.txt`, `output/day_logs/task4_batch_summary.csv`). check_main.py runs after this task and overwrites `output/batch_summary.csv` and the decks (see Unresolved 1).
+6. **I read all 3 summaries against their payloads line by line,** not just the validator's pass. That's the model comparison's lesson. Findings are under What failed, item 2.
+7. **I didn't change the prompt or validator for those findings.** The task says to fix only non-API bugs, and checking a prompt change needs more paid runs.
+
+### What failed and how I fixed it
+
+Both are logged in LEARNINGS.md.
+
+1. **My first run command was blocked before it started.**
+   - **What happened:** I added `; echo "EXIT CODE: $?"` after the run, and the permission rules only allow commands that start with `.venv/bin/python`.
+   - **Proof nothing ran:** before trying again, I checked the timestamps. `output/northwind_analysis.json` and `batch_summary.csv` were unchanged, so no API call had been made.
+   - **Fix:** ran `.venv/bin/python main.py --all` on its own. That was run 1. The exit code (0) came from the background task's status.
+2. **Claude's text passed validation but has 3 false or misleading claims** (not fixed):
+   - **Alderpeak, win 1:** YoY growth of 47.5% is "well above prior-period levels". **False:** it fell every quarter (53.9% → 51.5% → 49.5% → 47.5%), and Claude's own risk 1 says so.
+   - **Alderpeak, risk 3:** NRR has a "persistent gentle decline" from 110.0% to 109.8%. **False:** it goes up and down (110.2%, 109.5%, 110.0%, 109.6%, 109.8%, 109.7%, 109.8%) and rose last quarter. That's the story, which says NRR never falls at every step.
+   - **Fernhollow, win 3:** the combo flag passing is presented as good news. **Misleading:** it passes because pipeline is falling too (4,200 → 2,500 $K), so the company has a sales problem and a retention problem. Pipeline isn't mentioned anywhere in Fernhollow's text.
+   - **Smaller:** Alderpeak calls a 0.4-point Rule of 40 dip (43.1% → 42.7%) a "slide" and asks how to "arrest" it. That's the same overstatement the v1 → v2 prompt rule was meant to stop.
+   - **Why the checks missed them:** the validator checks the shape, lengths and that every number appears in the payload. It can't check direction or whether something is good news. This is the "wrong direction" gap already logged in the model comparison.
+   - **Prompt-rule slips (known from the v3 notes, still happening):**
+     - **"Describe a trend from its peak or lookback window, not the first quarter":** Alderpeak and Fernhollow break it several times, e.g. "NRR fell from 98.0% in Q3 2024" and "burn multiple improved from 0.70x (Q3 2024)". Northwind's answer follows it.
+     - **"When a flag passed, say so":** Northwind question 3 asks what is lengthening CAC payback (18.9 → 20.7 mo) without saying the flag passed. Its win 3 does say it.
+     - **Fixed since v3:** Northwind's pipeline now has $K.
+
+### Unresolved
+
+1. **Running the check scripts after this task replaces the AI decks with placeholders.** check_main.py runs `main.py --all --skip-ai` into output/ (Task 3, Unresolved 3), and it also overwrites `batch_summary.csv`. The analysis JSONs survive, because check_main.py checks that they aren't touched.
+   - **To get the AI decks back without an API call:** `python build_deck.py data/alderpeak.xlsx`, and the same for fernhollow and northwind.
+   - **To get the CSV back:** copy `output/day_logs/task4_batch_summary.csv`.
+   - **Proper fix:** an `--output-dir` option so checks write to a temporary folder. It needs your go-ahead.
+2. **Direction and "is this really good news" claims aren't validated** (What failed, item 2). Options, cheapest first:
+   - **(a) Prompt rules:** "only call a trend rising or falling if every step in the window moves that way" and "a passing flag is not a win unless its value is good in itself". Needs paid runs to confirm.
+   - **(b) Code check:** a validator check that finds "rose/fell/declined/improved … from X to Y" and compares X and Y. Direction words next to two numbers can be tested without the API.
+   - **(c) Human review:** keep a person reading each claim before a deck goes to a board. It's the only thing that caught these today.
+3. **Only 1 run per company.** 3 first-attempt passes don't prove the retry rate at 275 companies. The model comparison's Sonnet runs didn't need retries either, so the retry path has only run for real with Haiku.
+4. **`output/northwind_analysis_restored_task3.json`** can be deleted now that a real analysis exists (output/ isn't in git).
