@@ -580,7 +580,7 @@ Four layers:
 
 **Q18. What are the known limits of that number check?**
 It asks "does this number appear anywhere in the data?", not "is it used correctly". So:
-- A calculated number that happens to equal another value passes. "3.3 months faster" passed because −3.3% is a Rule of 40 value.
+- A calculated number that happens to equal another value passes. The first planned test, "NRR fell 11 points", would have passed because runway is 11.0 mo, so the tests use numbers proven to be absent. In the blind runs, "3.3 months faster" passed because −3.3% is a Rule of 40 value.
 - It ignores minus signs.
 - It can't catch a wrong direction ("improved… down from 20.3 mo" when it went from 20.3 to 20.7, which is worse).
 - It can't catch invented attributions ("Management asserts…").

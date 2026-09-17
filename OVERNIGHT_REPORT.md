@@ -282,3 +282,64 @@ main.py already prints input errors as one line, e.g. `✗ FAILED: ValueError: S
 3. **If two tabs both have a "Quarter" header, the first tab wins silently** (e.g. a copied "KPI Tracker (old)" tab placed first). Stopping with "two tabs look like KPI tabs: ..." would be safer. Not added, for the same reason.
 4. **Row numbers depend on pandas keeping the empty rows and columns at the top and left.** I verified this for openpyxl-written files. I didn't have a real Excel-saved file with unusual layout info to test. If a real workbook ever shows an address that's off, that's where to look. The error-cell message uses openpyxl's own address, so it's always right.
 5. **Any text in the label column under the table stops the run**, e.g. a "Source: finance team" note row: `row 14: Can't read quarter label 'Source: finance team'`. That was true before Task 5 too; only the message is new. Real workbooks often have footnotes there. If you want to allow them, the rule would need to say which rows may be ignored, and that is a design decision.
+
+---
+
+## Task 6 — Study guide (STUDY_GUIDE.md, no code changes)
+
+**Result:** done. `STUDY_GUIDE.md` (about 930 lines) has the data flow in plain English, every file explained function by function, 25 interview questions with short answers, 10 trace-this-number exercises with answers at the bottom, and 5 functions to rewrite yourself, easiest first. **No code changed:** no `.py` file, `config.yaml` or `CLAUDE.md` was touched, `build_deck.py` doesn't exist, and nothing called the Anthropic API. `python -m pytest -q` still reports 212 passed, and `check_northwind.py` and `check_companies.py` still print "All checks passed". Five commits: `60db889` (data flow + file guide), `b9baf3b` (interview questions), `e2673f9` (exercises + answers), `77ad97b` (functions to rewrite), `ad0aa67` (fact-check fixes).
+
+### What I built
+
+| Section of STUDY_GUIDE.md | What it is, in plain English |
+|---|---|
+| 1. How to use this guide | Which commands are free to run (clean, metrics, main `--skip-ai`, pytest, checks) and which **cost money** (`analyze.py`, `compare_models.py run`). |
+| 2. The data flow | One sentence, a table matching each step to what an analyst does by hand, a diagram of every file and what it passes on, then each step walked through with Northwind's numbers. Ends with the "Python computes, Claude interprets" rule and two reasons to give in an interview. |
+| 3. Python words you'll see | 22 terms (DataFrame, NaN, `.shift`, `.mask`, `try`/`except`, `Decimal`…), each explained with an Excel comparison where one exists. |
+| 4. Every file, function by function | A table per file: each function, what it does, and an example or why it exists. The metrics table shows each formula with **Northwind's Q2 2026 numbers worked through**. clean.py also gets the order the functions call each other. Covers config.yaml, clean, metrics, analyze, excel_output, main, the 4 make_data files, the 4 check scripts, compare_models, the 3 test files and the small files. |
+| 5. 25 interview questions | Grouped as: the project (4), design decisions (7), what broke (5), the AI part (6), reliability and scale (3). Every LEARNINGS.md row, the prompt iterations, the model comparison and the validator gaps are covered. Each answer ends with **"Point to:"**, the file, function or LEARNINGS row to open if they dig deeper. |
+| 6. 10 trace-this-number exercises | Each names a line you can see by running a free command and asks you to trace it from the workbook cell to the screen: NRR 97.1%, runway 11.0 mo, burn vs budget 20.0% (with the Notes-tab trap), burn multiple 2.35x, Rule of 40 −12.2%, net new ARR vs budget −19.0%, runway at budget 13.0 mo, "data missing" vs "n/a (no prior period)", the combo rule, and Fernhollow's "7 of 9, 1 cannot evaluate". |
+| 7. 5 functions to rewrite yourself | `nrr` → `growth` → `check_threshold` → `parse_number` → `check_combo`. Each has the skill it teaches, a spec, hints, the traps the existing tests will catch, the exact pytest command, and a follow-up check. Starts with a safe routine: delete the body, rewrite it, run the tests, `git diff`, then `git checkout -- <file>`. |
+| 8. Answers | Numbered chains for all 10: the `make_data.py` value, the workbook cell (e.g. E9 `"260K"`, J9 `"$14.3M"`), each clean.py and metrics.py function, the arithmetic, the flag decision and the display format. |
+
+### Decisions you didn't specify
+
+1. **Section order:** exercises (6), then rewrites (7), then answers (8). You asked for the answers "at the bottom", so they're the very last section and you can't see them by accident while doing the exercises.
+2. **Two extra sections:** "How to use this guide" and a short Python glossary. Both are aimed at a finance student reading real pandas code for the first time.
+3. **How far "function by function" goes:** every function in the pipeline files, `make_data_common.py`, the check scripts and `compare_models.py` gets its own row. The three company data files are described as constants plus `main()`, because that's all they contain. **Test files are described by their helper functions and test groups, not all 212 tests one by one.** The test names already say what they test, and a 212-row table would bury the helpers you actually need to understand.
+4. **Explanations use Northwind's real numbers** wherever a formula appears, so each function has a concrete example you can check in the `metrics.py` printout.
+5. **Exercise choice:** 9 from Northwind and 1 from Fernhollow. Fernhollow's is the only real data that reaches "cannot evaluate" and ∞ in the latest quarter, which Northwind can't show. Every exercise starts from a line printed by a free command.
+6. **Every number and cell address was checked by running the code,** not copied from docs. I read the workbook cells with openpyxl and recomputed each formula in a scratch script in `/tmp` (not in the project, not committed).
+7. **Interview answers are short (30–60 seconds spoken)** with a "Point to" line, and the guide tells you to practise them in your own words rather than memorize them. Q2 ("Why would a PE fund want this?") is my framing of the business case. It only quotes numbers that are in the project (the $14.65 per quarter for 275 companies).
+8. **Rewrite picks:** 5 functions that are central to interview talking points and already have tests, so you get instant feedback. Each adds one skill: column math, `.shift`, if/else and float noise, text parsing and errors, windows and "can't tell". I left out `data_gaps` (too many ideas at once for practice) and the analyze.py functions (their tests are mixed into `check_northwind.py`, not pytest).
+9. **The practice routine uses `git checkout -- <file>`** to restore the original, with a bold warning that it discards edits to that file.
+10. **An independent fact-check before the report.** A separate read-only agent compared the whole guide with the code and the docs; see "What failed" item 3. It had no permission to edit or call the API.
+11. **No LEARNINGS.md entry.** Nothing in the project broke. The errors below were mistakes in my draft of the guide, caught before you saw it.
+12. **I didn't rerun `check_excel_output.py` or `check_main.py`.** No code changed, and both rewrite the files in `output/`. pytest, `check_northwind.py` and `check_companies.py` were run and pass.
+13. **The guide is pinned to commit `aa8838b`** in its first lines, so it's clear which version of the code it describes.
+
+### What failed and how I fixed it
+
+1. **Tooling:** the shell sandbox blocked `source .venv/bin/activate`, a `PYTHONPATH=…` prefix and a `for` loop. I ran `.venv/bin/python` directly, and the scratch script adds the project folder to its import path itself. No effect on the project.
+2. **A wrong count in my first draft:** I wrote that 20+ kinds of unreadable text are tested. `pytest --collect-only -k unreadable_text_stops` shows **17**. Fixed before the first commit.
+3. **The fact-check found 9 wording errors (no wrong numbers), all fixed in `ad0aa67`:**
+   - `compute_metrics` doesn't call `runway_at_next_budget`.
+   - `NotWiredError` doesn't print a traceback.
+   - `ai_step` still skips with `--skip-ai` even if `build_deck.py` exists.
+   - The header tests cover most Northwind headers, not every one ("Revenue" and "Net Burn" aren't listed).
+   - The Notes tab **is** loaded, just never used.
+   - The "n/a for both" explanation named the wrong function and the wrong report item.
+   - One trace skipped `header_name`.
+   - The "Sheet '…'" prefix isn't added to the "no Quarter header" error.
+   - `append_learning` itself doesn't enforce "once"; `command_score` does.
+
+   It confirmed that every cell address, calculation, test count, cost, token count and LEARNINGS row reference is correct, and that all internal links work.
+
+### Unresolved: needs your call
+
+1. **The guide will go out of date** when step 4 adds `build_deck.py` and main.py starts calling analyze.py. Section 2, main.py's table in section 4, and Q1/Q25 will need updating. Step 6 (README) is a natural time to refresh it.
+2. **Found while tracing, not changed (no code changes allowed):**
+   - **main.py reads each workbook twice.** `run_company` calls `clean_workbook`, and `save_metrics_workbook` calls it again. It's harmless at this size and a one-line change when the deck step is wired in.
+   - **The number check can't catch a flipped sign.** `numbers_in` ignores minus signs (its docstring says so), so an answer saying net new ARR vs budget was "19.0%" when the data says "−19.0%" would pass. LEARNINGS.md logs direction errors in general, but not this case.
+   - **`python metrics.py` prints "n/a" for both a data gap and "no prior period"** (Exercise 8). Only that debugging printout is affected; Excel and the Claude payload tell them apart. The exercise uses it as a teaching point.
+3. **Check the interview answers against your own view,** especially Q2 (business case) and Q25 (what's next), before you use them. They're a starting point written from the repo, not from your conversations with the fund.
