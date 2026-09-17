@@ -692,6 +692,141 @@ For scale: at ~36s per company, 275 companies run one at a time would take about
 
 ---
 
+## 7. 5 functions to rewrite yourself
+
+Rewriting a function from its description is the fastest way to be able to explain it. These five run from easiest to hardest, and each adds one new skill. The tests already exist, so you'll know right away whether your version is right.
+
+### How to practise safely (same steps for all five)
+
+1. Open the file and find the function. **Keep the `def` line and the docstring; delete only the code under them.**
+2. Write your version from the spec below, without peeking at git.
+3. Run the test command given. Red = keep going; all green = done.
+4. Compare with the original: `git diff metrics.py` (or `clean.py`).
+5. Put the original back: `git checkout -- metrics.py`. **This throws away your edits to that file**, which is what you want here. Don't commit practice edits.
+
+If you get stuck for more than 20 minutes, read the original's first line, put it back, and try again tomorrow.
+
+---
+
+### 1. `nrr(df)` in `metrics.py`: easiest
+
+**New skill:** math on whole pandas columns at once.
+
+**Spec:** return annualized NRR for every quarter: 1 + 4 × (expansion − contraction − churn) / starting ARR. Columns: `df["expansion_arr"]`, `df["contraction_arr"]`, `df["churned_arr"]`, `df["starting_arr"]`. Return a decimal (1.05, not 105).
+
+**Hints:**
+- A column behaves like one number in a formula: `df["a"] - df["b"]` subtracts row by row, like filling a formula down.
+- You don't need a loop, and you don't need to handle blanks: NaN in gives NaN out on its own.
+
+**Traps the tests catch:** forgetting the 4 (not annualized); putting the brackets in the wrong place, so only churn is divided.
+
+**Test:** `python -m pytest -q -k "nrr_annualized"`
+**Stretch:** do `grr(df)` too: `python -m pytest -q -k "grr_annualized"`.
+
+---
+
+### 2. `growth(series, quarters_back)` in `metrics.py`
+
+**New skill:** comparing each row with an earlier row (`.shift`).
+
+**Spec:** return growth versus N quarters earlier: value ÷ value N quarters ago − 1. `quarters_back=1` is QoQ, `4` is YoY. The first N quarters have nothing to compare with and must come out NaN, not 0 and not an error.
+
+**Hints:**
+- `series.shift(1)` gives a new column where each quarter holds the value from one row up. The first row gets NaN.
+- Try it first in a Python prompt: `pd.Series([100, 110, 121]).shift(1)`.
+
+**Traps the tests catch:**
+- `.shift(-N)` looks **forward** (wrong direction).
+- Forgetting the − 1 gives 1.10 instead of 0.10.
+- A blank quarter must spread to the **next** quarter's QoQ (the test `test_growth_blank_quarter_spreads_to_next_quarter`).
+
+**Test:** `python -m pytest -q -k growth`
+**Then check the real numbers:** `python check_companies.py` (ARR YoY for all three companies).
+
+---
+
+### 3. `check_threshold(value, threshold, kind)` in `metrics.py`
+
+**New skill:** `if`/`else` logic, and why float noise matters.
+
+**Spec:** return `MISSING`, `TRIP` or `PASS` (constants already defined at the top of the file).
+- If `value` is NaN → `MISSING`.
+- Otherwise round `value` to 6 decimals.
+- `kind == "min"`: trip if the value is **below** the threshold.
+- `kind == "max"`: trip if the value is **above** the threshold.
+- **Exactly at the threshold passes.**
+
+**Hints:**
+- `math.isnan(value)` tests for NaN. Don't use `value == math.nan`: NaN is never equal to anything, not even itself.
+- `round(value, 6)`.
+- `<` vs `<=` is the whole "exactly at the threshold" rule.
+
+**Traps the tests catch:**
+- No rounding: 0.19999999999999996 vs 0.2 misbehaves.
+- `<=` instead of `<`: exactly-at trips.
+- ∞ must pass a minimum (runway when not burning) and trip a maximum (CAC payback that never pays back). Check yours does this without special code.
+- A real miss of 0.000001 must still trip.
+
+**Test:** `python -m pytest -q -k check_threshold` (15 tests)
+**Then:** `python check_companies.py` (every flag for all three companies).
+
+---
+
+### 4. `parse_number(value)` in `clean.py`
+
+**New skill:** handling messy text step by step, raising clear errors, and `Decimal`.
+
+**Spec:** turn one cell into a number in $K. In order:
+1. Blank (use `is_blank`) → `float("nan")`.
+2. `True`/`False` → raise `ValueError` (message must start with `Can't read`).
+3. Already a number (`isinstance(value, numbers.Real)`) → `float(value)`.
+4. Otherwise it's text. Remove `$` and spaces, uppercase it, and raise `ValueError(f"Can't read {value!r} as a number{NUMBER_HINT}")` unless it matches `NUMBER_TEXT`.
+5. If it ends in `M`, remove the M and multiply by 1000. If it ends in `K`, just remove the K.
+6. Remove commas and return `float(Decimal(text) * multiplier)`.
+
+**Hints:**
+- `text.endswith("M")`, `text[:-1]` (everything except the last character), `text.replace(",", "")`.
+- `NUMBER_TEXT.match(text)` returns None if the text doesn't fit.
+
+**Traps the tests catch:**
+- **Order matters:** in Python, `True` counts as a number (`isinstance(True, numbers.Real)` is True). So the TRUE/FALSE check must come **before** step 3.
+- Using `float(text) * 1000` instead of `Decimal`: `"$4.03M"` becomes 4030.0000000000005.
+- A blank cell must be NaN, never 0.
+- `"n/a"`, `"(120)"`, `"12.5%"`, `"inf"`, `"1e3"` must all stop.
+
+**Test:** `python -m pytest -q tests/test_clean.py tests/test_bad_inputs.py` (134 tests; the second file reads real workbooks through your function)
+**Then:** `python check_companies.py` (cleaning must recover every answer-key value exactly).
+
+---
+
+### 5. `check_combo(metrics, config, quarter)` in `metrics.py`: hardest
+
+**New skill:** taking a window of rows, comparing steps, and treating "can't tell" as its own answer.
+
+**Spec:** return `TRIP` if NRR fell at **every** step **and** pipeline rose at **every** step over the last `config["combo_lookback_quarters"]` quarters, ending at `quarter`. Otherwise `PASS`. Return `MISSING` if:
+- there isn't enough history for a full window, or
+- any NRR or pipeline value in the window is NaN.
+
+**Hints:**
+- `metrics.index.get_loc(quarter)` gives the row position of a quarter label (Q3 2024 = 0).
+- `metrics.iloc[start:end]` takes rows `start` up to but **not including** `end`. So for a window of 3 ending at position 7, you want `iloc[5:8]`.
+- `.isna().any()` → True if any value is NaN.
+- `.diff()` gives this row minus the row above. The first row of the window has nothing above it inside the window, so skip it with `.iloc[1:]`.
+- `(steps < 0).all()` → True only if every step is negative.
+- Round NRR to 6 decimals **before** `.diff()`, so a tiny float wobble doesn't count as a decline.
+
+**Traps the tests catch:**
+- A flat step counts as falling (`<= 0` instead of `< 0`).
+- Missing data returns `PASS` instead of `MISSING`.
+- A window that's one row off.
+- Older quarters outside the window affect the result.
+- A quarter other than the latest is evaluated as if it were the latest (`test_check_combo_earlier_quarter`).
+
+**Test:** `python -m pytest -q -k check_combo` (15 tests)
+**Then:** `python metrics.py data/northwind.xlsx` should still say `TRIP  NRR falling while pipeline rising`, and `python check_companies.py` should pass (Alderpeak's zigzag NRR must not trip in any quarter).
+
+---
+
 ## 8. Answers to the exercises
 
 ### Answer 1: NRR 97.1%
