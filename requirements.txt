@@ -5,3 +5,4 @@ matplotlib
 anthropic
 python-dotenv
 pyyaml
+pydantic

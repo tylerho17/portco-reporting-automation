@@ -294,7 +294,7 @@ def data_gaps(actuals, metrics, flags):
 # Printing (formatting to % happens only here)
 # ---------------------------------------------------------------------------
 
-DOLLAR_COLUMNS = {"ending_arr", "net_new_arr", "pipeline"}
+DOLLAR_COLUMNS = {"ending_arr", "net_new_arr", "pipeline", "net_burn", "ending_cash"}
 MONTH_COLUMNS = {"cac_payback_months", "runway_months"}
 
 
