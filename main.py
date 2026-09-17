@@ -4,18 +4,20 @@ Steps for each company:
 1. Clean the workbook (clean.py)
 2. Compute metrics, flags and data gaps (metrics.py)
 3. Save output/<company>_metrics.xlsx (excel_output.py)
-4. AI commentary (analyze.py)  - not connected yet, see below
-5. Deck (build_deck.py)        - output/<company>_board_pack.pptx
+4. AI commentary (analyze.py): output/<company>_analysis.json, saved whether it passed or failed
+5. Deck (build_deck.py): output/<company>_board_pack.pptx
 
-Step 4 isn't connected yet, so for now a run needs --skip-ai: without it, each company
-stops with a clear "not connected" error instead of quietly skipping the AI (no API call is
-ever made from here yet). With --skip-ai the deck is built with "AI summary unavailable" on
-slides 1 and 5 (CLAUDE.md decision L). If build_deck.py is missing, steps 4 and 5 are
-skipped with a message.
+The deck is always built, because its numbers come from Python (CLAUDE.md decisions K and L):
+- AI passed validation      -> the AI text is on slides 1 and 5, result "OK"
+- AI failed (validation failed after the retry, or an API error)
+                            -> "AI summary unavailable" on slides 1 and 5, result "OK (AI failed)"
+- --skip-ai                 -> the same placeholder with no API call, result "OK (AI skipped)"
+Without --skip-ai, the API key is checked before any company runs.
 
 One company failing never stops the batch. The run ends with a summary table
 (company, flags tripped, data gaps, result), also saved as output/batch_summary.csv, a warning
-if companies end on different quarters, and exit code 1 if any company failed.
+if companies end on different quarters or any AI summary is unavailable, and exit code 1 if any
+company failed. "OK (AI failed)" is not a failed company: its outputs were all built.
 
 Run: python main.py data/northwind.xlsx
      python main.py --all --skip-ai
@@ -23,31 +25,34 @@ Run: python main.py data/northwind.xlsx
 
 import argparse
 import csv
+import os
 import sys
 import traceback
 from pathlib import Path
 
+import anthropic
+from dotenv import load_dotenv
+
+from analyze import AnalysisError, analyze, build_payload, payload_to_text, save_analysis
+from build_deck import PLACEHOLDER_TEXT, analysis_path, save_deck
 from clean import clean_workbook
-from build_deck import PLACEHOLDER_TEXT, save_deck
 from excel_output import save_metrics_workbook
 from metrics import CANNOT_EVALUATE, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config, metric_reasons
 
 PROJECT_DIR = Path(__file__).parent
 DATA_DIR = PROJECT_DIR / "data"
-BUILD_DECK_PATH = PROJECT_DIR / "build_deck.py"
-SUMMARY_CSV_PATH = PROJECT_DIR / "output" / "batch_summary.csv"
+OUTPUT_DIR = PROJECT_DIR / "output"
+SUMMARY_CSV_PATH = OUTPUT_DIR / "batch_summary.csv"
 
 # Errors caused by a bad input file (clean.py raises ValueError with a clear message; a missing
 # or unreadable file raises OSError). Anything else is probably a bug, so its traceback is printed.
 INPUT_ERRORS = (ValueError, OSError)
 
-NO_DECK_MESSAGE = "skipped (build_deck.py doesn't exist yet - build step 4)"
-NOT_WIRED_MESSAGE = ("AI commentary isn't connected to main.py yet - run with --skip-ai "
-                     "(or analyze.py, then build_deck.py, for one company)")
+# What happened to the AI summary, and how the Result column says it.
+AI_OK, AI_SKIPPED, AI_FAILED = "ok", "skipped", "failed"
+RESULT_TEXTS = {AI_OK: "OK", AI_SKIPPED: "OK (AI skipped)", AI_FAILED: "OK (AI failed)"}
 
-
-class NotWiredError(Exception):
-    """A build step that should run hasn't been connected to main.py yet."""
+NO_KEY_MESSAGE = "ANTHROPIC_API_KEY isn't set: add it to .env, or run with --skip-ai"
 
 
 # ---------------------------------------------------------------------------
@@ -63,29 +68,72 @@ def find_workbooks(data_dir=DATA_DIR):
 
 
 def company_name(workbook_path):
-    """data/northwind.xlsx -> 'Northwind' (same rule analyze.py uses)."""
+    """data/northwind.xlsx -> 'Northwind' (same rule analyze.py and build_deck.py use)."""
     return Path(workbook_path).stem.title()
 
 
+def shown_path(path):
+    """A path as printed: relative to the project folder when it's inside it (output/...), else in full."""
+    path = Path(path)
+    return path.relative_to(PROJECT_DIR) if path.is_relative_to(PROJECT_DIR) else path
+
+
 # ---------------------------------------------------------------------------
-# Steps 4 and 5: AI commentary (not connected yet) and the deck
+# Steps 4 and 5: AI commentary and the deck
 # ---------------------------------------------------------------------------
 
-def ai_step(skip_ai):
-    """Return a message saying why AI commentary was skipped, or stop if it should have run."""
+def api_key_problem():
+    """None if an API key is set (from the environment or .env), else a message saying what to do."""
+    load_dotenv()  # puts ANTHROPIC_API_KEY from .env into the environment
+    return None if os.environ.get("ANTHROPIC_API_KEY", "").strip() else NO_KEY_MESSAGE
+
+
+def ai_step(workbook_path, actuals, next_budget, config, output_dir, client=None):
+    """Ask Claude for the commentary and save output/<company>_analysis.json, whether it passed or not.
+
+    Returns the analysis file for the deck, or None when the AI failed (the deck then shows the
+    placeholder). Only a validation failure after the retry or an API error counts as "AI failed";
+    any other error is a bug and fails the company. client=None uses the real Anthropic client.
+    """
+    path = analysis_path(workbook_path, output_dir)
+    path.unlink(missing_ok=True)  # an old analysis must never look like this run's
+    payload = build_payload(company_name(workbook_path), actuals, next_budget, config)
+    try:
+        summary, run_info = analyze(payload_to_text(payload), client=client)
+    except AnalysisError as error:  # both attempts failed validation
+        save_analysis(path, payload, run_info=error.run_info, error=str(error))
+        print(f"  ✗ AI commentary: failed validation after the retry ({shown_path(path)}):")
+        print("      " + str(error).replace("\n", "\n      "))
+        return None
+    except anthropic.AnthropicError as error:  # the API call itself failed (connection, rate limit, ...)
+        message = f"{type(error).__name__}: {error}"
+        save_analysis(path, payload, error=message)
+        print(f"  ✗ AI commentary: API error ({shown_path(path)}): {message}")
+        return None
+    save_analysis(path, payload, summary, run_info)
+    print(f"  ✓ AI commentary: passed validation ({run_info['attempts']} attempt(s), "
+          f"{run_info['input_tokens']} in / {run_info['output_tokens']} out tokens, {run_info['seconds']}s): "
+          f"{shown_path(path)}")
+    return path
+
+
+def deck_step(workbook_path, config, analysis_file, output_dir):
+    """Build and save the deck. Returns why the AI summary isn't on it, or None if it is."""
+    path, why_unavailable = save_deck(workbook_path, config, analysis_file, output_dir=output_dir)
+    if why_unavailable is None:
+        print(f"  ✓ Deck: {shown_path(path)} (AI text on slides 1 and 5)")
+    else:
+        print(f"  ✓ Deck: {shown_path(path)} ({PLACEHOLDER_TEXT} on slides 1 and 5)")
+    if analysis_file is not None and why_unavailable is not None:  # the AI passed, but the deck rejected it
+        print(f"      {PLACEHOLDER_TEXT}: {why_unavailable}")
+    return why_unavailable
+
+
+def ai_status(skip_ai, why_unavailable):
+    """AI_SKIPPED with --skip-ai; otherwise AI_OK only if the AI text actually made it onto the deck."""
     if skip_ai:
-        return "skipped (--skip-ai)"
-    if not BUILD_DECK_PATH.exists():
-        return NO_DECK_MESSAGE
-    raise NotWiredError(NOT_WIRED_MESSAGE)
-
-
-def deck_step(workbook_path, config):
-    """Build and save the deck with the AI placeholder (the only case until step 4 is connected)."""
-    if not BUILD_DECK_PATH.exists():
-        return NO_DECK_MESSAGE
-    path, _ = save_deck(workbook_path, config, analysis_file=None)
-    return f"{path.relative_to(PROJECT_DIR)} ({PLACEHOLDER_TEXT} on slides 1 and 5)"
+        return AI_SKIPPED
+    return AI_OK if why_unavailable is None else AI_FAILED
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +145,7 @@ def blank_quarters(actuals):
     return list(actuals.index[actuals.isna().any(axis=1)])
 
 
-def run_company(workbook_path, config, skip_ai):
+def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_DIR):
     """Run every step for one workbook and print a line per step.
 
     Returns a result dict for the summary table. Raises if any step fails.
@@ -118,34 +166,41 @@ def run_company(workbook_path, config, skip_ai):
         "cannot_evaluate": [flag["flag"] for flag in flags if flag["status"] == CANNOT_EVALUATE],
         "gap_count": len(gaps),
         "blank_quarters": blank_quarters(actuals),
-        "ai_skipped": skip_ai,
     }
     print(f"  ✓ Flags tripped ({result['quarter']}): {flags_text(result)}")
     for name in result["tripped"]:
         print(f"      tripped: {name}")
     print(f"  ✓ Data gaps: {gaps_text(result)}")
 
-    excel_path = save_metrics_workbook(workbook_path, config)
-    print(f"  ✓ Excel: {excel_path.relative_to(PROJECT_DIR)}")
-    print(f"  - AI commentary: {ai_step(skip_ai)}")
-    print(f"  ✓ Deck: {deck_step(workbook_path, config)}")
+    excel_path = save_metrics_workbook(workbook_path, config, output_dir)
+    print(f"  ✓ Excel: {shown_path(excel_path)}")
+    if skip_ai:
+        analysis_file = None
+        print("  - AI commentary: skipped (--skip-ai)")
+    else:
+        analysis_file = ai_step(workbook_path, actuals, next_budget, config, output_dir, client)
+    why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir)
+    result["ai"] = ai_status(skip_ai, why_unavailable)
     return result
 
 
 def describe_error(error):
     """Print why a company failed. Unexpected errors also get a traceback, to help fix the bug."""
     print(f"  ✗ FAILED: {type(error).__name__}: {error}")
-    if not isinstance(error, INPUT_ERRORS + (NotWiredError,)):
+    if not isinstance(error, INPUT_ERRORS):
         traceback.print_exc()
 
 
-def run_batch(workbook_paths, config, skip_ai):
-    """Run every workbook in turn. A failure is recorded and the batch moves on."""
+def run_batch(workbook_paths, config, skip_ai, client=None, output_dir=OUTPUT_DIR):
+    """Run every workbook in turn. A failure is recorded and the batch moves on.
+
+    client and output_dir are for tests: a fake Claude client, and a temporary folder.
+    """
     results = []
     for path in workbook_paths:
         print(f"\n=== {Path(path).name} ===")
         try:
-            result = run_company(path, config, skip_ai)
+            result = run_company(path, config, skip_ai, client, output_dir)
             result["error"] = None
         except Exception as error:  # noqa: BLE001 - one bad company must not stop the batch
             describe_error(error)
@@ -175,12 +230,10 @@ def gaps_text(result):
 
 
 def result_text(result):
-    """'OK', 'OK (AI skipped)' with --skip-ai, 'OK (AI + deck skipped)' without build_deck.py, or 'FAILED: <why>'."""
+    """'OK', 'OK (AI skipped)', 'OK (AI failed)', or 'FAILED: <why>'."""
     if result["error"]:
         return f"FAILED: {result['error']}"
-    if not BUILD_DECK_PATH.exists():
-        return "OK (AI + deck skipped)"
-    return "OK (AI skipped)" if result.get("ai_skipped") else "OK"
+    return RESULT_TEXTS[result["ai"]]
 
 
 def summary_rows(results):
@@ -245,6 +298,16 @@ def quarter_mismatch_warning(results):
     return f"⚠ Companies end on different quarters ({groups}) - compare them with care"
 
 
+def ai_failed_warning(results):
+    """A warning line naming every company whose deck has the AI placeholder because the AI failed, else None."""
+    names = [result["company"] for result in results if not result["error"] and result["ai"] == AI_FAILED]
+    if not names:
+        return None
+    companies = "company" if len(names) == 1 else "companies"
+    return (f"⚠ AI summary unavailable for {len(names)} {companies} ({', '.join(names)}): their decks show the "
+            f"placeholder; the reasons are in output/<company>_analysis.json")
+
+
 # ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------
@@ -254,7 +317,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Build board-pack outputs for one or all KPI workbooks.")
     parser.add_argument("workbook", nargs="?", help="path to one KPI workbook, e.g. data/northwind.xlsx")
     parser.add_argument("--all", action="store_true", help="run every .xlsx workbook in data/")
-    parser.add_argument("--skip-ai", action="store_true", help="don't call Claude for commentary")
+    parser.add_argument("--skip-ai", action="store_true", help="don't call Claude; decks show the AI placeholder")
     args = parser.parse_args(argv)
     if bool(args.workbook) == args.all:  # both given, or neither
         parser.error("give one workbook path, or --all (not both)")
@@ -267,12 +330,16 @@ def main(argv=None):
     if not paths:
         print(f"No .xlsx workbooks found in {DATA_DIR}")
         return 1
+    problem = None if args.skip_ai else api_key_problem()
+    if problem:  # stop before any company runs, rather than fail the AI step for every one
+        print(problem)
+        return 1
     results = run_batch(paths, load_config(), args.skip_ai)
     print_summary(results)
-    warning = quarter_mismatch_warning(results)
-    if warning:
-        print(warning)
-    print(f"Summary saved: {write_summary_csv(results).relative_to(PROJECT_DIR)}")
+    for warning in (quarter_mismatch_warning(results), ai_failed_warning(results)):
+        if warning:
+            print(warning)
+    print(f"Summary saved: {shown_path(write_summary_csv(results))}")
     return 1 if any(result["error"] for result in results) else 0
 
 

@@ -8,20 +8,25 @@ Checks:
 2. One company failing doesn't stop the batch: a broken workbook, a missing file and a
    simulated code bug sit between good companies, and every good company still succeeds.
 3. A failed run exits with code 1; wrong arguments exit with code 2 (argparse's usage error).
-4. The AI step isn't connected yet, so a run without --skip-ai fails loudly instead of
-   quietly skipping it; and if build_deck.py were missing, the deck is skipped with a message.
+4. --skip-ai never calls Claude and never needs an API key: with analyze(), the key check and
+   the Anthropic client all replaced by functions that stop the check if called, every deck
+   still gets the "AI summary unavailable" placeholder, and no analysis JSON is written
+   (an earlier one is left untouched).
 5. --all ignores Excel's "~$" lock files and anything that isn't .xlsx.
 6. The batch also writes output/batch_summary.csv with the same counts, and prints no
    quarter warning when every company ends on the same quarter.
 
-No API calls: every run uses --skip-ai, and main.py doesn't call Claude at all yet.
-(check_deck.py checks what is inside the decks.)
+No API calls: every run uses --skip-ai. The main.py process also runs with no API key and the
+API address pointed at a dead local port, so even a bug that called Claude couldn't reach it.
+The AI-on paths ("OK", "OK (AI failed)" after the retry, an API error, a missing key) are proven
+in tests/test_main.py with a fake Claude client. (check_deck.py checks what is inside the decks.)
 
 Run: python check_main.py  -> prints "All checks passed" or stops at the first failure.
 """
 
 import csv
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -30,9 +35,11 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from openpyxl import Workbook
+from pptx import Presentation
 
+import analyze
 import main
-from build_deck import deck_path
+from build_deck import PLACEHOLDER_TEXT, analysis_path, deck_path
 from check_companies import COMPANIES, expected_gaps
 from clean import clean_workbook
 from excel_output import output_path
@@ -40,6 +47,7 @@ from metrics import CANNOT_EVALUATE, TRIP, compute_metrics, load_config
 
 PROJECT_DIR = Path(__file__).parent
 EXPECTED_OK = "OK (AI skipped)"
+DEAD_API_URL = "http://127.0.0.1:9"  # nothing listens on port 9, so a call can't reach any API
 
 
 # ---------------------------------------------------------------------------
@@ -47,9 +55,14 @@ EXPECTED_OK = "OK (AI skipped)"
 # ---------------------------------------------------------------------------
 
 def run_main(*args):
-    """Run main.py as its own process, like typing it in the terminal. Returns the finished process."""
+    """Run main.py as its own process, like typing it in the terminal. Returns the finished process.
+
+    The process gets no API key and a dead API address, so it can never reach Claude.
+    """
+    env = {**os.environ, "ANTHROPIC_BASE_URL": DEAD_API_URL}
+    env.pop("ANTHROPIC_API_KEY", None)
     return subprocess.run([sys.executable, "main.py", *args], cwd=PROJECT_DIR,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=env)
 
 
 def summary_table(stdout):
@@ -95,12 +108,24 @@ def write_broken_workbook(folder):
     return path
 
 
-def run_quietly(function, *args):
+def run_quietly(function, *args, **kwargs):
     """Call a main.py function without printing; returns (result, stdout text, stderr text)."""
     stdout, stderr = io.StringIO(), io.StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
-        result = function(*args)
+        result = function(*args, **kwargs)
     return result, stdout.getvalue(), stderr.getvalue()
+
+
+def analysis_file_state(workbook):
+    """(size, modified time) of a company's analysis JSON, or None if there isn't one."""
+    path = analysis_path(workbook)
+    return (path.stat().st_size, path.stat().st_mtime) if path.exists() else None
+
+
+def headline_on_deck(path):
+    """The text in slide 1's Headline box."""
+    slide = Presentation(path).slides[0]
+    return next(shape.text_frame.text for shape in slide.shapes if shape.name == "Headline")
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +142,8 @@ def check_finds_the_three_companies():
 def check_batch_run():
     """main.py --all --skip-ai: exit 0, fresh Excel files and decks, a clear AI skip message, a correct summary."""
     started = time.time()
+    workbooks = [company["answer_key"].OUTPUT_PATH for company in COMPANIES]
+    analyses_before = [analysis_file_state(workbook) for workbook in workbooks]
     process = run_main("--all", "--skip-ai")
     assert process.returncode == 0, f"Exit code {process.returncode}\n{process.stdout}\n{process.stderr}"
     assert process.stderr == "", f"Unexpected error output:\n{process.stderr}"
@@ -125,6 +152,9 @@ def check_batch_run():
     assert process.stdout.count("AI summary unavailable on slides 1 and 5") == len(COMPANIES), \
         "--skip-ai decks should say they carry the AI placeholder"
     assert f"{len(COMPANIES)} of {len(COMPANIES)} companies succeeded" in process.stdout, "Success count wrong"
+    assert "AI summary unavailable for" not in process.stdout, "--skip-ai isn't an AI failure"
+    assert [analysis_file_state(workbook) for workbook in workbooks] == analyses_before, \
+        "--skip-ai must not write, replace or delete any analysis JSON"
 
     rows = summary_table(process.stdout)
     assert set(rows) == {company["name"] for company in COMPANIES}, f"Summary rows: {sorted(rows)}"
@@ -206,24 +236,33 @@ def check_exit_codes(broken_path):
         assert "give one workbook path, or --all" in process.stderr, f"main.py {args}: unclear usage error"
 
 
-def check_unwired_ai_fails_loudly(config):
-    """Without --skip-ai, a run must fail (the AI step isn't connected), not skip the AI silently."""
-    results, _, _ = run_quietly(main.run_batch, [COMPANIES[0]["answer_key"].OUTPUT_PATH], config, False)
-    assert results[0]["error"] == f"NotWiredError: {main.NOT_WIRED_MESSAGE}", f"Got: {results[0]['error']}"
-    assert main.ai_step(skip_ai=True) == "skipped (--skip-ai)", "--skip-ai should still skip AI"
+def refuse(what):
+    """A stand-in function that stops the check if it is ever called."""
+    def called(*args, **kwargs):
+        raise AssertionError(f"--skip-ai {what}")
+    return called
 
 
-def check_missing_deck_builder_is_skipped(folder, config):
-    """If build_deck.py weren't there, the deck step says so and the result reads 'OK (AI + deck skipped)'."""
-    real_path = main.BUILD_DECK_PATH
-    main.BUILD_DECK_PATH = Path(folder) / "no_build_deck.py"  # a path that doesn't exist; the real file is untouched
+def check_skip_ai_never_calls_claude(folder, config):
+    """--skip-ai with every way to Claude blocked: each company still gets a placeholder deck, and no analysis JSON."""
+    blocked = [(main, "analyze", refuse("called analyze()")),
+               (main, "api_key_problem", refuse("looked for an API key")),
+               (analyze.anthropic, "Anthropic", refuse("created an Anthropic client"))]
+    originals = [(module, name, getattr(module, name)) for module, name, _ in blocked]
+    for module, name, stand_in in blocked:
+        setattr(module, name, stand_in)
     try:
-        results, stdout, _ = run_quietly(main.run_batch, [COMPANIES[0]["answer_key"].OUTPUT_PATH], config, True)
-        result = main.result_text(results[0])
+        workbooks = [company["answer_key"].OUTPUT_PATH for company in COMPANIES]
+        results, stdout, _ = run_quietly(main.run_batch, workbooks, config, True, output_dir=Path(folder))
     finally:
-        main.BUILD_DECK_PATH = real_path
-    assert f"Deck: {main.NO_DECK_MESSAGE}" in stdout, "Missing deck builder should print the skip message"
-    assert result == "OK (AI + deck skipped)", f"Got: {result}"
+        for module, name, original in originals:  # always put the real functions back
+            setattr(module, name, original)
+    for company, result, workbook in zip(COMPANIES, results, workbooks):
+        assert main.result_text(result) == EXPECTED_OK, f"{company['name']}: {main.result_text(result)}"
+        assert headline_on_deck(deck_path(workbook, folder)) == PLACEHOLDER_TEXT, f"{company['name']}: no placeholder"
+        assert not analysis_path(workbook, folder).exists(), f"{company['name']}: --skip-ai saved an analysis JSON"
+    placeholder_lines = stdout.count(f"({PLACEHOLDER_TEXT} on slides 1 and 5)")
+    assert placeholder_lines == len(COMPANIES), "Each deck line should say it carries the placeholder"
 
 
 def check_ignores_lock_and_other_files(folder):
@@ -248,10 +287,10 @@ def main_check():
         print("✓ Batch continues past an unexpected code error, and prints its traceback")
         check_exit_codes(Path(folder) / "broken.xlsx")
         print("✓ Exit codes: 0 all OK, 1 any company failed, 2 wrong arguments")
-        check_unwired_ai_fails_loudly(config)
-        print("✓ Without --skip-ai the run fails loudly: the AI step isn't connected yet (no API call)")
-        check_missing_deck_builder_is_skipped(folder, config)
-        print("✓ If build_deck.py were missing, the deck is skipped with a message")
+
+    with tempfile.TemporaryDirectory() as folder:
+        check_skip_ai_never_calls_claude(folder, config)
+        print("✓ --skip-ai never calls Claude or needs a key: placeholder on every deck, no analysis JSON saved")
 
     with tempfile.TemporaryDirectory() as folder:
         check_ignores_lock_and_other_files(folder)
