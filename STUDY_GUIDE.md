@@ -293,7 +293,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 |---|---|---|
 | `number_format(column)` | The Excel display format for a column: `#,##0`, `0.0" mo"`, `0.00"x"` or `0.0%`. | The cell holds 0.971; Excel shows 97.1%. The number stays usable in formulas. |
 | `cell_value(column, value, is_gap)` | The number, or a word: NaN → "data missing" or "n/a (no prior period)"; ∞ → "∞ (reason)". | Excel can't store NaN or ∞, and openpyxl would silently save both as an empty cell, so "missing" and "infinite" would look the same. |
-| `runway_context_value(runway)` | Same idea for runway at budget: a number, "n/a (no budget row)" or "∞ (budget not burning)". | |
+| `runway_context_value(runway, has_budget_row)` | Same idea for runway at budget: a number, "n/a (no budget row)", "data missing" (the row exists but latest cash or budgeted burn is blank) or "∞ (budget not burning)". | Added in the Task 7 review: a blank input used to say "no budget row". |
 | `color_cell(cell, status)` | Fills a cell red/green/gray with matching text color. | |
 | `write_header(sheet, headers)` | Bold header row, freezes row 1 and column A. | |
 | `set_column_widths(sheet, widths)` | Sets column widths left to right. | |
@@ -302,8 +302,8 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `write_metrics_sheet(sheet, metrics, gaps, config)` | One row per quarter, one column per metric, with values, formats and highlights. | |
 | `flag_row(flag, gaps, config)` | One flag as a row: Flag, Quarter, Value, Threshold, Trips when, Status. The combo rule gets text instead of a value. | "Trips when" says "below threshold" or "above threshold", so −20.0% makes sense. |
 | `style_flag_row(sheet, row_number, flag)` | Colors the whole row by status and formats Value and Threshold. | |
-| `write_runway_context(sheet, runway, quarter)` | Adds "Runway at next quarter's budgeted burn (context, not a flag)" below the table, uncolored. | CLAUDE.md: shown as context, not flagged. |
-| `write_flags_sheet(sheet, flags, gaps, config, runway_at_budget)` | Writes every flag row plus the runway context line. | |
+| `write_runway_context(sheet, runway, has_budget_row, quarter)` | Adds "Runway at next quarter's budgeted burn (context, not a flag)" below the table, uncolored. | CLAUDE.md: shown as context, not flagged. |
+| `write_flags_sheet(sheet, flags, gaps, config, runway_at_budget, has_budget_row)` | Writes every flag row plus the runway context line. | |
 | `gap_label(name)` | `"nrr"` → `"NRR (annualized)"`; `"flag: Rule of 40"` → `"Flag: Rule of 40"`. | |
 | `write_gaps_sheet(sheet, gaps)` | One row per affected metric or flag, or "None — every metric and flag has the data it needs". | |
 | `build_workbook(actuals, next_budget, config)` | Computes metrics, flags and gaps, then writes all 3 sheets into a new workbook. | |

@@ -84,10 +84,16 @@ def cell_value(column, value, is_gap):
     return float(value)  # plain Python float; openpyxl writes it exactly
 
 
-def runway_context_value(runway):
-    """Runway at next quarter's budgeted burn: a number, or a label saying why there isn't one."""
-    if math.isnan(runway):
+def runway_context_value(runway, has_budget_row):
+    """Runway at next quarter's budgeted burn: a number, or a label saying why there isn't one.
+
+    NaN has two causes: no budget row at all, or a blank input (latest cash or budgeted burn).
+    Only the first is "no budget row"; the second is "data missing".
+    """
+    if not has_budget_row:
         return NO_BUDGET_ROW
+    if math.isnan(runway):
+        return DATA_MISSING
     if math.isinf(runway):
         return BUDGET_NOT_BURNING
     return float(runway)
@@ -193,23 +199,23 @@ def style_flag_row(sheet, row_number, flag):
             cell.alignment = Alignment(horizontal="right")
 
 
-def write_runway_context(sheet, runway, quarter):
+def write_runway_context(sheet, runway, has_budget_row, quarter):
     """Below the flag table, after one empty row: runway at next quarter's budgeted burn."""
     row_number = sheet.max_row + 2
     sheet.cell(row=row_number, column=1, value=RUNWAY_CONTEXT_LABEL)
     sheet.cell(row=row_number, column=2, value=quarter)
-    cell = sheet.cell(row=row_number, column=3, value=runway_context_value(runway))
+    cell = sheet.cell(row=row_number, column=3, value=runway_context_value(runway, has_budget_row))
     cell.number_format = number_format("runway_months")
     cell.alignment = Alignment(horizontal="right")
 
 
-def write_flags_sheet(sheet, flags, gaps, config, runway_at_budget):
+def write_flags_sheet(sheet, flags, gaps, config, runway_at_budget, has_budget_row):
     """Every flag for one quarter (the latest), colored by status, plus runway context."""
     write_header(sheet, FLAG_HEADERS)
     for flag in flags:
         sheet.append(flag_row(flag, gaps, config))
         style_flag_row(sheet, sheet.max_row, flag)
-    write_runway_context(sheet, runway_at_budget, flags[0]["quarter"])
+    write_runway_context(sheet, runway_at_budget, has_budget_row, flags[0]["quarter"])
     set_column_widths(sheet, [56, 10, 36, 18, 42, 32])
 
 
@@ -249,7 +255,7 @@ def build_workbook(actuals, next_budget, config):
     metrics_sheet.title = SHEET_NAMES[0]
     write_metrics_sheet(metrics_sheet, metrics, gaps, config)
     write_flags_sheet(book.create_sheet(SHEET_NAMES[1]), flags, gaps, config,
-                      runway_at_next_budget(actuals, next_budget))
+                      runway_at_next_budget(actuals, next_budget), next_budget is not None)
     write_gaps_sheet(book.create_sheet(SHEET_NAMES[2]), gaps)
     return book
 
