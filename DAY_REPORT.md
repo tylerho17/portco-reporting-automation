@@ -553,3 +553,93 @@ All 3 are logged in LEARNINGS.md.
 2. **CLAUDE.md, outside this task's sections, has 2 lines that are out of date** (decision 10).
 3. **Cost and time come from a single live run** of 3 companies (Task 4, Unresolved 3). The 275-company numbers are a projection.
 4. **The README's Next steps say "a person still reads each deck before it goes to a board"** because direction claims aren't validated (Task 4, Unresolved 2). That stays true until the direction check exists.
+
+## Review: everything committed today (`git diff main..HEAD`)
+
+### What I reviewed and how
+
+- **Scope:** 17 commits, `df6de63` to `9bd1951`. 24 files, +3,320 / −113 lines.
+- **Read in full:** build_deck.py, main.py, charts.py, text_fit.py, make_template.py.
+- **Read the diffs of:** analyze.py (`save_analysis`), metrics.py (the two blank-input fixes), check_main.py, tests/test_excel_output.py.
+- **Skimmed:** check_deck.py, and every new test file's test names.
+- **Ran again:** 412 tests pass. All 5 check scripts print "All checks passed".
+- **Probes:** 4 small scripts in /tmp that try one thing each. None calls the API, and none writes to output/ (they use temporary folders). They aren't part of the project.
+
+### Findings, most serious first
+
+**1. A valid AI answer that's a little longer makes the whole company FAIL, with no deck. (Medium-high: your decision)**
+- **What happens:** the validator allows each win and risk detail up to 45 words. Slide 1 has room for less than that. When the text doesn't fit at 12 pt, text_fit.py stops the build (as designed). But in main.py that stop happens inside the deck step, so:
+  - the result is `FAILED: TextDoesNotFitError: Slide 1, Risks: ...`, with a traceback
+  - no deck is saved (the old one was already deleted)
+  - the analysis JSON is saved as **passed**
+- **Proof (fake Claude client, temporary folder):** I took today's real Northwind answer and added "this quarter" to each of the 6 win and risk details. The longest detail was 43 words, still under the 45-word limit, and main.py reported Northwind as FAILED.
+- **How close today's real answers are** (the same extra words added to every detail until slide 1 breaks):
+
+  | Company | Wins/risks font today | Breaks with |
+  |---|---|---|
+  | Northwind | 12 pt (the floor) | +1 word per detail |
+  | Fernhollow | 12 pt (the floor) | +3 words per detail |
+  | Alderpeak | 13 pt | +4 words per detail |
+
+  So the next live run could fail a company just because Claude wrote a bit more. Task 2's report said Northwind needed 13 pt. That was the old restored text. The live-run text is longer and already needs 12 pt.
+- **Why no check caught it:**
+  - the tests use short fake answers
+  - check_deck.py uses the saved answers, which happen to fit
+  - the 45-word limit was set in step 3, before the slides existed
+- **Why this conflicts with the rules:** decision K says the deck is built whenever the numbers are valid. Here both the numbers and the AI text are valid, and there's no deck.
+- **Options:**
+  - **(a) Placeholder fallback:** if the AI text doesn't fit slide 1 or 5, build the deck with "AI summary unavailable". The result reads `OK (AI failed)`, with the reason "AI text doesn't fit slide 1".
+  - **(b) Fit check in the validator:** `validate_summary` also measures the text against slide 1's boxes. A too-long answer then uses the existing retry, with "too long for the slide" as the problem. It costs nothing unless it happens.
+  - **(c) Tighter limits or more room:** a lower word limit in the prompt (needs paid runs to confirm), or more room for the columns (e.g. a shorter headline box).
+- **My recommendation:** (b) plus (a). The retry fixes most cases, and the placeholder guarantees the deck.
+- **Not fixed:** each option changes what the AI step does or what a result means, so it's your call.
+
+**2. A text-fit stop prints a traceback as if it were a code bug. (Low)**
+- `TextDoesNotFitError` isn't in main.py's `INPUT_ERRORS`, so it gets the full traceback that's meant for bugs.
+- The message already names the slide and the box, so the traceback adds nothing.
+- It goes with finding 1: fixing that removes most of the cases.
+
+**3. `shrink_to_fit` accepts text that already starts below 12 pt. (Low, can't happen today)**
+- **Proof:** `shrink_to_fit([paragraph('short', 10)], ...)` returns 10 pt without an error.
+- **Why it matters:** `add_columns` shrinks both columns by the bigger column's shrink. If the two columns started with different smallest sizes, one could be pushed below 12 pt, and nothing would stop it.
+- **Why it can't happen today:** on both slides that use columns (1 and 4), the two columns use the same sizes. check_deck.py also checks every saved font is at least 12 pt.
+- **Fix, if you want it:** one line that stops when the smallest size is already below `MIN_FONT_PT`.
+
+**4. A hand-edited analysis JSON can crash the deck step instead of giving a reason. (Low)**
+- **Examples:** a `payload` that isn't an object, or a file that isn't UTF-8 text. `load_analysis` raises an error instead of returning "why not".
+- **Effect:** in main.py that company fails.
+- **How likely:** only a hand-edited file can do this. `save_analysis` always writes a valid shape.
+
+**5. The template script depends on python-pptx internals, and no package version is pinned. (Low)**
+- **Internals:** make_template.py uses python-pptx's private attributes: `theme_part._blob` and `shapes._spTree`.
+- **No pins:** requirements.txt pins no versions, and Pillow isn't listed (Task 2 decision 16).
+- **Risk:** a python-pptx upgrade could break re-running make_template.py.
+- **Limit of the risk:** templates/base.pptx is committed, so decks keep building either way.
+
+**6. Each workbook is read 3 times per company. (Low, efficiency)**
+- `run_company`, `save_metrics_workbook` and `save_deck` each clean it again and recompute the metrics. The payload is also built twice: once for Claude, once to re-check the answer.
+- **Cost:** well under a second per company, next to about 33 s of API time.
+- **Verdict:** not worth changing now.
+
+**7. Chart PNGs aren't deleted before a build. (Very low)**
+- Decks and analyses are deleted first; the images in `output/charts/` aren't.
+- A failed build can leave last run's PNGs. They're only used for README screenshots.
+
+**8. Docs out of date**
+- **check_deck.py's docstring** said Alderpeak and Fernhollow have no analysis. They do since Task 4. **Fixed** (docstring only).
+- **STUDY_GUIDE.md** still described main.py before the deck existed (`NotWiredError`, "AI + deck skipped"). **Updated in this task.**
+- **CLAUDE.md** still has the 2 out-of-date lines from Task 5 decision 10. Not edited (this task doesn't allow it).
+
+### What I checked and found right
+
+- **No typed numbers:** a test reads build_deck.py and charts.py and fails on any text in the code (docstrings aside) that contains a digit. Every number comes through `metrics.format_value`, so ratios become % only at output.
+- **One label set:** the deck uses `METRIC_LABELS` and `INPUT_LABELS` from metrics.py, and Excel's status and gap labels. No names are typed a second time.
+- **A stale or edited analysis can't reach a slide:** `load_analysis` re-checks it against a payload rebuilt from today's workbook. check_deck.py proves it with a changed number and a wrong quarter.
+- **The AI failure paths are sorted correctly in main.py:**
+  - failed validation twice, or an API error → deck with the placeholder, `OK (AI failed)`
+  - any other error → the company fails with a traceback
+  - a missing key → the run stops before any company starts
+- **`--skip-ai` can't reach Claude:** check_main.py runs it with no key and a dead API address, and also swaps in stand-ins that stop the check if `analyze()`, the key check or the client is ever called.
+- **Blank inputs win:** the two metrics.py fixes put missing input first in both runway-at-budget and the combo rule, the same order as `metric_reasons`.
+- **Delete first:** the old deck and the old analysis are deleted before a rebuild, so a crash never leaves last run's file looking current.
+- **No secrets or real data:** `.env` isn't tracked (only `.env.example`), and every company and number is fictional.

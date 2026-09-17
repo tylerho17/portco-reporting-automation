@@ -1,7 +1,7 @@
 """Automated proof for build step 4: the board decks are complete, match the numbers, and fit.
 
-For each of the three companies, build the deck (Northwind with output/northwind_analysis.json;
-Alderpeak and Fernhollow have no analysis, so they get the placeholder), open the saved file, and check:
+For each of the three companies, build the deck (with output/<company>_analysis.json if it exists,
+otherwise with the placeholder), open the saved file, and check:
 1. 5 slides, titles in order (typed by hand here).
 2. Slide 1: the headline is the JSON's headline, or exactly "AI summary unavailable"; slide 5
    matches (the JSON's 3 questions, or the placeholder). The flag count matches the company's story.
