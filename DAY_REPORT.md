@@ -493,3 +493,63 @@ Both are logged in LEARNINGS.md.
    - **(c) Human review:** keep a person reading each claim before a deck goes to a board. It's the only thing that caught these today.
 3. **Only 1 run per company.** 3 first-attempt passes don't prove the retry rate at 275 companies. The model comparison's Sonnet runs didn't need retries either, so the retry path has only run for real with Haiku.
 4. **`output/northwind_analysis_restored_task3.json`** can be deleted now that a real analysis exists (output/ isn't in git).
+
+## Task 5: Docs (README.md, CLAUDE.md Architecture)
+
+### Where this started
+
+Nothing for this task existed yet: README.md was the one-line stub plus the model comparison block. No API calls were made. I didn't edit config.yaml or any pipeline code.
+
+### What I built
+
+1. **`tests/test_docs.py`** (4 tests, written first):
+   - The README keeps exactly one model comparison block, start marker before end marker.
+   - Rewriting that block with `compare_models.write_readme_section` (on a copy in a temporary folder) leaves everything above and below it unchanged. So re-running the model comparison can't wipe the new README.
+   - Every `.py` file named in the README, and in CLAUDE.md's Architecture section, exists. I proved the check catches a made-up `ghost.py`.
+2. **README.md, rewritten:**
+   - **What it does:** 3 sentences.
+   - **How to run it:** setup, the 3 main.py commands, a sample summary table, the output files, the other commands, and the 5 checks + pytest.
+   - **Data flow:** a diagram from the workbook to the deck.
+   - **Key design decisions:** 11 of them, each with its reason.
+   - **Model comparison:** the existing block, unchanged. I checked it's identical character for character.
+   - **Cost:** per company, and for 275 companies per quarter.
+   - **Screenshots:** 11 placeholders.
+   - **Next steps.**
+3. **CLAUDE.md, Architecture section only:**
+   - build_deck.py is no longer "not built yet".
+   - Added make_template.py, charts.py, text_fit.py, check_deck.py, README.md, LEARNINGS.md and DAY_REPORT.md.
+   - main.py's line now shows its full chain.
+
+**Checks:** 412 tests pass (408 + 4 new). All 5 check scripts print "All checks passed".
+
+### Decisions I made that you didn't specify
+
+1. **6 of the 8 Next steps are already built, so the README marks them done.** They are the combo minimum drop, lookback guard, budget row check, two-KPI-tab check, same-quarter warning and sign-aware number check. Each one is in the code with tests: LEARNINGS rows D, E, F, G, N and O, from the hardening pass. Listing them as future work would say the code lacks things it has. The README shows them as `[x]`, each with the function that does it. Only the Power Automate or SharePoint trigger and the portfolio rollup are `[ ]`. **Tell me if you meant something different by any of the 6.**
+2. **I added 3 open items to Next steps from earlier reports.** They are: checking the direction of trend claims (Task 4), an `--output-dir` option (Tasks 3 and 4), and running companies in parallel (Task 3). They're real gaps a reader should know about. Delete them if you want only your list.
+3. **I didn't add a new stories section to CLAUDE.md.** "Company stories" already has the Alderpeak and Fernhollow stories (added in the hardening pass). I checked them against today's data (Fernhollow NRR 77.9%, GRR 74.7%, runway 6.0 mo, Rule of 40 "cannot evaluate") and against Task 4's flag counts. They match, so I left them word for word.
+4. **Where the cost numbers come from:** Task 4's live run. $0.0466 per company is the average of the 3 real costs. $12.81 for 275 companies is that average × 275. The range is $9.45 (all like Alderpeak) to $16.18 (all like Fernhollow). Prices come from `compare_models.PRICES` (as of 2026-06-24). I worked these out with a Python one-liner, not by hand.
+5. **I suggest a budget of $13–15 per quarter**, between the live run ($12.81) and the model comparison ($14.65), because a retry doubles one company's cost.
+6. **Screenshot placeholders are text lines (📸), not image links.** A link to an image that doesn't exist shows as a broken icon on GitHub. Each line names the file, slide and what should be visible. I added two that show the flags aren't hard-coded: Alderpeak slide 1 ("0 of 9") and Fernhollow slide 4.
+7. **The README tells you to run `build_deck.py` before taking deck screenshots.** check_main.py leaves placeholder decks behind. I ran it for all 3 companies at the end of this task, so the decks in output/ have the AI text right now (I checked Northwind's slide 1). The next check run will replace it again.
+8. **I left the Python version (3.14) and "400+ tests" in the README.** An exact test count goes out of date with every new test.
+9. **One README heading (Model comparison) is written by compare_models.py.** I placed the block after the design decisions, and the table of contents links to it.
+10. **CLAUDE.md, outside the sections I was allowed to edit:** the heading "Step 4 decisions (build_deck.py, not built yet)" and "Should trip 4+ flags" in the Northwind story (it trips 6) are now out of date. I didn't change them.
+
+### What failed and how I fixed it
+
+All 3 are logged in LEARNINGS.md.
+
+1. **Your Next steps list included 6 finished items** (decision 1). I caught this by checking each item in the code before writing.
+2. **My first README draft blamed `check_deck.py` as well as `check_main.py` for placeholder decks.**
+   - **Caught:** when I ran the checks myself. Only check_main.py does it.
+   - **Fixed:** corrected the note. I also proved that `build_deck.py` restores the AI text.
+3. **Three shell commands were refused before running.**
+   - **Which:** two `for` loops using `$f`, and one ending in `awk`.
+   - **Workaround:** ran one command per script instead. Nothing ran, and there was no effect on the code.
+
+### Unresolved
+
+1. **Screenshots aren't taken.** Placeholders only: capturing them needs you (PowerPoint and Excel open on screen).
+2. **CLAUDE.md, outside this task's sections, has 2 lines that are out of date** (decision 10).
+3. **Cost and time come from a single live run** of 3 companies (Task 4, Unresolved 3). The 275-company numbers are a projection.
+4. **The README's Next steps say "a person still reads each deck before it goes to a board"** because direction claims aren't validated (Task 4, Unresolved 2). That stays true until the direction check exists.
