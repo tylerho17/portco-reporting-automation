@@ -38,7 +38,7 @@ from check_companies import COMPANIES
 from clean import clean_workbook
 from excel_output import save_metrics_workbook
 from make_template import FOOTER_RULE
-from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, PASS, TRIP, compute_metrics, load_config
+from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, TRIP, compute_metrics, load_config
 from text_fit import MIN_FONT_PT, paragraph, text_height_pt
 
 PROJECT_DIR = Path(__file__).parent

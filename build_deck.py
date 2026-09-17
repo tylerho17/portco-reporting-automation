@@ -265,6 +265,24 @@ def add_text_box(slide, name, box, paragraphs, deck):
     return shape
 
 
+def add_columns(slide, columns, top, height, deck):
+    """Two text boxes side by side across the content area, at matching font sizes.
+
+    columns = [(name, paragraphs), (name, paragraphs)]. Each column is fitted on its own first;
+    then both use the bigger shrink, so the two sides never show different sizes.
+    """
+    left, _, width, _ = deck["area"]
+    column_width = (width - COLUMN_GAP) // 2
+    shrink = 0
+    for name, paragraphs in columns:
+        sized = fitted(paragraphs, column_width, height, f"{deck['where']}, {name}")
+        shrink = max(shrink, paragraphs[0]["size"] - sized[0]["size"])
+    for position, (name, paragraphs) in enumerate(columns):
+        same_size = [{**item, "size": item["size"] - shrink} for item in paragraphs]
+        column_left = left + position * (column_width + COLUMN_GAP)
+        add_text_box(slide, name, (column_left, top, column_width, height), same_size, deck)
+
+
 def set_title(slide, text, deck):
     """Write the slide title into the layout's title placeholder, shrunk to fit."""
     title = slide.shapes.title
@@ -320,11 +338,8 @@ def summary_slide(slide, deck):
         add_text_box(slide, "AI note", (left, columns_top, width, columns_height),
                      [paragraph(PLACEHOLDER_NOTE, BODY_SIZE, color=MID_GRAY)], deck)
         return
-    column_width = (width - COLUMN_GAP) // 2
-    add_text_box(slide, "Wins", (left, columns_top, column_width, columns_height),
-                 points_paragraphs("Wins", summary.wins), deck)
-    add_text_box(slide, "Risks", (left + column_width + COLUMN_GAP, columns_top, column_width, columns_height),
-                 points_paragraphs("Risks", summary.risks), deck)
+    add_columns(slide, [("Wins", points_paragraphs("Wins", summary.wins)),
+                        ("Risks", points_paragraphs("Risks", summary.risks))], columns_top, columns_height, deck)
 
 
 # ---------------------------------------------------------------------------
@@ -472,11 +487,9 @@ def risks_slide(slide, deck):
     """Flags on the left; the Data gaps line (one bullet per set of quarters) on the right."""
     data = deck["data"]
     set_title(slide, f"Risks and flags — {data['latest']}", deck)
-    left, top, width, height = deck["area"]
-    column_width = (width - COLUMN_GAP) // 2
-    add_text_box(slide, "Risks and flags", (left, top, column_width, height), flags_paragraphs(data), deck)
-    add_text_box(slide, "Data gaps", (left + column_width + COLUMN_GAP, top, column_width, height),
-                 section("Data gaps (data missing)", gaps_lines(data["gaps"])), deck)
+    _, top, _, height = deck["area"]
+    add_columns(slide, [("Risks and flags", flags_paragraphs(data)),
+                        ("Data gaps", section("Data gaps (data missing)", gaps_lines(data["gaps"])))], top, height, deck)
 
 
 # ---------------------------------------------------------------------------

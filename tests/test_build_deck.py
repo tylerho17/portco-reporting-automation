@@ -254,6 +254,20 @@ def test_risks_slide_lists_tripped_flags_combo_and_data_gaps(tmp_path):
     assert gaps.startswith("Data gaps") and "Q1 2026 + Q2 2026: ARR growth QoQ" in gaps
 
 
+def run_sizes(text_shape):
+    return {run.font.size.pt for item in text_shape.text_frame.paragraphs for run in item.runs}
+
+
+def test_side_by_side_columns_use_the_same_font_sizes(tmp_path):
+    # Wins are long, risks are short: the risks column must shrink along with the wins column.
+    summary = summary_dict()
+    summary["wins"] = [{"title": "Steady base", "detail": " ".join(["Customers stayed with the product."] * 5)}] * 3
+    slide = build(tmp_path, summary=summary).slides[0]
+    wins, risks = shape(slide, "Wins"), shape(slide, "Risks")
+    assert max(run_sizes(wins)) < 18      # the wins heading had to shrink from 18 pt...
+    assert run_sizes(wins) == run_sizes(risks)  # ...and the risks column shrank with it
+
+
 def test_charts_slide_has_two_pictures(tmp_path):
     slide = build(tmp_path).slides[2]
     assert shape(slide, "ARR chart").shape_type == 13   # MSO_SHAPE_TYPE.PICTURE
