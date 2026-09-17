@@ -343,3 +343,87 @@ main.py already prints input errors as one line, e.g. `✗ FAILED: ValueError: S
    - **The number check can't catch a flipped sign.** `numbers_in` ignores minus signs (its docstring says so), so an answer saying net new ARR vs budget was "19.0%" when the data says "−19.0%" would pass. LEARNINGS.md logs direction errors in general, but not this case.
    - **`python metrics.py` prints "n/a" for both a data gap and "no prior period"** (Exercise 8). Only that debugging printout is affected; Excel and the Claude payload tell them apart. The exercise uses it as a teaching point.
 3. **Check the interview answers against your own view,** especially Q2 (business case) and Q25 (what's next), before you use them. They're a starting point written from the repo, not from your conversations with the fund.
+
+---
+
+## Task 7 — Review of everything committed tonight (`git diff main..HEAD`)
+
+**Result:** done. I reviewed all 25 commits (from `aaaa606` to `14bf7f1`, 25 files). I found and fixed **3 clear bugs**, each with a test that fails on the old code and passes on the new one. Everything else is listed below for you to decide. `python -m pytest -q` now runs **223 tests, all passing** (212 before, +11). `check_northwind.py`, `check_companies.py`, `check_excel_output.py` and `check_main.py` all print "All checks passed". Two commits: `1fd5db0` (Excel runway label) and `1d53668` (compare_models.py). No refactoring. CLAUDE.md, config.yaml, the analyze.py prompt and metrics.py are unchanged. No build_deck.py and no API calls.
+
+### Review
+
+The findings are grouped as you asked. **"Still open" means I didn't change it.** Items already in an earlier task's "Unresolved" list are only named here, with a pointer, unless the review found something new about them.
+
+#### Inconsistent with CLAUDE.md
+
+1. **"Not meaningful" still shows as "data missing" in 3 cases, even with no blank cells.** All three come from `metrics.data_gaps`, which existed before tonight. Tonight's Excel output and main.py summary pass them on. I confirmed each one with a scratch script:
+   - **0 ÷ 0 counts as a gap.** A complete quarter with revenue 0 (a pre-revenue company) makes gross margin and CAC payback "data missing". So does zero net new ARR against a flat `budget_arr` (net new ARR vs budget). main.py then prints `7 metrics/flags (blank: none)`, which contradicts itself.
+   - **Flags with too little history count as gaps.** `data_gaps` lists every "cannot evaluate" flag, whatever the reason. A company with fewer than 5 quarters gets "Flag: Rule of 40" in Data gaps, even though the real reason is "no prior year". With fewer than 3 quarters, the combo rule gets the same treatment. Metric cells in the same situation correctly say "n/a (no prior period)", so the flag and its own metric disagree.
+   - **A partly blank quarter among the first 4** (already Task 4, Unresolved 1). New finding: the test meant to guard this (`test_data_gaps_one_blank_cell_spreads_only_to_metrics_that_use_it`) blanks Q4 2025, which has a full year of history, so it can't catch the problem.
+2. **CAC payback can trip a flag on a blank cell.** If S&M spend is blank and new ARR is 0, `cac_payback_months` gives ∞ and **trips**, and no data gap is listed. The CLAUDE.md rule is "any flag that depends on a missing value returns cannot evaluate". This is the same family as Task 4, Unresolved 5 (runway and burn multiple), but those cases *pass*, and this one puts a red flag on the board slide. It's in metrics.py (from before tonight), so I didn't change it.
+3. **The budget-only row isn't checked to be "next quarter"** (Task 5, Unresolved 2). "Q1 2026 (Budget)" after Q2 2026 actuals is accepted and used for runway at budget without a word.
+4. **CLAUDE.md's Architecture list is out of date.** It doesn't mention `excel_output.py`, `make_data_common.py`, `make_data_alderpeak.py`, `make_data_fernhollow.py`, the four `check_*.py` scripts, `compare_models.py`, `tests/` or `pytest.ini`. The healthy and distressed company stories aren't in CLAUDE.md either (Task 1, Unresolved 5). I'm not allowed to edit CLAUDE.md.
+5. **`python main.py data/northwind.xlsx` doesn't do what CLAUDE.md describes yet.** Steps 4b and 5 were built before step 4. Without `build_deck.py`, main.py skips both the AI summary and the deck, even without `--skip-ai` (Task 3, decision 1). That's correct for tonight, but the README and demo shouldn't promise a deck until step 4 is done.
+
+#### Risky
+
+6. **compare_models.py understates cost when a run fails.** This doesn't affect tonight's README numbers, because all 6 real runs passed.
+   - If the retry hits an API error, the first attempt's tokens are thrown away and the run is logged at $0.
+   - If a reply doesn't match the JSON shape, analyze.py logs `input_tokens: None`, and `make_run_info` counts it as 0.
+   - Either way, average cost per run and the 275-company projection come out low. Fixing it means changing analyze.py's error path (not the prompt).
+7. **compare_models.py saves nothing until all 6 runs finish.** A crash or Ctrl-C during run 5 loses 4 paid results.
+8. **Prices are hard-coded** (Sonnet 5 $2/$10, Haiku 4.5 $1/$5 per million tokens, "as of 2026-06-24"), and the README prints them with no decimals, so a price like $0.80 would show as "$1". I couldn't check current prices tonight (no web access, no API). Check them before quoting "$14.65 for 275 companies" in an interview.
+9. **Commit `aaaa606` is titled "Add pytest" but also contains all of step 3b:** `compare_models.py`, the README comparison table, the LEARNINGS entry, the analyze.py change and the new check_northwind checks. Anyone reading `git log` would miss step 3b. I didn't rewrite history, since the branch may already be shared. If you squash-merge, a better PR title fixes it.
+10. **main.py reads each workbook twice** (Task 6, Unresolved 2): once in `run_company`, and again in `save_metrics_workbook`. It's harmless now. If a file changed between the two reads, the Excel file and the summary line could disagree.
+11. **`make_data_common.py` checks the answer key with `assert`**, which `python -O` switches off. It's low risk, because `check_companies.py` would still catch a bad workbook.
+
+#### Unclear
+
+12. **`check_excel_output.py`'s docstring overstates how independent it is.** It says expected labels and formats are written out "instead of imported", but it imports the column headers (`METRIC_LABELS`) and the lists that decide number formats (`DOLLAR_COLUMNS`, `MONTH_COLUMNS`) from the same places excel_output.py uses. A wrong entry there would pass both. Also, ∞ cells are only checked with `startswith("∞")`, so a wrong reason (e.g. "∞ (ARR shrank)" on runway) would pass.
+13. **Northwind's ARR vs budget is never checked against a hand formula.** `EXPECTED_LATEST` in `check_northwind.py` has no `arr_vs_budget` entry, but the other two companies have one. It would be one line: `"arr_vs_budget": 27470 / 26800 - 1`. That's a missing check, not a bug, so I didn't add it.
+14. **Two small compare_models.py edges.** Running `score` a second time rewrites the README but not LEARNINGS.md, so the two can disagree. A README with the start marker but no end marker crashes with `IndexError`.
+15. **Names still differ across outputs** (Task 2, Unresolved 1): the Flags sheet says "Burn vs budget" and the Metrics sheet says "Net burn vs budget". `python metrics.py` and the analyze payload also still print "n/a" for both a gap and "no prior period" (Task 1, Unresolved 3). Both are worth settling before the deck.
+
+#### Checked and fine
+
+- **The three company stories match their docstrings and CLAUDE.md.** Northwind: NRR 108.0% → 102.0% → 97.1%, pipeline rising, burn 20.0% over budget, runway 11.0 months, 6 flags trip. Alderpeak trips no flag in any quarter. Fernhollow: 7 trip, 1 cannot evaluate, 1 pass.
+- **Nothing writes into `data/`.** Tests use pytest's temp folder and `check_main.py` uses a temp directory. The only project writes go to `output/`, which is git-ignored.
+- **No API call happens on import.** `load_dotenv` and the client are only created inside `analyze()` / `command_run`.
+- **Ratios are stored as decimals everywhere.** Formatting to % happens only in the printouts, the Excel number formats and the payload.
+- **All data is fictional.**
+
+### What I built (the 3 bug fixes)
+
+| File | What changed, in plain English |
+|---|---|
+| `excel_output.py` | **Bug 1: the Excel file said "no budget row" when a number was just blank.** Runway at next quarter's budgeted burn is NaN in three cases: there is no budget row, the budget row's burn cell is blank, or the latest quarter's cash is blank. `runway_context_value` only looked at the NaN, so all three said "n/a (no budget row)". It now also receives `has_budget_row`: no row → "n/a (no budget row)"; a row but NaN → **"data missing"**. `write_runway_context` and `write_flags_sheet` pass that one extra value through, and `build_workbook` supplies it (`next_budget is not None`). |
+| `tests/test_excel_output.py` (new, 5 tests) | Builds a tiny 2-quarter table and reads the runway context cell from the Flags sheet. The 5 cases are a normal number (1200 / (300 / 3) = 12.0), no budget row, a budget of 0 burn (∞), a blank budgeted burn and a blank latest cash. The last 2 fail on the old code. |
+| `compare_models.py` | **Bug 2: runs past the 10th silently disappeared.** Blind letters came from `"ABCDEFGHIJ"`, and `zip` stops at the shorter list without an error. With `RUNS_PER_MODEL = 6`, 12 paid runs would become 10 in the blind set and the stats. Letters are now A–Z, and more than 26 runs stops with a message. **Bug 3: a letter could be scored twice.** `score A=4 B=3 A=2` quietly kept 2. It now stops with "answer A was already scored - give each letter once". |
+| `tests/test_compare_models.py` (new, 6 tests) | Checks that 6, 11 and 26 runs each keep every run exactly once, that 27 runs stop, and that a repeated letter stops (including `A=4 a=2`). 5 of the 6 fail on the old code. The 6-run case passes on both, which is expected. |
+| `LEARNINGS.md` | Two rows: the runway label, and the two compare_models.py holes. |
+| `STUDY_GUIDE.md` | 5 table rows updated so the function signatures and descriptions match the fixed code. |
+
+### Decisions you didn't specify
+
+1. **What counts as a "clear bug" I could fix:** wrong output with no design question behind it, in code committed tonight. A fix had to be a few lines, with the right answer obvious from CLAUDE.md or from what the code already claims to do. Everything that needs a definition choice, or touches code from before tonight (metrics.py's gap and edge-case rules), is listed instead. The same goes for anything needing analyze.py changes (the cost accounting).
+2. **The compare_models.py fixes are latent.** Neither changed tonight's 6-run results. I still fixed them because both lose data silently, which is the same class of problem as the duplicate-quarter bug in LEARNINGS.md.
+3. **"Data missing" for the runway context cell, not a new label.** It's the exact word the Metrics sheet already uses for a gap, and CLAUDE.md wants one consistent "data missing".
+4. **The review covered the diff, not just the code.** I also checked the reports, README, LEARNINGS, STUDY_GUIDE and commit messages, because "unclear" findings (e.g. item 9) live there.
+5. **I used a separate read-only agent** for the test files, check scripts, data generators and compare_models.py, while I read clean.py, metrics.py, excel_output.py and main.py. It had no permission to edit files or call the API. I re-checked each of its findings against the code before listing it. I dropped one of its items (the wording of a made-up Claude answer inside a test, which is test data, not a claim).
+6. **New pytest files instead of adding to `check_northwind.py`.** The unit tests for `parse_scores` so far live in `check_northwind.py`, but tonight's convention is pytest under `tests/`, and pytest runs automatically in the overnight script.
+7. **I didn't update the "212 tests" counts in STUDY_GUIDE.md.** The guide is pinned to commit `aa8838b`. I only fixed the rows that describe functions I changed, so no row describes code that no longer exists.
+
+### What failed and how I fixed it
+
+1. **Proving each new test catches its bug, without editing committed files.** The shell sandbox blocked `git stash`, `git archive` and copying the project to `/tmp`. One run I meant to do "without the fix" actually ran with it, because the stash had been refused; I noticed before relying on it. **Fix:** a scratch script in `/tmp/t7` loads the committed version of the file (`git show HEAD:<file>`) under the module's name and runs the new tests against it. Result: 2 of 5 Excel tests and 5 of 6 compare_models tests fail on the old code, all pass on the new code. The project files were never touched.
+2. **A heredoc was blocked** (`Parser skipped input`), so I wrote the scratch scripts with the file editor instead. No effect on the project.
+3. **The review agent couldn't run scratch scripts** (blocked by permissions), so it checked its edge cases by reading the code. I re-ran the ones I relied on (runway label, 0 ÷ 0 gaps, flag gaps with short history) myself.
+
+### Unresolved: needs your call
+
+1. **Decide how `data_gaps` should tell "missing" from "not meaningful"** (Review items 1–2). One fix covers all of them: a list of which inputs each metric uses, and flags that say *why* they can't be evaluated (no history / missing input / undefined). It's a design change to metrics.py, and the deck's "Data gaps" line depends on it, so it should come before step 4.
+2. **Should the budget row's label be checked against the last actual quarter?** (Review item 3; also Task 5.)
+3. **Should compare_models.py count failed attempts' tokens?** (Review items 6–7.) Only matters if you rerun the comparison, e.g. for a new prompt version.
+4. **Verify the model prices** before quoting costs (Review item 8).
+5. **Update CLAUDE.md's Architecture section** with tonight's files (Review item 4). I wasn't allowed to.
+6. **Cheap test additions I left out, because they aren't bug fixes:** Northwind `arr_vs_budget` hand formula (item 13), exact ∞ labels in `check_excel_output.py` (item 12), and a partly-blank-first-quarter test (item 1, once you decide the rule).
