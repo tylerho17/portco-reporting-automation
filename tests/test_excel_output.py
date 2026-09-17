@@ -51,6 +51,8 @@ def runway_context_cell(actuals, next_budget):
     (two_quarters(), budget_row(0.0), "∞ (budget not burning)", "budgeted burn 0: never runs out"),
     (two_quarters(), budget_row(NAN), "data missing", "budget row exists but its burn cell is blank"),
     (two_quarters(ending_cash=NAN), budget_row(300.0), "data missing", "latest quarter's cash is blank"),
+    (two_quarters(ending_cash=NAN), budget_row(0.0), "data missing",
+     "cash blank while the budget isn't burning: a blank wins over the ∞ edge case"),
 ])
 def test_runway_context_label(actuals, next_budget, expected, why):
     # A blank input must say "data missing", never "no budget row" (CLAUDE.md: missing never looks

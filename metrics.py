@@ -198,13 +198,15 @@ def runway_months(df):
 def runway_at_next_budget(actuals, next_budget):
     """Runway (months) at next quarter's budgeted burn = latest cash / (budgeted burn / 3).
 
-    NaN if there's no budget-only row; infinite if the budget has no burn.
+    NaN if there's no budget-only row or an input is blank; infinite if the budget has no burn.
     Shown as context on the deck, not flagged.
     """
     if next_budget is None:
         return math.nan
     cash = actuals["ending_cash"].iloc[-1]  # .iloc[-1] = last row = latest quarter
     burn = next_budget["budget_net_burn"]
+    if pd.isna(cash) or pd.isna(burn):
+        return math.nan  # a blank stays blank: the "not burning" edge case needs every input
     if burn <= 0:
         return math.inf
     return cash / (burn / 3)
@@ -402,19 +404,23 @@ def check_combo(metrics, reasons, config, quarter):
     """Combo rule: NRR fell by at least combo_min_nrr_drop AND pipeline rose, at every step. Returns (status, reason).
 
     Window = last `combo_lookback_quarters` quarters, including `quarter`.
-    Not enough history -> no prior period. A value with no number -> its reason (missing input first).
+    Reasons, in the same order as a metric's: missing input (a blank wins, even with too little
+    history), then no prior period (not enough history), then the value's own reason.
     Never PASS on missing data.
     """
     validate_config(config)
     size = config["combo_lookback_quarters"]
     end = metrics.index.get_loc(quarter) + 1  # row position just after `quarter`
+    start = max(end - size, 0)                # a short history still gets its blanks checked
+    window = metrics.iloc[start:end]
+    window_reasons = [r for r in reasons.iloc[start:end][["nrr", "pipeline"]].to_numpy().ravel()
+                      if isinstance(r, str)]
+    if MISSING_INPUT in window_reasons:
+        return CANNOT_EVALUATE, MISSING_INPUT
     if end < size:
         return CANNOT_EVALUATE, NO_PRIOR_PERIOD
-    window = metrics.iloc[end - size:end]
-    window_reasons = [r for r in reasons.iloc[end - size:end][["nrr", "pipeline"]].to_numpy().ravel()
-                      if isinstance(r, str)]
     if window_reasons:
-        return CANNOT_EVALUATE, MISSING_INPUT if MISSING_INPUT in window_reasons else window_reasons[0]
+        return CANNOT_EVALUATE, window_reasons[0]
 
     # .diff() = this quarter minus the previous one; the first row has no previous, so skip it.
     # Round after subtracting, so 1.07 - 1.08 = -0.010000000000000009 counts as exactly 1 point.

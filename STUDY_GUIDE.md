@@ -237,7 +237,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `arr_vs_budget(df)` | ending ARR / budget_arr − 1 | 27470 / 26800 − 1 = **2.5%** |
 | `cac_payback_months(df)` | sm_spend / (new_arr × gross margin) × 12. Edge case: new_arr × margin ≤ 0 → ∞. | 2400 / (1850 × 0.751) × 12 = **20.7 mo** |
 | `runway_months(df)` | ending_cash / (net_burn / 3). Edge case: not burning → ∞. | 14300 / 1300 = **11.0 mo** |
-| `runway_at_next_budget(actuals, next_budget)` | latest cash / (next quarter's budgeted burn / 3). NaN if there's no budget row, ∞ if the budget has no burn. Shown as context, never flagged. | 14300 / 1100 = **13.0 mo** |
+| `runway_at_next_budget(actuals, next_budget)` | latest cash / (next quarter's budgeted burn / 3). NaN if there's no budget row or latest cash / budgeted burn is blank (checked first), ∞ if the budget has no burn. Shown as context, never flagged. | 14300 / 1100 = **13.0 mo** |
 | `compute_metrics(actuals)` | Calls every metric function above except `runway_at_next_budget` (a single number, which callers compute separately) and puts the results in one table: a row per quarter, 19 metric columns. `pipeline` is copied in for the combo rule. | The table `python metrics.py` prints. |
 
 **Flags and gaps.**
@@ -250,7 +250,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `validate_config(config)` | Stops if `combo_lookback_quarters` isn't a whole number ≥ 2, or `combo_min_nrr_drop` is missing or negative. | With 1 quarter there are no steps, and `all()` of nothing is True, so the combo would always trip. |
 | `load_config(path)` | Reads config.yaml into a dictionary, then runs `validate_config`. | `config["nrr_min"]` → 1.0. |
 | `check_threshold(value, threshold, kind)` | NaN → CANNOT_EVALUATE. Otherwise rounds to 6 decimals, then "min" trips below the threshold and "max" trips above it. **Exactly at the threshold passes.** | Rounding matters: 3900/3250 − 1 is 0.19999999999999996 in Python. Without rounding, a burn exactly 15% over budget could trip on noise. |
-| `check_combo(metrics, reasons, config, quarter)` | Takes the last 3 quarters up to `quarter`. Returns **(status, reason)**. Not enough history → (cannot evaluate, no prior period); an NRR/pipeline value with no number → its reason (missing input first). Otherwise trips only if NRR fell by at least `combo_min_nrr_drop` (1 point) at **every** step and pipeline rose at **every** step. | Northwind: NRR 108.0% → 102.0% → 97.1% (−6.0, −5.0 points) while pipeline 10,100 → 11,200 → 12,500 → trip. Missing data is never quietly treated as a pass. |
+| `check_combo(metrics, reasons, config, quarter)` | Takes the last 3 quarters up to `quarter`. Returns **(status, reason)**. Reasons in the same order as a metric's: a blank NRR/pipeline input in the quarters it has → (cannot evaluate, missing input), even with too little history; then not enough history → no prior period; then the value's own reason. Otherwise trips only if NRR fell by at least `combo_min_nrr_drop` (1 point) at **every** step and pipeline rose at **every** step. | Northwind: NRR 108.0% → 102.0% → 97.1% (−6.0, −5.0 points) while pipeline 10,100 → 11,200 → 12,500 → trip. Missing data is never quietly treated as a pass. |
 | `evaluate_flags(metrics, reasons, config, quarter=None)` | Loops over `FLAG_RULES`, runs `check_threshold` for each, then adds the combo rule. Defaults to the latest quarter but accepts any. Returns a list of dicts (flag, metric, quarter, value, threshold, status, reason). | Northwind Q2 2026: 6 trip, 3 pass. |
 | `flag_status_text(flag)` | "trip", "pass" or "cannot evaluate — missing input". | |
 | `data_gaps(actuals, metrics, flags)` | Every metric value whose reason is **missing input**, plus every flag that can't be evaluated because of a missing input. Returns `{metric or flag: [quarters]}`. | ARR YoY in Q4 2024 is blank but not a gap (no prior period). ARR YoY in Q1 2026 **is** a gap (it uses Q1 2025, which is blank). A partly blank quarter only makes gaps of the metrics that use the blank cell. |
@@ -810,13 +810,14 @@ If you get stuck for more than 20 minutes, read the original's first line, put i
 
 **New skill:** taking a window of rows, comparing steps, and treating "can't tell" as its own answer.
 
-**Spec:** return a pair `(status, reason)`. `(TRIP, None)` if NRR fell by at least `config["combo_min_nrr_drop"]` at **every** step **and** pipeline rose at **every** step over the last `config["combo_lookback_quarters"]` quarters, ending at `quarter`. Otherwise `(PASS, None)`. Start with `validate_config(config)`. Return `CANNOT_EVALUATE` with a reason if:
-- there isn't enough history for a full window → `NO_PRIOR_PERIOD`, or
-- any NRR or pipeline cell in the window has a reason in `reasons` → `MISSING_INPUT` if any of them is missing input, else the first reason found.
+**Spec:** return a pair `(status, reason)`. `(TRIP, None)` if NRR fell by at least `config["combo_min_nrr_drop"]` at **every** step **and** pipeline rose at **every** step over the last `config["combo_lookback_quarters"]` quarters, ending at `quarter`. Otherwise `(PASS, None)`. Start with `validate_config(config)`. Return `CANNOT_EVALUATE` with a reason, checked in this order:
+1. any NRR or pipeline cell in the window (or in the quarters that exist, if the history is short) is `MISSING_INPUT` → `MISSING_INPUT` (a blank wins),
+2. there isn't enough history for a full window → `NO_PRIOR_PERIOD`,
+3. any other NRR or pipeline cell in the window has a reason → the first reason found.
 
 **Hints:**
 - `metrics.index.get_loc(quarter)` gives the row position of a quarter label (Q3 2024 = 0).
-- `metrics.iloc[start:end]` takes rows `start` up to but **not including** `end`. So for a window of 3 ending at position 7, you want `iloc[5:8]`.
+- `metrics.iloc[start:end]` takes rows `start` up to but **not including** `end`. So for a window of 3 ending at position 7, you want `iloc[5:8]`. With a short history, `max(end - size, 0)` keeps `start` from going negative.
 - `.isna().any()` → True if any value is NaN.
 - `.diff()` gives this row minus the row above. The first row of the window has nothing above it inside the window, so skip it with `.iloc[1:]`.
 - `(steps <= -min_drop).all()` → True only if every step fell at least the minimum.

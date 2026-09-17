@@ -205,6 +205,13 @@ def test_runway_at_next_budget_missing():
     assert math.isnan(runway_at_next_budget(blank_cash, pd.Series({"budget_net_burn": 600})))
 
 
+@pytest.mark.parametrize("budget_burn", [0, -200])
+def test_runway_at_next_budget_blank_cash_while_budget_not_burning_is_nan(budget_burn):
+    # Edge cases apply only when every input is there: a blank cash cell must not become "∞ (budget not burning)".
+    blank_cash = table(ending_cash=[NAN])
+    assert math.isnan(runway_at_next_budget(blank_cash, pd.Series({"budget_net_burn": budget_burn})))
+
+
 # ---------------------------------------------------------------------------
 # Budget variance and CAC payback
 # ---------------------------------------------------------------------------
@@ -425,6 +432,22 @@ def test_check_combo_not_meaningful_nrr_says_so():
 def test_check_combo_not_enough_history_cannot_evaluate():
     # Only 2 quarters exist but the window needs 3.
     assert combo(combo_metrics([1.08, 0.97], [9000, 11000])) == (CANNOT_EVALUATE, NO_PRIOR_PERIOD)
+
+
+@pytest.mark.parametrize("nrr_values, pipeline_values", [
+    ([1.08, NAN], [9000, 11000]),   # latest NRR blank
+    ([1.08, 0.97], [NAN, 11000]),   # earlier pipeline blank
+])
+def test_check_combo_blank_input_wins_over_not_enough_history(nrr_values, pipeline_values):
+    # CLAUDE.md: a blank input wins. Too little history AND a blank is "missing input", so it is a data gap.
+    # Old code checked history first and said "no prior period", hiding the blank.
+    assert combo(combo_metrics(nrr_values, pipeline_values)) == (CANNOT_EVALUATE, MISSING_INPUT)
+
+
+def test_check_combo_not_enough_history_beats_not_meaningful():
+    # Same order as a metric's own reasons: missing input, then no prior period, then not meaningful.
+    metrics = combo_metrics([1.08, NAN], [9000, 11000])
+    assert combo(metrics, reason=NOT_MEANINGFUL) == (CANNOT_EVALUATE, NO_PRIOR_PERIOD)
 
 
 def test_check_combo_gap_outside_window_is_ignored():
