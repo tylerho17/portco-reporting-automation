@@ -490,3 +490,152 @@ Run with `python -m pytest -q` (212 tests, about 2 seconds). Expected values are
 | `README.md` | For now, just the model comparison table. The full README is build step 6. |
 | `templates/` | Empty for now; `base.pptx` for the deck goes here (step 4). |
 | `output/` | Generated files (git-ignored): `*_metrics.xlsx`, `northwind_analysis*.json`, `compare/`. |
+
+---
+
+## 5. 25 interview questions
+
+Short answers you can say out loud in 30–60 seconds. **"Point to"** says where to look in the code or docs if they ask for detail. Practise saying the answers in your own words; don't memorize them.
+
+### The project
+
+**Q1. Walk me through the project in one minute.**
+A messy portfolio-company KPI workbook goes in; a board pack comes out. `clean.py` reads the messy Excel: odd headers, "$14.3M" typed as text, a blank quarter. It produces a standard table in $K. `metrics.py` calculates NRR, GRR, burn multiple, runway, Rule of 40, CAC payback and budget variances, then checks 9 flags against thresholds in `config.yaml` and lists any data gaps. `excel_output.py` writes a highlighted Excel summary, and `analyze.py` has Claude write the headline, wins, risks and questions for management. Code then checks that Claude used only numbers from the data. `main.py` runs it all for one company or a whole folder. The deck itself is the next build step.
+*Point to:* section 2 of this guide.
+
+**Q2. Why would a PE fund want this?**
+Portfolio companies report KPIs in their own formats, so analysts spend time re-typing and reconciling before they can think. This standardizes the file, applies the **same** definitions and thresholds to every company, and flags what needs attention, so the analyst's time goes to the questions for management. It also makes gaps explicit instead of letting a missing quarter quietly distort a trend. The cost estimate for the AI step is about $14.65 per quarter for 275 companies.
+*Point to:* README.md model comparison.
+
+**Q3. Why does Python do all the math and Claude only interpret?**
+A language model can make arithmetic mistakes, and one wrong number in a board deck undermines every other number in it. Python math is deterministic and can be tested against hand formulas; a prompt can't be tested the same way. So every number is computed and checked in Python first, Claude receives them already formatted ("97.1%"), and the prompt tells it to quote, not calculate. Code then verifies the answer.
+*Point to:* CLAUDE.md Rules; `analyze.py` `SYSTEM_PROMPT`.
+
+**Q4. Why build three fake companies instead of one?**
+With one company you can't tell whether the flags work or were tuned to produce that company's story. Northwind trips 6 of 9, Alderpeak (healthy) trips none in any quarter, and Fernhollow (distressed) trips 7, with 1 flag it can't evaluate. That proves the logic responds to the data. Each company also has different mess (a title row, a different column order, the Notes tab first), so cleaning isn't tuned to one file either.
+*Point to:* `check_companies.py`; OVERNIGHT_REPORT Task 1.
+
+### Design decisions
+
+**Q5. How do you handle missing data? Why not fill it in?**
+A blank cell stays blank (NaN), never 0 and never an estimate: an imputed number could reach a board as if it were real. Because any math with NaN gives NaN, a blank quarter automatically spreads to every metric that uses it: QoQ metrics for that quarter and the next, YoY for that quarter and the one 4 later. Flags that depend on a missing value say "cannot evaluate — data missing" instead of pass or fail, and every affected metric and flag is listed as a data gap.
+*Point to:* `metrics.data_gaps`; CLAUDE.md "Messy data rules".
+
+**Q6. What's the difference between "data missing" and "not meaningful"?**
+YoY growth in the first year of data is blank because there's no earlier year: that's "n/a (no prior period)", not a problem. YoY in Q1 2026 is blank because Q1 2025 exists but wasn't reported: that's "data missing". Infinite values have their own reason too: burn multiple "∞ (ARR shrank)", runway "∞ (not burning)". CLAUDE.md says the two must never look alike, because a reader would draw different conclusions. `data_gaps` tells them apart by asking whether the quarter has enough history for that metric.
+*Point to:* `metrics.data_gaps`, `analyze.metric_trend`, `excel_output.cell_value`.
+
+**Q7. Why store ratios as decimals and format as % only at output?**
+One representation everywhere means thresholds, comparisons and math never mix 97.1 with 0.971. Formatting happens in one place (`format_value`, or an Excel number format), so the Excel cell still holds 0.971 and works in formulas while displaying 97.1%. The Excel check deliberately tested saving 97.1 instead of 0.971, and it's caught.
+*Point to:* `metrics.format_value`, `excel_output.number_format`.
+
+**Q8. Why is NRR annualized, and what's the trade-off?**
+The thresholds (NRR 100%, GRR 85%) are annual conventions. One quarter's expansion minus churn is roughly a quarter of the annual effect, so it's multiplied by 4 to compare like with like. The trade-off: one quarter's data is noisier than a true trailing-12-month cohort. So the deck labels it "annualized", and the combo rule looks at a 3-quarter trend rather than a single quarter.
+*Point to:* `metrics.nrr`, `metrics.grr`; CLAUDE.md metric definitions.
+
+**Q9. Explain the combo rule. Why "cannot evaluate" instead of False?**
+NRR falling while pipeline is rising suggests a retention problem, not a sales problem: sales keeps filling the funnel, but existing customers are leaking, so more pipeline won't fix it. It trips only if NRR fell at **every** step and pipeline rose at **every** step over the last 3 quarters. If any quarter in the window is missing, returning False would tell the board "no retention problem" when we simply don't know. So it returns "cannot evaluate". Fernhollow passes because its pipeline is falling too: that's a sales problem **and** a retention problem.
+*Point to:* `metrics.check_combo`; config.yaml comments.
+
+**Q10. Why is "exactly at the threshold" a pass, and why round before comparing?**
+The thresholds are limits ("more than 15% over budget"), so hitting 15.0% exactly is within the limit. Computers store decimals in binary, so 3900/3250 − 1 comes out as 0.19999999999999996, not 0.2. A burn exactly at a threshold could trip or pass on invisible noise. `check_threshold` rounds to 6 decimals first. A test proves a real miss of 0.000001 still trips, so rounding doesn't hide real breaches.
+*Point to:* `metrics.check_threshold`; LEARNINGS row 1; `tests/test_metrics.py` `test_check_threshold_*`.
+
+**Q11. Why are thresholds in config.yaml and the API key in .env?**
+Thresholds are investment judgments, not code: a partner may want runway under 18 months instead of 12, and that shouldn't need a code change. Each line has a comment with the investor reasoning. The API key is a secret: it lives in `.env`, which `.gitignore` keeps out of git, and `python-dotenv` loads it at run time. `.env.example` shows the variable name without a key.
+*Point to:* `config.yaml`, `.gitignore`, `analyze.main` (`load_dotenv`).
+
+### What broke (LEARNINGS.md)
+
+**Q12. Tell me about a bug you found. What did it teach you?**
+Net new ARR vs budget compared actual **net** new ARR (after churn) with `budget_new_arr`, which is **gross** new sales. So churn counted against the actuals but not the budget, and Q2 2026 showed −17.0% instead of −19.0%. The checks didn't catch it, because the answer key had been written with the same wrong formula. It was caught in review. The fix: the budget side is now budget_arr this quarter minus last quarter, net on both sides. **Lesson:** an answer key only catches errors if it's built independently from the definition, not copied from the code. Every later test follows that rule.
+*Point to:* `metrics.budget_net_new_arr`; LEARNINGS row 2.
+
+**Q13. Why does clean.py use `Decimal` to read "$4.03M"?**
+In normal float math, 4.03 × 1000 = 4030.0000000000005. `Decimal` does the math the way you would on paper, so "$4.03M" becomes exactly 4030. That matters because the checks require cleaned values to equal the answer key exactly, and because tiny errors can push a value across a threshold.
+*Point to:* `clean.parse_number`; LEARNINGS row 1; OVERNIGHT_REPORT Task 4.
+
+**Q14. A cell saying "n/a" was being read as blank. Why was that dangerous, and how did you fix it?**
+pandas quietly turns a built-in list of words ("n/a", "NA", "NULL", "None") and every Excel error like `#DIV/0!` into NaN before our code sees them. So a broken formula would have shown on the deck as "data missing" instead of stopping the run to be fixed. A unit test said "n/a" stops, but it only tested `parse_number` on its own, never through pandas. The fix was to read with `keep_default_na=False` so only a truly empty cell is blank, plus `check_no_error_cells` using openpyxl. **Lesson:** test through the real file, not just the helper.
+*Point to:* `clean.find_kpi_sheet`, `clean.check_no_error_cells`; LEARNINGS row 6.
+
+**Q15. What happened with a duplicated quarter row?**
+Rows were stored in a dictionary keyed by quarter label, and saving a second "Q2 2025" silently overwrote the first. The quarter-order check does catch repeats, but it never saw the duplicate because the dictionary only held one Q2. Now `clean_sheet` stops with "quarter 'Q2 2025' appears twice (also in row 5) - delete one of the rows". Same lesson as Q14: a check can only catch what reaches it.
+*Point to:* `clean.clean_sheet`; LEARNINGS row 5.
+
+**Q16. Your Excel read-back check failed on its first run. Why?**
+NRR 1.0706921944035346 came back as 1.070692194403535. openpyxl saves 16 significant digits, but a Python float can need 17. The gap is about 1e-16, and Excel itself only keeps 15 digits, so the check compares to 15 significant digits. It still catches real errors like 97.1 saved instead of 0.971. The same investigation found openpyxl silently saves NaN and infinity as an **empty cell**, so `excel_output.py` writes a label that says why instead ("data missing", "∞ (ARR shrank)").
+*Point to:* `check_excel_output.same_as_saved`, `excel_output.cell_value`; LEARNINGS row 4.
+
+### The AI part
+
+**Q17. How do you stop Claude from inventing or calculating numbers?**
+Four layers:
+1. Claude only gets pre-formatted facts.
+2. The prompt says to quote numbers exactly and never calculate differences or changes ("went from A to B" instead).
+3. `validate_summary` extracts every number from the answer and fails it if any number doesn't appear in the payload. A rounded "97%" or a calculated "11.8 points" gets caught.
+4. The saved JSON keeps the payload next to the answer, so a reviewer can trace every claim.
+
+*Point to:* `analyze.find_ungrounded_numbers`, `check_northwind.check_analysis_validation`.
+
+**Q18. What are the known limits of that number check?**
+It asks "does this number appear anywhere in the data?", not "is it used correctly". So:
+- A calculated number that happens to equal another value passes. "3.3 months faster" passed because −3.3% is a Rule of 40 value.
+- It ignores minus signs.
+- It can't catch a wrong direction ("improved… down from 20.3 mo" when it went from 20.3 to 20.7, which is worse).
+- It can't catch invented attributions ("Management asserts…").
+- Questions can come back as raw JSON strings, because the schema only requires strings.
+
+These are logged as open items. That's why human review stays in the loop.
+*Point to:* LEARNINGS "Validator gaps found in the blind answers".
+
+**Q19. What happens if Claude's answer fails validation?**
+`analyze()` retries **once**, sending back Claude's previous answer and the exact list of problems. If the second answer also fails, it raises `AnalysisError`; nothing unvalidated is ever returned. Both attempts are logged with tokens and timing. One retry is the balance between cost and latency and giving Claude a fair chance to fix a specific problem. Repeated failure points to a prompt or model problem that more retries would just pay for.
+*Point to:* `analyze.analyze`, `analyze.build_messages`.
+
+**Q20. How did you improve the prompt?**
+Each round: run, find a specific flaw, add one rule, re-run, check the result. v1 → v2 fixed three framing problems:
+- The best win (ARR growth YoY 42.8%) was missing.
+- A passing flag was framed as a breach.
+- NRR's decline was described from the first quarter in the data instead of the peak.
+
+But v2 doubled the output (3,218 → 6,955 tokens, ~$0.043 → ~$0.081 per run) and made details too long for a slide. v3 added a 2-sentence, ~40-word limit that **code enforces**, and banned "significant" for variances under 10%. Output fell to 2,090 tokens, 21.1s, $0.0325.
+*Point to:* LEARNINGS "Prompt iterations".
+
+**Q21. Which model did you pick, and how did you decide?**
+Sonnet 5 vs Haiku 4.5, 3 runs each on identical input, answers shuffled and scored blind on a 1–5 rubric. The decision rule was written **before** running: Haiku becomes the default only if it averages ≥ 4.0 with a 100% pass rate.
+- **Sonnet:** average score 4.0, $0.0533 and 36.0s per run.
+- **Haiku:** average score 2.0, $0.0173 and 13.2s per run, and it needed its retry on every run.
+
+So Sonnet stays the default, at about $14.65 per quarter for 275 companies versus $4.77 for Haiku.
+*Point to:* README.md; `compare_models.recommend`.
+
+**Q22. What did blind scoring teach you?**
+Before scoring, the prediction was that the most polished-sounding answer would score highest. It tied for lowest. The fluent writing hid a number Claude calculated (24.0 − 20.7 = "3.3 months faster") and a false claim ("consistently missing budget", when Q4 2025 beat budget by +16.5%). It had passed every code check. **Lesson:** judge line by line against the data and the rubric, not by how it reads. Code checks catch rule breaks at scale, blind scoring removes bias toward a model, and line-by-line review catches what code can't yet.
+*Point to:* LEARNINGS "Reflection".
+
+### Reliability and scale
+
+**Q23. How do you know the numbers are right?**
+Four layers:
+1. The fake data's answer key is checked to tie out: ARR and cash roll forward.
+2. The `check_*.py` scripts run the real workbooks end to end and compare with hand formulas typed like Excel (`3900 / (1850 + 580 - 260 - 510)`), written independently of the code.
+3. 212 pytest unit tests check each function, including every edge case, with the hand math in comments.
+4. The tests were tested: the code was broken on purpose (in throwaway copies) to confirm the tests notice. 35 of 36 breaks were caught in Task 4 (the missed one can't change any result) and 18 of 18 in Task 5.
+
+*Point to:* `check_companies.py`, `tests/`, OVERNIGHT_REPORT "What failed".
+
+**Q24. In a batch of 275 companies, what happens when one workbook is broken?**
+`clean.py` stops that company with a message naming the sheet and cell, e.g. `Sheet 'KPI Tracker', cell G5 (Q2 2025, revenue): Can't read 'TBD' as a number`. `main.py` catches it, prints one ✗ FAILED line, and moves on to the next company. The summary table shows FAILED with the reason, and the run exits with code 1 so a scheduler knows. A bad-input error gets one clean line; an unexpected error (probably a bug) also gets a full traceback.
+*Point to:* `main.run_batch`, `main.describe_error`; `check_main.py`.
+
+**Q25. What would you improve or build next?**
+Next are the deck (step 4) and the README (step 6). Beyond that, several open definition questions are already logged for a decision:
+- **Burn vs budget when a company isn't burning:** burn −200 vs budget −150 comes out +33% and trips.
+- **Net new ARR vs budget when budgeted net new ARR is zero or negative:** the sign flips.
+- **The combo rule has no minimum size of decline:** a 0.1-point dip counts.
+- **`data_gaps` over-reports** a partly blank quarter in the first year.
+- **The budget-only row's label isn't checked** against the latest quarter.
+
+For scale: at ~36s per company, 275 companies run one at a time would take about 2.75 hours with AI, so run companies in parallel. Also save the summary table to a file, and warn if companies report different latest quarters.
+*Point to:* OVERNIGHT_REPORT "Unresolved" sections.
