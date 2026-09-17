@@ -1,0 +1,236 @@
+"""Automated proof for build step 5: main.py runs the batch and survives a bad company.
+
+Checks:
+1. `python main.py --all --skip-ai` (a real command, run as a separate process) exits 0,
+   finds exactly the three company workbooks, saves a fresh Excel file for each, skips AI
+   and deck with a clear message, and its summary table shows all three "OK" with the
+   flag and gap counts from each company's story (check_companies.py), not from main.py.
+2. One company failing doesn't stop the batch: a broken workbook, a missing file and a
+   simulated code bug sit between good companies, and every good company still succeeds.
+3. A failed run exits with code 1; wrong arguments exit with code 2 (argparse's usage error).
+4. If build_deck.py appears before main.py calls it, companies fail loudly instead of
+   quietly skipping the deck.
+5. --all ignores Excel's "~$" lock files and anything that isn't .xlsx.
+
+No API calls: every run uses --skip-ai, and main.py never calls Claude while build_deck.py
+doesn't exist anyway.
+
+Run: python check_main.py  -> prints "All checks passed" or stops at the first failure.
+"""
+
+import io
+import subprocess
+import sys
+import tempfile
+import time
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
+
+from openpyxl import Workbook
+
+import main
+from check_companies import COMPANIES, expected_gaps
+from clean import clean_workbook
+from excel_output import output_path
+from metrics import MISSING, TRIP, compute_metrics, load_config
+
+PROJECT_DIR = Path(__file__).parent
+EXPECTED_OK = "OK (AI + deck skipped)"
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def run_main(*args):
+    """Run main.py as its own process, like typing it in the terminal. Returns the finished process."""
+    return subprocess.run([sys.executable, "main.py", *args], cwd=PROJECT_DIR,
+                          capture_output=True, text=True)
+
+
+def summary_table(stdout):
+    """Rows of the summary table as {company: [company, flags, gaps, result]}.
+
+    Columns are separated by at least two spaces; the header and dashes lines are skipped.
+    """
+    lines = stdout.split("=== Summary ===")[1].strip().splitlines()
+    rows = {}
+    for line in lines[2:]:           # skip the header and the dashes
+        if not line.strip():
+            break                    # a blank line ends the table
+        cells = [cell for cell in line.split("  ") if cell.strip()]
+        rows[cells[0].strip()] = [cell.strip() for cell in cells]
+    return rows
+
+
+def story_flags_text(company):
+    """Expected 'Flags tripped' cell, counted from the company's story in check_companies.py."""
+    statuses = list(company["expected_flags"].values())
+    text = f"{statuses.count(TRIP)} of {len(statuses)}"
+    if statuses.count(MISSING):
+        text += f", {statuses.count(MISSING)} cannot evaluate"
+    return text
+
+
+def story_gaps_text(company):
+    """Expected 'Data gaps' cell, from the gaps the CLAUDE.md rules predict for this company."""
+    actuals, _ = clean_workbook(company["answer_key"].OUTPUT_PATH)
+    count = len(expected_gaps(company, compute_metrics(actuals).columns))
+    if count == 0:
+        return "none"
+    return f"{count} metrics/flags (blank: {company['answer_key'].BLANK_QUARTER})"
+
+
+def write_broken_workbook(folder):
+    """A workbook with a Quarter header but most required columns missing."""
+    path = Path(folder) / "broken.xlsx"
+    book = Workbook()
+    book.active.append(["Quarter", "Starting ARR"])
+    book.active.append(["Q2 2026", 1000])
+    book.save(path)
+    return path
+
+
+def run_quietly(function, *args):
+    """Call a main.py function without printing; returns (result, stdout text, stderr text)."""
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        result = function(*args)
+    return result, stdout.getvalue(), stderr.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Checks
+# ---------------------------------------------------------------------------
+
+def check_finds_the_three_companies():
+    """--all picks up exactly the three company workbooks in data/."""
+    found = {path.name for path in main.find_workbooks()}
+    expected = {Path(company["answer_key"].OUTPUT_PATH).name for company in COMPANIES}
+    assert found == expected, f"--all finds {sorted(found)}, expected {sorted(expected)}"
+
+
+def check_batch_run():
+    """main.py --all --skip-ai: exit 0, fresh Excel files, clear skip messages, a correct summary."""
+    started = time.time()
+    process = run_main("--all", "--skip-ai")
+    assert process.returncode == 0, f"Exit code {process.returncode}\n{process.stdout}\n{process.stderr}"
+    assert process.stderr == "", f"Unexpected error output:\n{process.stderr}"
+    assert process.stdout.count("AI commentary: skipped (--skip-ai)") == len(COMPANIES), "AI skip message missing"
+    assert process.stdout.count("Deck: skipped (build_deck.py doesn't exist yet") == len(COMPANIES), \
+        "Deck skip message missing"
+    assert f"{len(COMPANIES)} of {len(COMPANIES)} companies succeeded" in process.stdout, "Success count wrong"
+
+    rows = summary_table(process.stdout)
+    assert set(rows) == {company["name"] for company in COMPANIES}, f"Summary rows: {sorted(rows)}"
+    for company in COMPANIES:
+        expected = [company["name"], story_flags_text(company), story_gaps_text(company), EXPECTED_OK]
+        assert rows[company["name"]] == expected, \
+            f"Summary row wrong.\nExpected: {expected}\nGot:      {rows[company['name']]}"
+        excel = output_path(company["answer_key"].OUTPUT_PATH)
+        assert excel.exists() and excel.stat().st_mtime >= started - 1, f"{excel} wasn't saved by this run"
+    return rows
+
+
+def check_failure_does_not_stop_batch(folder, config):
+    """Bad companies in the middle of the batch are recorded; the good ones after them still run."""
+    northwind, alderpeak = (COMPANIES[0]["answer_key"].OUTPUT_PATH, COMPANIES[1]["answer_key"].OUTPUT_PATH)
+    paths = [northwind, write_broken_workbook(folder), Path(folder) / "missing.xlsx", alderpeak]
+    results, stdout, stderr = run_quietly(main.run_batch, paths, config, True)
+
+    assert [r["company"] for r in results] == ["Northwind", "Broken", "Missing", "Alderpeak"], \
+        f"Batch order wrong: {[r['company'] for r in results]}"
+    assert results[0]["error"] is None and results[3]["error"] is None, "A good company failed"
+    assert "missing columns" in results[1]["error"], f"Broken workbook error unclear: {results[1]['error']}"
+    assert results[2]["error"].startswith("FileNotFoundError"), f"Missing file error: {results[2]['error']}"
+    assert stdout.count("✗ FAILED") == 2, "Each failure should print one FAILED line"
+    assert stderr == "", f"Input errors shouldn't print a traceback:\n{stderr}"
+    return results
+
+
+def check_code_bug_does_not_stop_batch(config):
+    """An unexpected error (a bug, not bad input) is recorded with a traceback; the batch continues."""
+    real_compute = main.compute_metrics
+    calls = []
+
+    def buggy_first_call(actuals):  # fails for the first company only
+        calls.append(1)
+        if len(calls) == 1:
+            raise KeyError("simulated bug")
+        return real_compute(actuals)
+
+    main.compute_metrics = buggy_first_call
+    try:
+        paths = [COMPANIES[0]["answer_key"].OUTPUT_PATH, COMPANIES[2]["answer_key"].OUTPUT_PATH]
+        results, _, stderr = run_quietly(main.run_batch, paths, config, True)
+    finally:
+        main.compute_metrics = real_compute  # always put the real function back
+    assert results[0]["error"] == "KeyError: 'simulated bug'", f"Bug not recorded: {results[0]['error']}"
+    assert results[1]["error"] is None, "The company after the bug should still succeed"
+    assert "Traceback" in stderr, "An unexpected error should print its traceback"
+
+
+def check_exit_codes(broken_path):
+    """1 when a company fails; 2 for no arguments or for both a file and --all."""
+    process = run_main(str(broken_path), "--skip-ai")
+    assert process.returncode == 1, f"Failed company: exit code {process.returncode}, expected 1"
+    assert "0 of 1 companies succeeded" in process.stdout, "Single-file failure summary missing"
+    assert summary_table(process.stdout)["Broken"][3].startswith("FAILED: ValueError"), "Result should say FAILED"
+    for args in [(), ("data/northwind.xlsx", "--all")]:
+        process = run_main(*args, "--skip-ai")
+        assert process.returncode == 2, f"main.py {args}: exit code {process.returncode}, expected 2"
+        assert "give one workbook path, or --all" in process.stderr, f"main.py {args}: unclear usage error"
+
+
+def check_unwired_deck_fails_loudly(folder, config):
+    """If build_deck.py exists but main.py doesn't call it, a run must fail, not skip silently."""
+    fake_deck = Path(folder) / "build_deck.py"  # a stand-in in the temp folder; the real file is untouched
+    fake_deck.write_text("")
+    real_path = main.BUILD_DECK_PATH
+    main.BUILD_DECK_PATH = fake_deck
+    try:
+        results, _, _ = run_quietly(main.run_batch, [COMPANIES[0]["answer_key"].OUTPUT_PATH], config, True)
+        try:
+            main.ai_step(skip_ai=False)
+            raise AssertionError("ai_step should stop when build_deck.py exists but isn't wired")
+        except main.NotWiredError:
+            pass
+        assert main.ai_step(skip_ai=True) == "skipped (--skip-ai)", "--skip-ai should still skip AI"
+    finally:
+        main.BUILD_DECK_PATH = real_path
+    assert results[0]["error"] == f"NotWiredError: {main.NOT_WIRED_MESSAGE}", f"Got: {results[0]['error']}"
+
+
+def check_ignores_lock_and_other_files(folder):
+    """--all skips '~$' lock files and non-.xlsx files, and sorts by name."""
+    for name in ["b.xlsx", "a.xlsx", "~$a.xlsx", "notes.txt", "old.xls"]:
+        (Path(folder) / name).write_text("")
+    found = [path.name for path in main.find_workbooks(folder)]
+    assert found == ["a.xlsx", "b.xlsx"], f"find_workbooks found {found}"
+
+
+def main_check():
+    config = load_config()
+    check_finds_the_three_companies()
+    rows = check_batch_run()
+    for company in COMPANIES:
+        print(f"✓ main.py --all --skip-ai: {' | '.join(rows[company['name']])}")
+
+    with tempfile.TemporaryDirectory() as folder:
+        results = check_failure_does_not_stop_batch(folder, config)
+        print(f"✓ Batch continues past a broken workbook and a missing file ({results[1]['error'][:60]}...)")
+        check_code_bug_does_not_stop_batch(config)
+        print("✓ Batch continues past an unexpected code error, and prints its traceback")
+        check_exit_codes(Path(folder) / "broken.xlsx")
+        print("✓ Exit codes: 0 all OK, 1 any company failed, 2 wrong arguments")
+        check_unwired_deck_fails_loudly(folder, config)
+        print("✓ If build_deck.py exists but isn't wired into main.py, the run fails loudly")
+
+    with tempfile.TemporaryDirectory() as folder:
+        check_ignores_lock_and_other_files(folder)
+        print("✓ --all ignores Excel lock files (~$) and non-.xlsx files")
+    print("All checks passed")
+
+
+if __name__ == "__main__":
+    main_check()

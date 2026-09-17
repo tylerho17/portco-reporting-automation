@@ -12,6 +12,7 @@ import math
 
 from analyze import BoardSummary, Point, build_payload, payload_to_text, validate_summary
 from clean import clean_workbook
+from compare_models import HAIKU, SONNET, parse_scores, recommend
 from make_data import BLANK_QUARTER, NEXT_QUARTER_BUDGET, OUTPUT_PATH, QUARTERS, TRUE_DATA
 from metrics import (PASS, TRIP, compute_metrics, data_gaps, evaluate_flags,
                      load_config, runway_at_next_budget)
@@ -141,6 +142,23 @@ def check_analysis_validation(payload_text):
     assert any("risks must have exactly 3" in p for p in problems), f"Wrong risk count not caught: {problems}"
 
 
+def check_recommendation_rule():
+    """Haiku only with avg score >= 4.0 AND 100% pass rate; scores must be complete and 1-5."""
+    assert recommend({"avg_score": 4.0, "pass_rate": 1.0}) == HAIKU, "4.0 and 100% should pick Haiku"
+    assert recommend({"avg_score": 3.9, "pass_rate": 1.0}) == SONNET, "3.9 should pick Sonnet"
+    assert recommend({"avg_score": 4.7, "pass_rate": 2 / 3}) == SONNET, "67% pass rate should pick Sonnet"
+    assert recommend({"avg_score": None, "pass_rate": 0.0}) == SONNET, "no passing runs should pick Sonnet"
+
+    runs = {"A": {"passed": True}, "B": {"passed": False}}
+    assert parse_scores(["A=4"], runs) == {"A": 4}
+    for bad_args in (["A=6"], ["A=0"], ["A=four"], [], ["B=3", "A=4"], ["Z=4"]):
+        try:
+            parse_scores(bad_args, runs)
+        except ValueError:
+            continue
+        raise AssertionError(f"parse_scores should reject {bad_args}")
+
+
 def main():
     actuals, next_budget = clean_workbook(OUTPUT_PATH)
     config = load_config()
@@ -157,6 +175,8 @@ def main():
     print("✓ Data gaps are exactly where the rules say")
     check_analysis_validation(payload_to_text(build_payload("Northwind", actuals, next_budget, config)))
     print("✓ Analysis validation passes a good answer, catches calculated/rounded numbers and wrong counts")
+    check_recommendation_rule()
+    print("✓ Model recommendation rule and score entry behave as agreed")
     print("All checks passed")
 
 

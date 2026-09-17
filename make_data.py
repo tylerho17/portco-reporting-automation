@@ -2,12 +2,8 @@
 
 Output: data/northwind.xlsx (all money figures in $K).
 
-How it works:
-1. TRUE_DATA holds the clean, correct numbers for 8 quarters.
-2. check_true_data() confirms those numbers tie out (ARR and cash roll forward).
-3. The workbook is written with mess added on purpose: odd header names,
-   some numbers stored as text ("$14.3M", "120K", "5,090"), one blank
-   quarter, a budget-only row for next quarter, and a junk Notes tab.
+This file holds only Northwind's numbers and mess settings. The checking and
+writing code is shared with the other companies in make_data_common.py.
 
 The numbers are chosen to tell the Northwind story in CLAUDE.md:
 strong ARR growth, NRR sliding 108% -> 97%, rising pipeline,
@@ -16,7 +12,7 @@ burn ~20% over budget and ~11 months of runway.
 
 from pathlib import Path
 
-from openpyxl import Workbook
+from make_data_common import save_workbook
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -69,9 +65,6 @@ NEXT_QUARTER_BUDGET = {
     "budget_net_burn": 3300,
 }
 
-# Columns that are counts, not money - skipped by the multiple-of-10 check.
-COUNT_COLUMNS = {"new_customers", "headcount"}
-
 # ---------------------------------------------------------------------------
 # The mess
 # ---------------------------------------------------------------------------
@@ -118,101 +111,32 @@ TEXT_CELLS = {
 }
 
 
-def check_true_data():
-    """Stop with an error if the clean data doesn't tie out."""
-    # Every column must have exactly one value per quarter.
-    for column, values in TRUE_DATA.items():
-        assert len(values) == len(QUARTERS), f"{column} needs {len(QUARTERS)} values"
-
-    # ARR roll-forward: this quarter's ending ARR must equal next quarter's starting ARR.
-    d = TRUE_DATA
-    for i in range(len(QUARTERS) - 1):
-        ending_arr = (d["starting_arr"][i] + d["new_arr"][i] + d["expansion_arr"][i]
-                      - d["contraction_arr"][i] - d["churned_arr"][i])
-        assert ending_arr == d["starting_arr"][i + 1], f"ARR doesn't roll forward after {QUARTERS[i]}"
-
-    # Cash roll-forward: this quarter's cash = last quarter's cash - this quarter's burn.
-    for i in range(1, len(QUARTERS)):
-        expected_cash = d["ending_cash"][i - 1] - d["net_burn"][i]
-        assert d["ending_cash"][i] == expected_cash, f"Cash doesn't roll forward into {QUARTERS[i]}"
-
-    # Money values must be multiples of 10 so "$21.85M"-style text is exact, not rounded.
-    for column, values in TRUE_DATA.items():
-        if column not in COUNT_COLUMNS:
-            assert all(v % 10 == 0 for v in values), f"{column} has a value not divisible by 10"
-
-    # Text cells must point at a real column and a quarter that actually gets written.
-    for column, quarter in TEXT_CELLS:
-        assert column in TRUE_DATA, f"Unknown column in TEXT_CELLS: {column}"
-        assert quarter in QUARTERS and quarter != BLANK_QUARTER, f"Bad quarter in TEXT_CELLS: {quarter}"
-
-
-def to_text(value, style):
-    """Turn a $K number into messy text, e.g. 14300 -> "$14.3M"."""
-    if style == "M":
-        # 14300 $K / 1000 = 14.3 $M; ":g" drops trailing zeros (6.0 -> 6).
-        return f"${value / 1000:g}M"
-    if style == "K":
-        return f"{value}K"
-    if style == "comma":
-        return f"{value:,}"
-    raise ValueError(f"Unknown text style: {style}")
-
-
-def write_kpi_sheet(ws):
-    """Write the main KPI table: header row, 8 quarters, then the budget-only row."""
-    columns = list(TRUE_DATA)
-
-    # Header row: "Quarter" followed by the messy header names.
-    ws.append(["Quarter"] + [HEADER_NAMES[c] for c in columns])
-
-    # One row per actual quarter.
-    for i, quarter in enumerate(QUARTERS):
-        if quarter == BLANK_QUARTER:
-            ws.append([quarter])  # label only, every value left empty
-            continue
-        row = [quarter]
-        for column in columns:
-            value = TRUE_DATA[column][i]
-            style = TEXT_CELLS.get((column, quarter))  # None if this cell stays a number
-            row.append(to_text(value, style) if style else value)
-        ws.append(row)
-
-    # Budget-only row: blank for actuals, filled for the 3 budget columns.
-    ws.append([BUDGET_ONLY_LABEL] + [NEXT_QUARTER_BUDGET.get(c) for c in columns])
-
-    # Widen columns so the sheet is readable when opened in Excel.
-    for column_cells in ws.columns:
-        ws.column_dimensions[column_cells[0].column_letter].width = 18
-
-
-def write_notes_sheet(ws):
-    """Write a junk notes tab, the kind of thing real workbooks carry around."""
-    ws["A1"] = "Northwind Software - misc notes"
-    ws["A3"] = "Q1 2025 actuals still with finance, do not use"
-    ws["A4"] = "Pipeline from CRM export, pulled first week of quarter"
-    ws["A5"] = "Board meeting moved - check calendar"
-    ws["A7"] = "scratch"
-    ws["B7"] = 3900
-    ws["C7"] = 3250
-    ws["D7"] = "20% over??"
-    ws["A9"] = "TODO: update headcount plan"
+# Junk notes tab: cell address -> content.
+NOTES = {
+    "A1": "Northwind Software - misc notes",
+    "A3": "Q1 2025 actuals still with finance, do not use",
+    "A4": "Pipeline from CRM export, pulled first week of quarter",
+    "A5": "Board meeting moved - check calendar",
+    "A7": "scratch",
+    "B7": 3900,
+    "C7": 3250,
+    "D7": "20% over??",
+    "A9": "TODO: update headcount plan",
+}
 
 
 def main():
-    check_true_data()
-
-    # A new workbook starts with one sheet; rename it and add the notes tab.
-    wb = Workbook()
-    kpi_sheet = wb.active
-    kpi_sheet.title = "KPI Tracker"
-    write_kpi_sheet(kpi_sheet)
-    write_notes_sheet(wb.create_sheet("Notes"))
-
-    OUTPUT_PATH.parent.mkdir(exist_ok=True)
-    wb.save(OUTPUT_PATH)
-    print(f"Wrote {OUTPUT_PATH.name}: {len(QUARTERS)} quarters (blank: {BLANK_QUARTER}), "
-          f"1 budget-only row, {len(TEXT_CELLS)} text cells, sheets: {wb.sheetnames}")
+    save_workbook({
+        "output_path": OUTPUT_PATH,
+        "quarters": QUARTERS,
+        "blank_quarter": BLANK_QUARTER,
+        "budget_only_label": BUDGET_ONLY_LABEL,
+        "true_data": TRUE_DATA,
+        "next_quarter_budget": NEXT_QUARTER_BUDGET,
+        "header_names": HEADER_NAMES,
+        "text_cells": TEXT_CELLS,
+        "notes": NOTES,
+    })
 
 
 if __name__ == "__main__":
