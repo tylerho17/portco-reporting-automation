@@ -26,6 +26,8 @@ from clean import (STANDARD_COLUMNS, check_quarters_in_order, clean_workbook, no
     ("$1,250K", 1250.0),     # dollar sign, comma and unit together
     (" $1.2 M ", 1200.0),    # stray spaces
     ("-$1.2M", -1200.0),     # negative (e.g. cash-generating burn)
+    ("$-1.2M", -1200.0),     # minus after the dollar sign
+    ("1,250,000", 1250000.0),  # commas in groups of 3
     ("0", 0.0),
 ])
 def test_parse_number_reads_text(cell, expected):
@@ -50,7 +52,10 @@ def test_parse_number_blank_cell_is_nan(cell):
     assert math.isnan(parse_number(cell))
 
 
-@pytest.mark.parametrize("cell", ["n/a", "TBD", "(120)", "12.5%", "M", "$", "1.2.3M"])
+@pytest.mark.parametrize("cell", ["n/a", "TBD", "(120)", "12.5%", "M", "$", "1.2.3M",
+                                  # Task 5: Python's Decimal used to read these as infinity, blank and 1000
+                                  "inf", "Infinity", "nan", "1e3",
+                                  "1.250,5", "1,2,5", ".5M", "-", True, False])
 def test_parse_number_unreadable_text_stops(cell):
     # Anything it can't read with certainty is an error that names the cell, never a guess.
     with pytest.raises(ValueError, match="Can't read"):

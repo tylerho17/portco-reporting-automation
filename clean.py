@@ -17,6 +17,7 @@ import sys
 from decimal import Decimal
 
 import pandas as pd
+from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
 # ---------------------------------------------------------------------------
@@ -178,13 +179,32 @@ def find_kpi_sheet(path):
     Checks the first 10 rows of each tab, so title rows above the table are fine.
     Tabs without a 'Quarter' header (like Notes) are ignored.
     """
-    sheets = pd.read_excel(path, sheet_name=None, header=None)  # every tab, raw, no header guessing
+    # Every tab, raw, no header guessing. Only a truly empty cell counts as missing: by default pandas
+    # would also quietly blank out text like "n/a", "NA" or "NULL", and those must stop in parse_number.
+    sheets = pd.read_excel(path, sheet_name=None, header=None, keep_default_na=False, na_values=[""])
     for sheet_name, sheet in sheets.items():
         for row_index in range(min(10, len(sheet))):
             cells = [normalize_header(v) for v in sheet.iloc[row_index] if not is_blank(v)]
             if LABEL_HEADER in cells:
                 return sheet_name, sheet, row_index
     raise ValueError(f"No tab in {path} has a 'Quarter' header in its first 10 rows (tabs: {list(sheets)})")
+
+
+def check_no_error_cells(path, sheet_name):
+    """Stop on Excel error values like #DIV/0! or #REF! in the KPI tab.
+
+    pandas reads them as empty cells, which would turn a broken formula into "data missing"
+    instead of a problem to fix. openpyxl still sees them (cell type "e" = error).
+    """
+    workbook = load_workbook(path, read_only=True, data_only=True)  # data_only: saved results, not formulas
+    try:
+        for row in workbook[sheet_name].iter_rows():
+            for cell in row:
+                if cell.data_type == "e":
+                    raise ValueError(f"cell {cell.coordinate}: Excel error value {cell.value!r} - fix the formula "
+                                     f"in the workbook, or clear the cell if there's no data")
+    finally:
+        workbook.close()  # read-only mode keeps the file open until closed
 
 
 def header_name(header):
@@ -313,6 +333,7 @@ def clean_workbook(path):
     """
     sheet_name, sheet, header_row = find_kpi_sheet(path)
     try:
+        check_no_error_cells(path, sheet_name)
         return clean_sheet(sheet, header_row)
     except ValueError as error:
         raise ValueError(f"Sheet {sheet_name!r}, {error}") from None
