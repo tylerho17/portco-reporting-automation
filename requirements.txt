@@ -1,0 +1,7 @@
+pandas
+openpyxl
+python-pptx
+matplotlib
+anthropic
+python-dotenv
+pyyaml
