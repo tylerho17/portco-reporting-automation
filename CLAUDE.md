@@ -22,12 +22,18 @@ Demo project for a PE AI automation role. Must be clean, explainable, and reliab
 - analyze.py             Claude API → JSON (headline, 3 wins, 3 risks, 3 mgmt questions); validate schema + sign-aware number check, retry once on failure
 - compare_models.py      step 3b: blind Sonnet vs Haiku comparison -> README table
 - excel_output.py        step 4b: output/<company>_metrics.xlsx (Metrics, Flags, Data gaps sheets)
-- build_deck.py          (step 4, not built yet) python-pptx using templates/base.pptx; slides: Summary, KPI table, Charts, Risks/Flags, Questions
-- main.py                CLI: `python main.py data/northwind.xlsx` or `--all` [--skip-ai]; summary table + output/batch_summary.csv
+- make_template.py       builds templates/base.pptx: fictional "Example Capital" brand, navy/gray, 16:9, title + content layouts
+- build_deck.py          step 4: output/<company>_board_pack.pptx on templates/base.pptx; slides: Summary, Key metrics, ARR and cash charts, Risks and flags, Questions. Re-checks the analysis JSON; "AI summary unavailable" if missing or failed
+- charts.py              the two matplotlib charts for slide 3 (ARR + net new ARR, ending cash with runway); a blank quarter is a visible gap
+- text_fit.py            measures slide text, shrinks it to a 12 pt floor, then stops naming the slide and box
+- main.py                CLI: `python main.py data/northwind.xlsx` or `--all` [--skip-ai]; clean -> metrics -> Excel -> AI JSON -> deck per company; summary table + output/batch_summary.csv
 - config.yaml            flag thresholds with investor reasoning in comments (NRR < 100%, burn > 15% over budget, runway < 12 mo)
-- tests/ + pytest.ini    pytest unit tests (`python -m pytest -q`), expected values worked out by hand
-- check_northwind.py, check_companies.py, check_excel_output.py, check_main.py   end-to-end proofs against each company's answer key
-- STUDY_GUIDE.md         data flow, glossary, interview questions, exercises; OVERNIGHT_REPORT.md is a historical record
+- tests/ + pytest.ini    pytest unit tests (`python -m pytest -q`), expected values worked out by hand; tests/test_docs.py keeps README/CLAUDE.md file names real
+- check_northwind.py, check_companies.py, check_excel_output.py, check_deck.py, check_main.py   end-to-end proofs against each company's answer key (no API calls)
+- README.md              what it does, how to run it, data flow, design decisions, model comparison (compare_models.py rewrites the block between its marker comments), cost, screenshots, next steps
+- STUDY_GUIDE.md         data flow, glossary, interview questions, exercises
+- LEARNINGS.md           what broke and what it taught; model comparison and live-run costs
+- DAY_REPORT.md          per-task report of the day's build (decisions, failures, unresolved); OVERNIGHT_REPORT.md is a historical record
 - output/                generated files (git-ignored)
 
 ## Rules
