@@ -27,3 +27,19 @@ Log what broke, why, and how it was fixed.
   - **Too wordy:** risk details now run to 3+ clauses, too long for a slide.
   - **One overstatement:** "−1.5% in Q1 2026, a second straight quarter of significant budget miss". A −1.5% miss isn't significant, and Q4 2025 beat budget (+16.5%).
   - **One mischaracterization:** 13.0 mo runway at budgeted burn is called a "projected improvement".
+- **2026-09-17, v2 → v3: details too long for a slide**
+  - **Flaw:** v2 risk details ran 65–70 words, and output doubled to 6,955 tokens.
+  - **Rule added:** each detail is at most 2 sentences and ~40 words. `validate_summary` enforces it (45-word buffer), so a long answer fails and retries.
+  - **Result:** fixed. All details are within limits on attempt 1; output fell to 2,090 tokens, 21.1s, $0.0325 (v2: 6,955 tokens, 61.8s, $0.0808). Re-validating the saved v2 answer under the new limits fails all 3 risks, so the check works.
+- **2026-09-17, v2 → v3: overstated variance**
+  - **Flaw:** a −1.5% quarter was called "a second straight quarter of significant budget miss".
+  - **Rule added:** never call a quarter a significant miss or beat unless its value is quoted and more than 10% off budget.
+  - **Result:** fixed. No "significant/large/sharp" language appears.
+- **2026-09-17, v2 → v3: runway at budget called a projection**
+  - **Flaw:** 13.0 mo runway at budgeted burn was called a "projected improvement".
+  - **Rule added:** describe it only as "runway if burn returns to plan", never as a projection or improvement. The payload key was also renamed `runway_if_burn_returns_to_plan`.
+  - **Result:** fixed. It now reads "runway if burn returns to plan is 13.0 mo".
+- **2026-09-17, v3 remaining issues (not fixed yet)**
+  - **Rule 3 slip:** question 1 describes burn vs budget "from 0.0% in Q3 2024", the first quarter in the data.
+  - **Passing flag not labeled:** question 3 treats net new ARR vs budget (−19.0%, passed) as a problem to "address" without saying it passed.
+  - **Missing units:** risk 2 quotes pipeline "from 9,200 to 12,500" without $K.

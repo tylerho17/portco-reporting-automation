@@ -129,6 +129,12 @@ def check_analysis_validation(payload_text):
     problems = validate_summary(rounded, payload_text)
     assert any("97" in p for p in problems), f"Rounded number not caught: {problems}"
 
+    too_long = good_summary()
+    too_long.risks[1].detail = ("Net burn is 20.0% over budget. The burn multiple is 2.35x. "
+                                "Runway is 11.0 mo.")  # 3 sentences
+    problems = validate_summary(too_long, payload_text)
+    assert any("risks #2 detail" in p for p in problems), f"3-sentence detail not caught: {problems}"
+
     two_risks = good_summary()
     two_risks.risks = two_risks.risks[:2]
     problems = validate_summary(two_risks, payload_text)

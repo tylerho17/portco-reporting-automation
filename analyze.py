@@ -33,6 +33,8 @@ DEFAULT_MODEL = "claude-sonnet-5"
 MAX_ATTEMPTS = 2           # first try + one retry
 MAX_TOKENS = 16000         # room for thinking + the answer
 MAX_HEADLINE_WORDS = 30    # prompt asks for 25; small buffer before we fail it
+MAX_DETAIL_WORDS = 45      # prompt asks for ~40; small buffer before we fail it
+MAX_DETAIL_SENTENCES = 2
 OUTPUT_DIR = Path(__file__).parent / "output"
 
 
@@ -135,7 +137,7 @@ def build_payload(company, actuals, next_budget, config):
         "flags_cannot_evaluate": sum(f["status"] == MISSING for f in flags),
         "flags_total": len(flags),
         "flags_latest_quarter": [describe_flag(f, config) for f in flags],
-        "runway_at_next_quarter_budgeted_burn": format_value(
+        "runway_if_burn_returns_to_plan": format_value(  # latest cash at next quarter's budgeted burn
             "runway_months", runway_at_next_budget(actuals, next_budget)),
         "trends_by_quarter": trends,
         "data_gaps": {METRIC_LABELS.get(name, name): quarters for name, quarters in gaps.items()},
@@ -166,11 +168,13 @@ What to write:
 - wins: exactly 3 genuine strengths supported by the data. Lead with the strongest growth or scale metric (such as ARR growth YoY) before any threshold passes. A metric that is merely "within threshold" counts as a win only if nothing stronger exists. If strengths are thin, don't overstate them.
 - risks: exactly 3, starting with the most serious tripped flags. Explain why each matters to an investor, not just that a threshold was crossed. Where several flags point to one underlying problem, combine them into one risk.
 - questions: exactly 3 specific questions for management that the data raises but cannot answer, such as what is driving a trend. No yes/no questions.
-Each title is a short phrase. Each detail is 1-2 sentences.
+Each title is a short phrase. Each detail is at most 2 sentences and about 40 words - it goes on a slide, so pick the evidence that matters most rather than listing everything. Answers with longer details are rejected.
 
 Accuracy of framing:
 - When a flag passed, say so explicitly, quoting its value next to its threshold (for example: "passed, but close to its threshold (value vs threshold) - watch"). Never place a passing metric where it reads as a breach.
-- Describe a trend from its peak, or from the start of the flag's lookback window, not from the first quarter in the data."""
+- Describe a trend from its peak, or from the start of the flag's lookback window, not from the first quarter in the data.
+- Never call a quarter a "significant" (or large, major, sharp) miss or beat against budget unless you quote its value and that value is more than 10% away from budget - above +10.0% or below -10.0%. Smaller variances are described plainly, with their value.
+- "runway_if_burn_returns_to_plan" is runway if burn returns to plan. Describe it only in those words. It is not a projection, forecast or improvement."""
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +188,15 @@ NUMBER_PATTERN = re.compile(r"\d[\d,]*(?:\.\d+)?")
 def numbers_in(text):
     """Every number in a piece of text, as floats. Ignores $, %, x, K, signs and commas."""
     return {float(match.replace(",", "")) for match in NUMBER_PATTERN.findall(text)}
+
+
+def count_sentences(text):
+    """Sentences = pieces ending in . ! or ? followed by a space or the end.
+
+    The decimal point in "97.1%" isn't followed by a space, so it doesn't count.
+    Known limit: an abbreviation like "vs. " would count as a sentence end.
+    """
+    return len([s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s])
 
 
 def summary_texts(summary):
@@ -213,6 +226,12 @@ def validate_summary(summary, payload_text):
     headline_words = len(summary.headline.split())
     if headline_words > MAX_HEADLINE_WORDS:
         problems.append(f"headline has {headline_words} words, max is {MAX_HEADLINE_WORDS}")
+    for section in ("wins", "risks"):
+        for number, point in enumerate(getattr(summary, section), start=1):
+            words, sentences = len(point.detail.split()), count_sentences(point.detail)
+            if words > MAX_DETAIL_WORDS or sentences > MAX_DETAIL_SENTENCES:
+                problems.append(f"{section} #{number} detail has {words} words and {sentences} sentences; "
+                                f"max is {MAX_DETAIL_WORDS} words and {MAX_DETAIL_SENTENCES} sentences")
     ungrounded = find_ungrounded_numbers(summary, payload_text)
     if ungrounded:
         problems.append("these numbers are not in the data (rounded or calculated?): "
