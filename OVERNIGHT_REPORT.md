@@ -117,3 +117,61 @@
 4. **I haven't opened the files in Excel.** Everything was verified by reading the saved file back with openpyxl: values, formats, fills. Column widths and how the colors look should get a quick visual check, which also gives step 6 a before/after screenshot.
 5. **`excel_output.py` depends on analyze.py for labels**, which pulls in the `anthropic` package. It's harmless (it's in requirements.txt and no API call happens), but if you want the Excel step to run without any AI code, `METRIC_LABELS` could move to metrics.py. That means editing analyze.py's import line (not the prompt), so I left it.
 6. **The Flags sheet covers the latest quarter only**, as specified. Earlier quarters' trips show only as red cells on the Metrics sheet; the combo rule's history isn't shown anywhere.
+
+---
+
+## Task 3 — Batch runner (main.py, no AI yet)
+
+**Result:** done. `python main.py --all --skip-ai` runs all three companies and exits 0. The new `check_main.py` prints "All checks passed", and so do `check_northwind.py`, `check_companies.py` and `check_excel_output.py`. Two commits: `4f1a989` (main.py) and `0deef52` (check). I made no changes to `clean.py`, `metrics.py`, `excel_output.py`, `analyze.py`, `config.yaml` or `CLAUDE.md`, and made no API calls.
+
+### What I built
+
+| File | What it is, in plain English |
+|---|---|
+| `main.py` (new) | **The one command that runs the whole pipeline.** `python main.py data/northwind.xlsx` runs one company; `python main.py --all` runs every workbook in `data/`. For each company it cleans the workbook, computes metrics, flags and gaps, saves the Excel file, then reaches the AI and deck steps and prints why they were skipped. `find_workbooks` lists the input files. `run_company` runs the steps for one company and prints a ✓ line per step. `run_batch` loops over the companies. A failure is caught, printed as `✗ FAILED: <reason>`, and the loop moves on. `print_summary` prints the final table. `main` returns exit code 0 if everything worked and 1 if any company failed. |
+| `check_main.py` (new) | **Proves the runner works and survives bad input.** (1) It runs `main.py --all --skip-ai` as a real command and checks that it exits 0, finds exactly the 3 workbooks, saves a fresh Excel file for each, prints both skip messages 3 times, and prints a summary table that matches each company's **story** from `check_companies.py`, not main.py's own counting. (2) It puts a broken workbook, a missing file and a simulated code bug between good companies and checks that the good companies still succeed. (3) It checks exit codes: 1 when a company fails, 2 for wrong arguments. (4) It checks that the run fails loudly if `build_deck.py` exists but isn't wired in. (5) It checks that `--all` ignores Excel lock files. |
+
+**Output of `python main.py --all --skip-ai`, summary part:**
+
+```
+Company     Flags tripped              Data gaps                          Result
+----------  -------------------------  ---------------------------------  ----------------------
+Alderpeak   0 of 9                     none                               OK (AI + deck skipped)
+Fernhollow  7 of 9, 1 cannot evaluate  20 metrics/flags (blank: Q2 2025)  OK (AI + deck skipped)
+Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK (AI + deck skipped)
+
+3 of 3 companies succeeded
+```
+
+Above the table, each company gets a block like `✓ Cleaned: 8 quarters (Q3 2024 to Q2 2026), budget row: Q3 2026 (Budget)`, the names of the tripped flags, `✓ Excel: output/northwind_metrics.xlsx`, `- AI commentary: skipped (--skip-ai)` and `- Deck: skipped (build_deck.py doesn't exist yet - build step 4)`.
+
+### Decisions you didn't specify
+
+1. **How I read "AI and deck steps are skipped if build_deck.py does not exist":** while `build_deck.py` is missing, **both** steps are skipped even without `--skip-ai`. The commentary has nowhere to go until there's a deck, so spending API money on it would be waste. As a result, main.py can't call the API tonight no matter which flags you pass. For now `--skip-ai` only changes the message ("skipped (--skip-ai)" instead of "skipped (build_deck.py doesn't exist yet)"). Once the deck exists, it will skip the Claude call.
+2. **AI and deck are not wired up, and main.py fails loudly if `build_deck.py` shows up.** I didn't write code that calls `analyze()`, because it couldn't be tested tonight without the API, and I don't know build_deck's functions yet. Once `build_deck.py` exists, every company fails with `NotWiredError: build_deck.py exists but main.py doesn't call it yet`. This happens even with `--skip-ai`, because the deck step isn't wired either. That way nobody gets an "OK" with no deck. **Heads-up for step 4:** creating `build_deck.py` will make `check_main.py` fail until main.py calls it. That's intended, but you'll need to update `ai_step`, `deck_step`, `result_text` and `EXPECTED_OK` in the check together.
+3. **Company name = file name in title case** (`northwind.xlsx` → "Northwind"), the same rule `analyze.py` uses. The workbooks don't have a reliable company-name cell.
+4. **"Flags tripped" column:** "6 of 9" (tripped out of all flags, including the combo rule). When some flags can't be evaluated, it says so: "7 of 9, 1 cannot evaluate". Otherwise Fernhollow's "7 of 9" would hide that a 9th flag had no answer. The per-company block above the table lists the tripped flag names.
+5. **"Data gaps" column:** the number of metrics and flags affected, the same count as the Excel "Data gaps" sheet, plus the blank quarter(s) that caused them: "19 metrics/flags (blank: Q1 2025)", or "none". A blank quarter here means any quarter with at least one blank input.
+6. **"Result" column:** `OK (AI + deck skipped)` while there is no deck, `OK` once there is, and `FAILED: <error type>: <message>` otherwise. A failed company shows "-" for flags and gaps, because there's nothing reliable to count.
+7. **Exit codes:** 0 = every company OK; 1 = at least one failed (the batch still finishes first); 2 = wrong arguments (argparse's standard). A scheduler or the overnight script can tell from the code alone whether a run worked.
+8. **Arguments:** exactly one of a file path or `--all`. Both or neither gives "give one workbook path, or --all (not both)". Only one path is accepted. For several, use `--all`.
+9. **A missing file is a company failure, not an argument error.** `main.py data/nope.xlsx` goes through the normal path and shows `FAILED: FileNotFoundError ...` in the table, so the batch path and the single-file path behave the same.
+10. **Bad input vs. code bugs:** `ValueError` (clean.py's messages, and pandas' "not an Excel file") and `OSError` (missing or unreadable file) print one clear line. Any other error is probably a bug, so its full traceback is printed as well. The batch continues either way.
+11. **`--all` reads `data/*.xlsx` only, sorted by name,** and skips files starting with `~$`. Excel creates those lock files while a workbook is open, and they would otherwise show up as a failing company. `.xls`, `.csv` etc. are ignored.
+12. **Nothing is written except the Excel file.** I didn't add a log or summary file; the table goes to the terminal only.
+13. **The check runs `main.py` as a separate process** for the batch, exit-code and argument tests, which is how you'll actually use it. The failure-isolation tests call `run_batch` directly with temporary files, so no broken workbook is ever put in `data/`. The simulated code bug and the fake `build_deck.py` are swapped in only in memory or in a temp folder, then put back. The real project files are never touched.
+14. **Expected table values in the check come from the stories**, not from main.py: flag counts are counted from `expected_flags`, and gap counts come from `expected_gaps()` in `check_companies.py`.
+
+### What failed and how I fixed it
+
+1. **Nothing in the project code failed.** The check passed on its first run, and a first pass proves nothing by itself. So I broke `main.py` on purpose **14 ways**, each in a throwaway copy of the project in a temp folder, and ran `check_main.py` against each copy. **14 of 14 caught:** the batch stopping at the first failure, exit code always 0, "cannot evaluate" dropped from the flags text, gap count off by one, lock files not skipped, the deck silently skipped when `build_deck.py` exists, the Excel file not saved, tracebacks printed for input errors, no traceback for real bugs, both a file and `--all` accepted, "cannot evaluate" counted as tripped, `--skip-ai` ignored, the blank quarter not shown, and a failed company shown as OK.
+2. **Wording, fixed before committing:** the first version printed "skipped: --skip-ai" and "Flags (Q2 2026): 0 of 9", which were hard to read. They now say "skipped (--skip-ai)" and "Flags tripped (Q2 2026): 0 of 9".
+3. **Minor tooling:** the shell sandbox blocked `echo $?`, a heredoc and chained commands, so I made the edits with the file editor and wrote scratch scripts to `/tmp`. No effect on the project.
+
+### Unresolved: needs your call
+
+1. **When `build_deck.py` exists, main.py needs a real AI + deck step** (see decision 2). Two questions for step 4. Should a company that fails AI validation after the retry still get a deck with the commentary slide marked "AI summary unavailable", or should it FAIL? And should `--skip-ai` build a deck without the Summary slide, or skip the deck too?
+2. **Does `--skip-ai` mean anything tonight?** Since AI is skipped anyway without a deck, the flag only changes the message. If you meant "without `--skip-ai`, call Claude now even without a deck" (saving `output/<company>_analysis.json`), that's a small change to `ai_step`. It wasn't allowed tonight because it calls the API.
+3. **The summary table only goes to the terminal.** For 275 companies you'd probably want it saved too, e.g. `output/batch_summary.xlsx` or a CSV with one row per company. I didn't add it because you didn't ask for it.
+4. **Runs are one company at a time.** That's fine for 3 companies and for the Python steps. With the Claude call added, 275 companies × ~36 s (the Sonnet timing in README) is about 2.75 hours in a row. Running several at once can wait until the AI step exists.
+5. **The runner doesn't cross-check companies.** For example, it doesn't warn if one company's latest quarter is Q1 2026 while the others are Q2 2026. A board pack for a fund probably wants every company on the same quarter. It's easy to add as a warning line if you want it.
