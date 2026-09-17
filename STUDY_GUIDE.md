@@ -201,7 +201,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `parse_row(label, row_index, raw_row, column_map)` | Runs `parse_number` on every cell in one row. If one fails, the error names the cell, quarter and column. | `cell G5 (Q2 2025, revenue): Can't read 'TBD' as a number`. |
 | `is_budget_only_row(label, row_index, row, column_map)` | True if the label contains budget/bud/plan. Stops if that row also has actual values. | `"Q3 2026 (Budget)"` → True. A budget row with revenue filled in is a mistake, so it stops. |
 | `clean_sheet(sheet, header_row)` | The main loop. Maps the columns, then goes row by row: skips empty rows, parses each labelled row, separates the budget-only row, stops on a repeated quarter or a second budget row, builds the table and checks the quarter order. | The blank Q1 2025 row is kept as a row of NaN, so later look-backs still line up. The duplicate-quarter stop was a bug fix (Task 4). |
-| `clean_workbook(path)` | **The entry point.** Finds the KPI tab, checks for error cells, runs `clean_sheet`, and puts `Sheet 'KPI Tracker', ` in front of any error. | Every other file calls this one function to read a workbook. |
+| `clean_workbook(path)` | **The entry point.** Finds the KPI tab, checks for error cells, runs `clean_sheet`, and puts the tab name (e.g. `Sheet 'KPI Tracker', `) in front of any error from that tab. The "no tab has a 'Quarter' header" error names the file instead, because no tab qualified. | Every other file calls this one function to read a workbook. |
 | `if __name__ == "__main__":` block | `python clean.py data/northwind.xlsx` prints the clean table sideways (quarters across) and the budget row. | For looking at the data yourself. |
 
 ---
@@ -236,7 +236,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `cac_payback_months(df)` | sm_spend / (new_arr × gross margin) × 12. Edge case: new_arr × margin ≤ 0 → ∞. | 2400 / (1850 × 0.751) × 12 = **20.7 mo** |
 | `runway_months(df)` | ending_cash / (net_burn / 3). Edge case: not burning → ∞. | 14300 / 1300 = **11.0 mo** |
 | `runway_at_next_budget(actuals, next_budget)` | latest cash / (next quarter's budgeted burn / 3). NaN if there's no budget row, ∞ if the budget has no burn. Shown as context, never flagged. | 14300 / 1100 = **13.0 mo** |
-| `compute_metrics(actuals)` | Calls all of the above and puts the results in one table: a row per quarter, 19 metric columns. `pipeline` is copied in for the combo rule. | The table `python metrics.py` prints. |
+| `compute_metrics(actuals)` | Calls every metric function above except `runway_at_next_budget` (a single number, which callers compute separately) and puts the results in one table: a row per quarter, 19 metric columns. `pipeline` is copied in for the combo rule. | The table `python metrics.py` prints. |
 
 **Flags and gaps.**
 
@@ -321,11 +321,11 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `NotWiredError` (class) | Raised if `build_deck.py` exists but main.py hasn't been connected to it. | So nobody gets an "OK" with no deck once step 4 starts. |
 | `find_workbooks(data_dir)` | Every `.xlsx` in `data/`, sorted by name, skipping `~$` files. | `~$northwind.xlsx` is the lock file Excel creates while a workbook is open; it would show up as a failing company. |
 | `company_name(workbook_path)` | `data/northwind.xlsx` → "Northwind". | |
-| `ai_step(skip_ai)` | For now only returns why AI was skipped: "--skip-ai" or "build_deck.py doesn't exist yet". Raises `NotWiredError` if the deck file exists. | No API money is spent while there's no deck to put the commentary in. |
+| `ai_step(skip_ai)` | For now only returns why AI was skipped: "--skip-ai" or "build_deck.py doesn't exist yet". Without `--skip-ai`, raises `NotWiredError` if the deck file exists. With `--skip-ai`, it skips even then. | No API money is spent while there's no deck to put the commentary in. |
 | `deck_step()` | Same for the deck. | |
 | `blank_quarters(actuals)` | Quarters with at least one blank input. | Northwind → `["Q1 2025"]`. |
 | `run_company(workbook_path, config, skip_ai)` | Clean → metrics → flags → gaps → save Excel → AI step → deck step, printing a ✓ line for each. Returns a result dict for the summary table. | |
-| `describe_error(error)` | Prints `✗ FAILED: <type>: <message>`. Bad-input errors (`ValueError`, `OSError`) get one line; anything else also gets a full traceback, because it's probably a bug. | A person fixing a workbook doesn't need a traceback; a developer fixing a bug does. |
+| `describe_error(error)` | Prints `✗ FAILED: <type>: <message>`. Bad-input errors (`ValueError`, `OSError`) and `NotWiredError` get one line; anything else also gets a full traceback, because it's probably a bug. | A person fixing a workbook doesn't need a traceback; a developer fixing a bug does. |
 | `run_batch(workbook_paths, config, skip_ai)` | Loops over the workbooks with `try`/`except` around each company, records the error and moves on. | The key reliability feature: company 2 breaking doesn't stop company 3. |
 | `flags_text(result)` | "6 of 9", or "7 of 9, 1 cannot evaluate". | Without the second part, Fernhollow's "7 of 9" would hide a flag that had no answer. |
 | `gaps_text(result)` | "none", or "19 metrics/flags (blank: Q1 2025)". | |
@@ -458,7 +458,7 @@ Builds each Excel file, **reads it back from disk**, and compares it with the me
 | `recommendation_text(sonnet, haiku)` | The one-line recommendation with the reason. |
 | `readme_section(stats, runs, scores)` | The Markdown table for the README. |
 | `write_readme_section(section)` | Replaces the text between the README's marker comments (or appends it). |
-| `append_learning(stats)` | Adds the result to LEARNINGS.md (once). |
+| `append_learning(stats)` | Adds the result to LEARNINGS.md. (`command_score` makes sure this happens only the first time scores are entered.) |
 | `command_score(score_args)` | Checks the scores, reveals the key, writes the README and LEARNINGS. |
 | `main()` | The `run` / `score` command line. |
 
@@ -470,7 +470,7 @@ Run with `python -m pytest -q` (212 tests, about 2 seconds). Expected values are
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
-| `test_clean.py` (81) | `write_workbook(path, labels, blank)`: a tiny workbook in pytest's temp folder. | `parse_number` (good text, real numbers, blanks → NaN, 17 kinds of unreadable text stop), `normalize_header` and `standard_column` on every Northwind header, quarter labels and order (Q4 → Q1 rollover, skipped, repeated), and whole workbooks (blank row kept, missing row stops, duplicate row stops). |
+| `test_clean.py` (81) | `write_workbook(path, labels, blank)`: a tiny workbook in pytest's temp folder. | `parse_number` (good text, real numbers, blanks → NaN, 17 kinds of unreadable text stop), `normalize_header` and `standard_column` on most of the Northwind headers, quarter labels and order (Q4 → Q1 rollover, skipped, repeated), and whole workbooks (blank row kept, missing row stops, duplicate row stops). |
 | `test_metrics.py` (78) | `table(**columns)`: a small table with only the needed columns. `values(series)`: compare with NaN allowed. `burn_table`, `cac_table`: tables for one metric. `full_actuals(blank, blank_cells)`: 8 realistic quarters with optional blanks. `combo_metrics`, `latest`, `gaps_for`: shortcuts for combo and gap tests. `TEST_CONFIG`: thresholds typed into the test file, so editing config.yaml never breaks a test. | Every metric against hand math; every CLAUDE.md edge case (∞, 0, −0.0); a missing input never becomes 0 or ∞; `check_threshold` exactly at the threshold, float noise, real misses, NaN, ∞; `check_combo` trip/pass/cannot evaluate; `data_gaps` following the QoQ/YoY rules. |
 | `test_bad_inputs.py` (53) | `good_table()`: a valid table. `set_cell`, `drop_column`, `add_column`: break one thing. `write_workbook(path, rows, empty_columns_left)`: Notes tab, title, empty row, table from row 3. `error_from`, `assert_stops_with`: run `clean_workbook` and check how the error message starts. `reorder_quarters(labels)`: quarter rows in a given order. | Broken workbooks stop with the sheet name and Excel address: missing columns, two headers with one meaning, unknown headers, quarters out of order, a budget row with actuals, unreadable text, Excel error cells. `test_good_workbook_cleans` proves the starting workbook is valid, so each failure comes from the one thing that was broken. |
 
@@ -833,7 +833,7 @@ If you get stuck for more than 20 minutes, read the original's first line, put i
 
 1. **Born in** `make_data.py` → `TRUE_DATA`, Q2 2026: starting ARR 25810, expansion 580, contraction 260, churn 510. `TEXT_CELLS` has `("contraction_arr", "Q2 2026"): "K"`, so `make_data_common.to_text` writes contraction as the text `"260K"`.
 2. **In the workbook:** KPI Tracker row 9: B9 = 25810 ("Beginning ARR"), D9 = 580 ("expansion arr"), **E9 = "260K"** ("Contraction_ARR"), F9 = 510 (" Churned ARR ").
-3. **`clean.py`:** `clean_workbook` → `find_kpi_sheet` → `clean_sheet` → `map_columns` → `name_headers` → `standard_column` → `normalize_header`. `"Beginning ARR"` → `beginning_arr` → alias → `starting_arr`; `" Churned ARR "` → `churned_arr`. Then `parse_row` → `parse_number("260K")` → 260.0.
+3. **`clean.py`:** `clean_workbook` → `find_kpi_sheet` → `clean_sheet` → `map_columns` → `name_headers` → `header_name` → `standard_column` → `normalize_header`. `"Beginning ARR"` → `beginning_arr` → alias → `starting_arr`; `" Churned ARR "` → `churned_arr`. Then `parse_row` → `parse_number("260K")` → 260.0.
 4. **`metrics.py`:** `compute_metrics` → `nrr(df)`:
    1 + 4 × (580 − 260 − 510) / 25810 = 1 + 4 × (−190) / 25810 = 1 − 760 / 25810 = **0.970554**, stored as a decimal.
 5. **Flag:** `evaluate_flags` → `check_threshold(0.970554, 1.00, "min")`. It's below the minimum, so **trip**.
@@ -859,7 +859,7 @@ If you get stuck for more than 20 minutes, read the original's first line, put i
 2. **The header:** `normalize_header("Net Burn (Bud.)")`: lowercase `"net burn (bud.)"`; each run of symbols and spaces becomes `_` → `"net_burn_bud_"`; strip the end `_` → `"net_burn_bud"`. `HEADER_ALIASES["net_burn_bud"]` = `"budget_net_burn"`.
 3. **`metrics.burn_vs_budget`:** 3900 / 3250 − 1. A calculator says 0.2; **Python gives 0.19999999999999996**, because floats are stored in binary.
 4. **`metrics.check_threshold`:** `value = round(value, 6)` turns it into 0.2. Then "max" with `burn_over_budget_max: 0.15`: 0.2 > 0.15 → **trip**. (The rounding line matters for a burn **exactly** 15% over budget, not here.)
-5. **The trap:** no. `find_kpi_sheet` only takes a tab with a "Quarter" header in its first 10 rows. The Notes tab has none, so it's never read. Its "3900 / 3250 / 20% over??" is someone's scratch math, left in on purpose (`make_data.py` → `NOTES`) to prove junk tabs are ignored.
+5. **The trap:** no. `find_kpi_sheet` loads every tab, but only uses one with a "Quarter" header in its first 10 rows. The Notes tab has none, so its cells never reach the table. Its "3900 / 3250 / 20% over??" is someone's scratch math, left in on purpose (`make_data.py` → `NOTES`) to prove junk tabs are ignored.
 
 ### Answer 4: burn multiple 2.35x
 
@@ -903,7 +903,7 @@ If you get stuck for more than 20 minutes, read the original's first line, put i
 
    So Q4 2024 is not a gap and Q1 2026 is. `arr_yoy` gaps: Q1 2025, Q1 2026.
 3. **The words:** `excel_output.cell_value(column, value, is_gap)` → "data missing" (plus gray fill from `style_metric_cell`) or "n/a (no prior period)". For Claude, `analyze.metric_trend` makes the same choice.
-4. **Why the printout says "n/a" for both:** `metrics.format_value` is a debugging printout and doesn't know about gaps. It's logged as unresolved in OVERNIGHT_REPORT Task 1, item 3.
+4. **Why the printout says "n/a" for both:** `metrics.print_report` passes every value straight to `metrics.format_value`, which doesn't know about gaps and turns any NaN into "n/a". `analyze.metric_trend` and `excel_output.cell_value` check the gap list **before** formatting, which is why the board-facing outputs tell the two apart. A related leftover: a "cannot evaluate" flag's value still reaches Claude as a bare "n/a" through `analyze.describe_flag` (OVERNIGHT_REPORT Task 1, unresolved item 3).
 
 ### Answer 9: the combo rule trips
 
