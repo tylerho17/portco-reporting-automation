@@ -60,3 +60,60 @@
 4. **Negative percentages will be hard to read on a slide.** Fernhollow's net new ARR vs budget is −150.0% (−$240K actual vs +$480K budget). The math is correct, but the deck may want to show the $K figures alongside it.
 5. **Not done here, by design:** no analysis was run for the new companies (no API calls), and CLAUDE.md wasn't updated with their stories. The stories are in each `make_data_*.py` docstring. You may want a "Healthy / distressed company story" section in CLAUDE.md like the Northwind one.
 6. **Overlap:** Northwind's cleaning, flag and gap checks now run in both `check_northwind.py` and `check_companies.py`. It's harmless, but if you'd rather have one home, the four Northwind checks could be deleted from `check_northwind.py`.
+
+---
+
+## Task 2 — Step 4b Excel output
+
+**Result:** done. `python excel_output.py data/northwind.xlsx` saves `output/northwind_metrics.xlsx`. The new `check_excel_output.py` builds the file for all three companies, reads each one back from disk and prints "All checks passed". `check_companies.py` and `check_northwind.py` still pass. Two commits: `4942059` (writer) and `85abfd5` (check + LEARNINGS entry). I made no changes to `clean.py`, `metrics.py`, `analyze.py`, `config.yaml` or `CLAUDE.md`.
+
+### What I built
+
+| File | What it is, in plain English |
+|---|---|
+| `excel_output.py` (new) | **Turns the computed numbers into a spreadsheet a partner can open.** It does no math: it calls the same `clean_workbook` → `compute_metrics` → `evaluate_flags` → `data_gaps` chain as everything else, then only writes and formats. `number_format` picks how a column displays (`0.0%`, `#,##0`, `0.0" mo"`, `0.00"x"`). `cell_value` decides what goes in a cell: the number itself, or a word when there's no usable number. `write_metrics_sheet`, `write_flags_sheet` and `write_gaps_sheet` build one sheet each. `build_workbook` puts them together, and `save_metrics_workbook(path, config)` is the one function `main.py` will call in Task 3. |
+| `check_excel_output.py` (new) | **Proves the spreadsheet says exactly what the metrics table says.** For each company it saves the file, **reloads it from disk** and checks: (1) the file name and sheet order; (2) every Metrics cell against the metrics table, its number format, and its fill (red only where a flag trips that quarter, gray only where data is missing, nothing else); (3) latest-quarter cells against the **hand formulas** already in `check_companies.py`; (4) every Flags row's value, threshold, status text and row color against each company's **story** (the expected statuses in `check_companies.py`, not recomputed); (5) the Data gaps rows against `data_gaps()`, no more and no fewer. |
+| `LEARNINGS.md` (changed) | One new row: openpyxl's number precision (see "What failed"). |
+
+**What each file shows:**
+
+| Sheet | Northwind | Alderpeak (healthy) | Fernhollow (distressed) |
+|---|---|---|---|
+| Metrics | 8 rows; Q1 2025 all gray; red cells wherever a flag tripped | 8 rows, no red or gray anywhere | 8 rows; Q2 2025 all gray; lots of red |
+| Flags (Q2 2026) | 6 red, 3 green; runway at budget 13.0 mo | 9 green; runway at budget 144.0 mo | 7 red, 1 gray (Rule of 40), 1 green; runway at budget 7.6 mo |
+| Data gaps | 19 rows | "None — every metric and flag has the data it needs" | 20 rows (incl. "Flag: Rule of 40") |
+
+### Decisions you didn't specify
+
+1. **File name comes from the input file name:** `data/northwind.xlsx` → `output/northwind_metrics.xlsx`. That needs no company-name lookup, and `--all` in Task 3 gets unique names for free.
+2. **The Metrics sheet holds the 19 computed metrics only** (the same columns as `compute_metrics`), not raw inputs like net burn or cash. That keeps it "one row per quarter of metrics" and makes the read-back check a 1-to-1 comparison.
+3. **Column headers reuse `METRIC_LABELS` from analyze.py** (imported, not edited), so Excel, the Claude payload and later the deck use the same names. Side effect: `excel_output.py` imports the `anthropic` package even though it never calls the API (see unresolved item 5).
+4. **No value = a word, never an empty cell.** Excel can't store NaN or infinity, and openpyxl silently saves both as a blank. So each case gets its own label: `data missing` (a gap), `n/a (no prior period)` (e.g. YoY in the first 4 quarters), `∞ (ARR shrank)` (burn multiple), `∞ (not burning)` (runway), `∞ (never pays back)` (CAC payback). This follows "not meaningful must never look like data missing". One nice consequence: a formula like `=D9-D8` on a "data missing" cell shows `#VALUE!` instead of quietly treating it as 0.
+5. **The Metrics sheet highlights flagged cells in every quarter.** CLAUDE.md step 4b says "flagged cells highlighted", and `evaluate_flags` already accepts any quarter. A cell is red if its flag trips in *that* quarter and gray if it's a data gap. Passed cells are **not** green: 150 green cells would drown out the red. The combo rule has no single cell, so it appears only on the Flags sheet.
+6. **The Flags sheet has 2 columns beyond the 4 you listed:** `Quarter` (so a printout is self-explanatory) and `Trips when` ("below threshold" / "above threshold"). Without it, a threshold of −20.0% doesn't say which direction is bad. Columns: Flag, Quarter, Value, Threshold, Trips when, Status.
+7. **The whole flag row is colored**, not just the Status cell, with darker text in the same color (Excel's standard "Good/Bad" light red `FFC7CE` and light green `C6EFCE`; gray `D9D9D9`).
+8. **Status wording:** "Tripped", "Passed", "Cannot evaluate — data missing". The payload to Claude uses "TRIPPED" / "passed"; for a spreadsheet I used sentence case.
+9. **Combo rule row:** Value = "see NRR and Pipeline on Metrics sheet", Threshold = "last 3 quarters" (read from config), Trips when = "NRR falls and pipeline rises at every step".
+10. **Value and Threshold stay real numbers** with the metric's format, so a threshold of 0.15 displays as 15.0% but can still be used in formulas.
+11. **Runway at next quarter's budgeted burn** is on the Flags sheet, one empty row below the table, labeled "(context, not a flag)" and uncolored. CLAUDE.md says to show it as context without flagging it.
+12. **Data gaps sheet:** one row per affected metric or flag, with quarters joined as "Q1 2025, Q2 2025", in the same order as `data_gaps()`. Flag gaps read "Flag: Rule of 40".
+13. **$K cells use `#,##0` with no `$` sign**, because the header already says "($K)", matching metrics.py's printout.
+14. **Small usability touches:** bold headers, frozen header row and quarter column, fixed column widths, and right-aligned text labels in number columns so they line up.
+15. **The check writes the real files into `output/`** (git-ignored) instead of a temp folder, so after any check run the latest files are there to open.
+16. **The check writes its expected labels, formats and colors out literally** instead of importing them from `excel_output.py`. If a constant there is wrong, the check can't agree with it by accident.
+17. **The CLI takes one file.** Batch mode is Task 3's `main.py`, which can loop over `save_metrics_workbook`.
+
+### What failed and how I fixed it
+
+1. **The read-back check failed on its first run.** NRR `1.0706921944035346` came back as `1.070692194403535`. openpyxl saves numbers with 16 significant digits (`"%.16g"`), but a Python float can need 17. The difference is about 1e-16, and Excel itself only keeps 15 digits. **Fix:** the check compares to 15 significant digits (`same_as_saved`). I didn't change the writer, because nothing is lost at any precision Excel can show. Logged in LEARNINGS.md, together with openpyxl silently writing NaN or infinity as a blank cell.
+2. **Checks passing proves nothing by itself, so I broke the writer on purpose** (in memory, without editing files) and reran the check. **13 of 13 caught:** ratios saved as 97.1 instead of 0.971, values rounded to 3 decimals, `%` format missing, "data missing" written as "n/a", "no prior period" written as "data missing", ∞ written as "n/a", tripped cells not red, passed rows gray, a changed status label, one data gap dropped, a wrong threshold, runway at budget off by 1, and sheets in the wrong order. The first break is the one the 15-digit tolerance needed to keep catching, and it does.
+3. **Minor tooling:** the shell sandbox blocked a `for` loop and a `sed` pipe, so I ran the three companies as separate commands and read full dumps instead. No effect on the project. `pytest` reports "no tests ran" (exit code 5) because `tests/` doesn't exist until Task 4; the overnight runner only runs pytest when that folder exists.
+
+### Unresolved: needs your call
+
+1. **Flag names and metric headers don't quite match.** The Flags sheet uses `FLAG_RULES` names ("Burn vs budget", "Runway (months)", "CAC payback (months)"). The Metrics sheet uses `METRIC_LABELS` ("Net burn vs budget", "Runway at current burn", "CAC payback"). Both come from existing code I wasn't asked to change. One set of names before the deck is built would be cleaner.
+2. **Burn multiple = 0 when not burning shows as "0.00x"** with no "not burning" note, while runway in the same situation shows "∞ (not burning)". It's a real number, so I kept it numeric. An Excel cell comment could explain it. No company in the data hits this case.
+3. **The Task 1 "burn vs budget" edge case carries into Excel.** A company generating more cash than budgeted would get a red cell. It's a definition decision in metrics.py, not an output one.
+4. **I haven't opened the files in Excel.** Everything was verified by reading the saved file back with openpyxl: values, formats, fills. Column widths and how the colors look should get a quick visual check, which also gives step 6 a before/after screenshot.
+5. **`excel_output.py` depends on analyze.py for labels**, which pulls in the `anthropic` package. It's harmless (it's in requirements.txt and no API call happens), but if you want the Excel step to run without any AI code, `METRIC_LABELS` could move to metrics.py. That means editing analyze.py's import line (not the prompt), so I left it.
+6. **The Flags sheet covers the latest quarter only**, as specified. Earlier quarters' trips show only as red cells on the Metrics sheet; the combo rule's history isn't shown anywhere.
