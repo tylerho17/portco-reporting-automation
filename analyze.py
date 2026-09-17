@@ -331,8 +331,8 @@ def analyze(payload_text, model=DEFAULT_MODEL, client=None):
 # 8. Command line
 # ---------------------------------------------------------------------------
 
-def print_summary(summary, run_info):
-    """Show the commentary and the run stats in the terminal."""
+def print_commentary(summary):
+    """Show the commentary only (no model or stats - used for blind scoring too)."""
     print(f"\nHEADLINE: {summary.headline}")
     for section in ("wins", "risks"):
         print(f"\n{section.upper()}")
@@ -341,6 +341,11 @@ def print_summary(summary, run_info):
     print("\nQUESTIONS FOR MANAGEMENT")
     for question in summary.questions:
         print(f"- {question}")
+
+
+def print_summary(summary, run_info):
+    """Show the commentary and the run stats in the terminal."""
+    print_commentary(summary)
     print(f"\nRun: {run_info['model']}, {run_info['attempts']} attempt(s), "
           f"{run_info['input_tokens']} in / {run_info['output_tokens']} out tokens, {run_info['seconds']}s")
 

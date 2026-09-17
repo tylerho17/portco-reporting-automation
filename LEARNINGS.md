@@ -43,3 +43,22 @@ Log what broke, why, and how it was fixed.
   - **Rule 3 slip:** question 1 describes burn vs budget "from 0.0% in Q3 2024", the first quarter in the data.
   - **Passing flag not labeled:** question 3 treats net new ARR vs budget (−19.0%, passed) as a problem to "address" without saying it passed.
   - **Missing units:** risk 2 quotes pipeline "from 9,200 to 12,500" without $K.
+
+## Model comparison (step 3b)
+
+- **2026-09-17, Sonnet 5 vs Haiku 4.5 on Northwind (v3 prompt, 3 runs each, blind)**
+  - **Sonnet:** passed 3/3, avg score 4.0, $0.0533/run, 36.0s
+  - **Haiku:** passed 3/3, avg score 2.0, $0.0173/run, 13.2s
+  - **Result:** Keep claude-sonnet-5 as the default ($14.65 per quarter for 275 companies): Haiku averaged 2.0 (needs ≥ 4.0).
+  - **Haiku needed its retry on every run** (avg attempts 2.0). The 100% pass rate hides that none of its first answers passed.
+  - **Validator gaps found in the blind answers (not fixed yet):**
+    - **Coincidental number:** "3.3 months faster than the 24.0-month threshold" is a subtraction, but passed because −3.3% (Rule of 40, Q4 2025) is in the payload. A second real case of the known limit.
+    - **Malformed questions:** raw JSON strings (`{"title": ..., "detail": ...}`) were accepted, because the schema only requires strings.
+    - **Wrong direction:** "improved… down from 20.3 mo" (actually 20.3 → 20.7, worse). Direction errors pass every current check.
+    - **Invented claim:** "Management asserts…" appeared, but nothing checks attributions.
+  - **Reflection:**
+    - **Prediction before scoring:** the most polished-sounding answer would score highest.
+    - **Result:** it tied for lowest (A, Haiku, score 2). Fluent writing hid two problems:
+      - A number Claude calculated: "3.3 months faster than the 24.0-month threshold" (24.0 − 20.7).
+      - A false claim: net new ARR was "consistently missing budget", but Q4 2025 beat budget by +16.5% and the flag passed at −19.0% vs −20.0%.
+    - **Lesson:** judge against the rubric line by line, not by how it reads. This is why validation runs in code and scoring is blind. Neither is enough alone: A passed every code check, and only checking each claim against the data caught it. Code catches rule breaks at scale, blind scoring removes bias toward a model, and line-by-line review catches what code can't yet.
