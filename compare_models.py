@@ -16,6 +16,7 @@ Rules (agreed before running):
 import argparse
 import json
 import random
+import string
 import sys
 import time
 from datetime import date
@@ -107,9 +108,11 @@ def run_once(client, model, run_number, payload_text):
 
 def assign_letters(records):
     """Shuffle the runs and label them A, B, C... so the order says nothing about the model."""
+    if len(records) > len(string.ascii_uppercase):  # zip would silently drop runs past Z
+        raise ValueError(f"{len(records)} runs, but only 26 letters (A-Z) to label them")
     shuffled = list(records)
     random.SystemRandom().shuffle(shuffled)
-    return dict(zip("ABCDEFGHIJ", shuffled))
+    return dict(zip(string.ascii_uppercase, shuffled))
 
 
 def save_blind_files(lettered):
@@ -182,6 +185,8 @@ def parse_scores(score_args, runs):
         letter = letter.strip().upper()
         if letter not in runs:
             raise ValueError(f"{arg!r}: there is no answer {letter}")
+        if letter in scores:  # "A=4 A=2" would otherwise keep the last one without a word
+            raise ValueError(f"{arg!r}: answer {letter} was already scored - give each letter once")
         if not runs[letter]["passed"]:
             raise ValueError(f"{letter} failed validation - it isn't scored (it already counts in the pass rate)")
         if not value.strip().isdigit() or not 1 <= int(value) <= 5:

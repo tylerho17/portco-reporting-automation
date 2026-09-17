@@ -446,11 +446,11 @@ Builds each Excel file, **reads it back from disk**, and compares it with the me
 | `run_cost(model, input_tokens, output_tokens)` | Dollar cost: tokens × price per million. |
 | `make_record(...)` | One run's result in a fixed shape, passed or failed. |
 | `run_once(client, model, run_number, payload_text)` | Calls `analyze` once. A failure is **recorded, never rerun**: a failure is data. |
-| `assign_letters(records)` | Shuffles the runs and labels them A–F. |
+| `assign_letters(records)` | Shuffles the runs and labels them A–F (up to A–Z; more than 26 runs stops). |
 | `save_blind_files(lettered)` | `answer_A.json` … holds commentary only; `key_DO_NOT_OPEN.json` holds models and stats. |
 | `print_blind_answers(lettered)` | Prints the answers by letter with the rubric. |
 | `command_run(force)` | Runs S, H, S, H, S, H, then saves and prints the blind set. Refuses to overwrite an existing set without `--force`. |
-| `parse_scores(score_args, runs)` | `["A=4", "B=3"]` → `{"A": 4, "B": 3}`. Every passed answer needs a whole-number score from 1 to 5. |
+| `parse_scores(score_args, runs)` | `["A=4", "B=3"]` → `{"A": 4, "B": 3}`. Every passed answer needs a whole-number score from 1 to 5, given once. |
 | `average(values)` | Mean of the values that exist, or None. |
 | `model_stats(model, runs, scores)` | Pass rate, average attempts, cost, seconds, score, and cost for 275 companies. |
 | `recommend(haiku)` | The rule agreed **before** running: Haiku only if its average score is ≥ 4.0 **and** it passed 100% of runs; otherwise Sonnet. |
