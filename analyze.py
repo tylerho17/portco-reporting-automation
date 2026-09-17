@@ -315,6 +315,20 @@ def analyze(payload_text, model=DEFAULT_MODEL, client=None):
 # 8. Command line
 # ---------------------------------------------------------------------------
 
+def save_analysis(path, payload, summary=None, run_info=None, error=None):
+    """Save what Claude saw next to what it wrote, so every claim can be traced. Returns the path.
+
+    summary=None means there is no validated answer (error says why), and build_deck.py then
+    shows "AI summary unavailable". analyze.py and main.py both save through here.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"summary": summary.model_dump() if summary else None, "run_info": run_info,
+              "error": error, "payload": payload}
+    path.write_text(json.dumps(record, indent=2, ensure_ascii=False))
+    return path
+
+
 def print_commentary(summary):
     """Show the commentary only (no model or stats - used for blind scoring too)."""
     print(f"\nHEADLINE: {summary.headline}")
@@ -346,19 +360,15 @@ def main():
     payload = build_payload(company_key.title(), actuals, next_budget, load_config())
     payload_text = payload_to_text(payload)
 
-    OUTPUT_DIR.mkdir(exist_ok=True)
     output_path = OUTPUT_DIR / f"{company_key}_analysis.json"
     try:
         summary, run_info = analyze(payload_text, args.model)
     except AnalysisError as error:
-        output_path.write_text(json.dumps({"summary": None, "run_info": error.run_info,
-                                           "payload": payload}, indent=2, ensure_ascii=False))
+        save_analysis(output_path, payload, run_info=error.run_info, error=str(error))
         print(error)
         sys.exit(1)
 
-    # Save what Claude saw next to what it wrote, so every claim can be traced.
-    output_path.write_text(json.dumps({"summary": summary.model_dump(), "run_info": run_info,
-                                       "payload": payload}, indent=2, ensure_ascii=False))
+    save_analysis(output_path, payload, summary, run_info)
     print_summary(summary, run_info)
     print(f"Saved {output_path.relative_to(Path(__file__).parent)}")
 

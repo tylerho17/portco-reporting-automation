@@ -4,9 +4,12 @@ Expected values are worked out by hand (shown in comments), not copied from the 
 Run from the project folder:  pytest
 """
 
+import json
+
 import pytest
 
-from analyze import BoardSummary, Point, build_payload, find_ungrounded_numbers, numbers_in
+from analyze import BoardSummary, Point, build_payload, find_ungrounded_numbers, numbers_in, save_analysis
+from build_deck import load_analysis
 from clean import clean_workbook
 from make_data import OUTPUT_PATH as NORTHWIND
 from metrics import load_config
@@ -92,3 +95,26 @@ def test_payload_not_meaningful_flag_shows_the_k_figures(northwind):
     # Not meaningful is not missing data. (Q1 2025 is still a gap: Northwind's blank quarter.)
     assert payload["data_gaps"]["Net burn vs budget"] == ["Q1 2025"]
     assert "flag: Net burn vs budget" not in payload["data_gaps"]
+
+
+def test_save_analysis_passed_answer_loads_on_the_deck(northwind, tmp_path):
+    # analyze.py and main.py save through save_analysis, so build_deck.py can read what either wrote.
+    actuals, next_budget = northwind
+    payload = build_payload("Northwind", actuals, next_budget, load_config())
+    point = {"title": "Steady base", "detail": "Customers stayed."}
+    answer = BoardSummary.model_validate({"headline": "Retention is the question.", "wins": [point] * 3,
+                                          "risks": [point] * 3, "questions": ["Why?", "Where?", "How?"]})
+    path = save_analysis(tmp_path / "sub" / "northwind_analysis.json", payload, answer, {"passed": True})
+    saved = json.loads(path.read_text())
+    assert saved == {"summary": answer.model_dump(), "run_info": {"passed": True}, "error": None, "payload": payload}
+    assert load_analysis(path, payload) == (answer, None)
+
+
+def test_save_analysis_failure_keeps_the_reason_and_gives_the_placeholder(northwind, tmp_path):
+    actuals, next_budget = northwind
+    payload = build_payload("Northwind", actuals, next_budget, load_config())
+    path = save_analysis(tmp_path / "northwind_analysis.json", payload, error="AnthropicError: outage")
+    saved = json.loads(path.read_text())
+    assert saved["summary"] is None and saved["run_info"] is None and saved["error"] == "AnthropicError: outage"
+    summary, why = load_analysis(path, payload)
+    assert summary is None and "failed validation when it was made" in why
