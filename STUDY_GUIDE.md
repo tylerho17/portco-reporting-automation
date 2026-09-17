@@ -639,3 +639,155 @@ Next are the deck (step 4) and the README (step 6). Beyond that, several open de
 
 For scale: at ~36s per company, 275 companies run one at a time would take about 2.75 hours with AI, so run companies in parallel. Also save the summary table to a file, and warn if companies report different latest quarters.
 *Point to:* OVERNIGHT_REPORT "Unresolved" sections.
+
+---
+
+## 6. 10 trace-this-number exercises
+
+**For each number:** name every file and function it passes through, from the workbook cell to the screen, and write out the arithmetic. Answers are in [section 8](#8-answers-to-the-exercises). Try each one first.
+
+**Set up:** run `python metrics.py data/northwind.xlsx` and keep the output open. It helps to open `data/northwind.xlsx` too. In the KPI Tracker tab, row 1 is the header, Q3 2024 is row 2, the blank Q1 2025 is row 4, Q2 2026 is row 9, and the budget-only row is row 10.
+
+**Tools you'll need:** `clean.py` (reading), `metrics.py` (math and flags), `config.yaml` (thresholds), `make_data.py` (where the number was born). Exercise 10 also uses `main.py`.
+
+### Exercise 1: Northwind NRR 97.1% (Q2 2026)
+**Where you see it:** `TRIP  NRR (annualized)  97.1% (threshold 100.0%)`
+**Your task:** Which 4 input cells does it come from, and which one is stored as text? Which function turns that text into a number? Which function computes NRR, and what's the formula with Northwind's numbers? Why does it trip? Where does 0.97… become "97.1%"?
+
+### Exercise 2: Northwind runway 11.0 mo (Q2 2026)
+**Where you see it:** `TRIP  Runway (months)  11.0 mo (threshold 12.0 mo)`
+**Your task:** Ending cash is typed as `"$14.3M"`. Trace exactly how `parse_number` turns that text into a number, step by step. Then compute runway. Why divide the burn by 3?
+
+### Exercise 3: Northwind burn vs budget 20.0%
+**Where you see it:** `TRIP  Burn vs budget  20.0% (threshold 15.0%)`
+**Your task:** Which two cells, and how does the header `"Net Burn (Bud.)"` become `budget_net_burn`? What does Python actually compute for this ratio (not what a calculator shows), and which line of code handles that? Trap: the Notes tab also has 3900, 3250 and "20% over??" in row 7. Does the deck's number come from there? How do you know?
+
+### Exercise 4: Northwind burn multiple 2.35x
+**Where you see it:** `TRIP  Burn multiple  2.35x (threshold 2.00x)`
+**Your task:** Compute net new ARR first, then the burn multiple. Which two edge-case lines in `burn_multiple` did this quarter **not** hit, and why?
+
+### Exercise 5: Northwind Rule of 40 −12.2%
+**Where you see it:** `TRIP  Rule of 40  -12.2% (threshold 40.0%)`
+**Your task:** Which two metrics are added? Which quarter's revenue does `.shift(4)` compare Q2 2026 with, and is that quarter blank? Write both parts as decimals, then add them.
+
+### Exercise 6: Northwind net new ARR vs budget −19.0%
+**Where you see it:** `PASS  Net new ARR vs budget  -19.0% (threshold -20.0%)`
+**Your task:** Compute budgeted net new ARR from two cells in the Budget ARR column. Why does −19.0% **pass** against a −20.0% threshold? Bonus: before the fix in LEARNINGS.md this showed −17.0%. Which number was used as the budget then, and why was that wrong?
+
+### Exercise 7: runway if burn returns to plan, 13.0 mo
+**Where you see it:** `Runway at next quarter's budgeted burn: 13.0 mo`
+**Your task:** Which row of the workbook does the budget come from, and which function decides that row is budget-only? Which cash figure is used? Why is this number never flagged, even though 13.0 is close to the 12-month threshold?
+
+### Exercise 8: two blanks that look the same
+**Where you see it:** in the `metrics.py` printout, `arr_yoy` shows `n/a` for **both** Q4 2024 and Q1 2026. In the Excel Metrics sheet (`python main.py --all --skip-ai`, then open `output/northwind_metrics.xlsx`), Q4 2024 reads "n/a (no prior period)" and Q1 2026 reads "data missing" in a gray cell.
+**Your task:** Why is each one blank? Which function decides that only one of them is a data gap, and what are the two conditions it checks? Which functions then pick the words for Excel and for Claude?
+
+### Exercise 9: the combo rule trips for Northwind
+**Where you see it:** `TRIP  NRR falling while pipeline rising`
+**Your task:** Which 3 quarters are in the window, and where does "3" come from? Give the NRR and pipeline value for each. Show that every step qualifies. Northwind's NRR peak was 108.9% in Q3 2025: why isn't that quarter part of this test?
+
+### Exercise 10: Fernhollow "7 of 9, 1 cannot evaluate"
+**Where you see it:** run `python main.py --all --skip-ai`. The summary row says `Fernhollow  7 of 9, 1 cannot evaluate  20 metrics/flags (blank: Q2 2025)`.
+**Your task:** Which flag can't be evaluated, and trace why, from the blank row to the words "cannot evaluate" to the summary text. Where does 20 come from? Bonus: burn multiple is one of the 7 trips, but its value is ∞. Why, and what does the Excel file show instead of ∞?
+
+---
+
+## 8. Answers to the exercises
+
+### Answer 1: NRR 97.1%
+
+1. **Born in** `make_data.py` → `TRUE_DATA`, Q2 2026: starting ARR 25810, expansion 580, contraction 260, churn 510. `TEXT_CELLS` has `("contraction_arr", "Q2 2026"): "K"`, so `make_data_common.to_text` writes contraction as the text `"260K"`.
+2. **In the workbook:** KPI Tracker row 9: B9 = 25810 ("Beginning ARR"), D9 = 580 ("expansion arr"), **E9 = "260K"** ("Contraction_ARR"), F9 = 510 (" Churned ARR ").
+3. **`clean.py`:** `clean_workbook` → `find_kpi_sheet` → `clean_sheet` → `map_columns` → `name_headers` → `standard_column` → `normalize_header`. `"Beginning ARR"` → `beginning_arr` → alias → `starting_arr`; `" Churned ARR "` → `churned_arr`. Then `parse_row` → `parse_number("260K")` → 260.0.
+4. **`metrics.py`:** `compute_metrics` → `nrr(df)`:
+   1 + 4 × (580 − 260 − 510) / 25810 = 1 + 4 × (−190) / 25810 = 1 − 760 / 25810 = **0.970554**, stored as a decimal.
+5. **Flag:** `evaluate_flags` → `check_threshold(0.970554, 1.00, "min")`. It's below the minimum, so **trip**.
+6. **Display:** `format_value("nrr", 0.970554)` → `f"{value:.1%}"` → **"97.1%"**. Claude sees the same text through `analyze.describe_flag`; Excel stores 0.970554 with the `0.0%` format.
+
+**Proven by:** `check_northwind.EXPECTED_LATEST["nrr"]`, typed as `1 + 4 * (580 - 260 - 510) / 25810`.
+
+### Answer 2: runway 11.0 mo
+
+1. **Workbook:** J9 = `"$14.3M"` ("Cash - End of Qtr" → alias → `ending_cash`); I9 = 3900 ("Net Burn").
+2. **`clean.parse_number("$14.3M")`:**
+   - Not blank, not TRUE/FALSE, not already a number, so it's text.
+   - Remove `$` and spaces, uppercase: `"14.3M"`.
+   - It matches `NUMBER_TEXT` (digits, decimals, M).
+   - It ends with M: multiplier = 1000, text = `"14.3"`.
+   - `Decimal("14.3") * 1000` = exactly 14300 → `float` → **14300.0**.
+3. **`metrics.runway_months`:** 14300 / (3900 / 3) = 14300 / 1300 = **11.0**. Net burn is **per quarter**, and a quarter has 3 months, so burn ÷ 3 = monthly burn. The `.mask` edge case (not burning → ∞) doesn't apply, because burn is 3900 > 0.
+4. **Flag:** `runway_min_months: 12`. 11.0 < 12 → **trip**. `format_value` → "11.0 mo".
+
+### Answer 3: burn vs budget 20.0%
+
+1. **Workbook:** I9 = 3900 ("Net Burn" → `net_burn`), Q9 = 3250 ("Net Burn (Bud.)").
+2. **The header:** `normalize_header("Net Burn (Bud.)")`: lowercase `"net burn (bud.)"`; each run of symbols and spaces becomes `_` → `"net_burn_bud_"`; strip the end `_` → `"net_burn_bud"`. `HEADER_ALIASES["net_burn_bud"]` = `"budget_net_burn"`.
+3. **`metrics.burn_vs_budget`:** 3900 / 3250 − 1. A calculator says 0.2; **Python gives 0.19999999999999996**, because floats are stored in binary.
+4. **`metrics.check_threshold`:** `value = round(value, 6)` turns it into 0.2. Then "max" with `burn_over_budget_max: 0.15`: 0.2 > 0.15 → **trip**. (The rounding line matters for a burn **exactly** 15% over budget, not here.)
+5. **The trap:** no. `find_kpi_sheet` only takes a tab with a "Quarter" header in its first 10 rows. The Notes tab has none, so it's never read. Its "3900 / 3250 / 20% over??" is someone's scratch math, left in on purpose (`make_data.py` → `NOTES`) to prove junk tabs are ignored.
+
+### Answer 4: burn multiple 2.35x
+
+1. **`metrics.net_new_arr`:** new C9 1850 + expansion 580 − contraction 260 − churn 510 = **1,660**.
+2. **`metrics.burn_multiple`:** `result = 3900 / 1660` = **2.349**.
+3. **Edge cases not hit:**
+   - `.mask(net_burn <= 0, 0.0)`: burn is 3900, so the company **is** burning.
+   - `.mask((net_burn > 0) & (new <= 0), inf)`: net new ARR is 1660 > 0, so ARR didn't shrink.
+4. **Flag:** `burn_multiple_max: 2.0`. 2.349 > 2.0 → **trip**. `format_value` → `f"{value:.2f}x"` → "2.35x".
+
+### Answer 5: Rule of 40 −12.2%
+
+1. **`metrics.rule_of_40`** = `growth(df["revenue"], 4)` + `fcf_margin(df)`.
+2. **Revenue YoY:** `.shift(4)` moves 4 rows up: Q1 2026, Q4 2025, Q3 2025, **Q2 2025**. Q2 2025 revenue is G5 = 4550. It is **not** blank; the blank quarter is Q1 2025. So 6660 / 4550 − 1 = **0.463736** (46.4%, also shown as `revenue_yoy`).
+3. **FCF margin:** −3900 / 6660 = **−0.585586** (−58.6%, shown as `fcf_margin`).
+4. **Sum:** 0.463736 + (−0.585586) = **−0.121849** → "−12.2%".
+5. **Flag:** `rule_of_40_min: 0.40`. −0.122 < 0.40 → **trip**. Strong growth, but the burn more than cancels it.
+
+### Answer 6: net new ARR vs budget −19.0%
+
+1. **`metrics.budget_net_new_arr`:** `budget_arr − budget_arr.shift(1)` = P9 26800 − P8 24750 = **2,050**.
+2. **`metrics.net_new_arr_vs_budget`:** 1660 / 2050 − 1 = **−0.190244** → "−19.0%".
+3. **Why it passes:** `net_new_arr_vs_budget_min: -0.20` is a **minimum**, so it trips only **below** −20%. −19.0% is above −20.0% (a smaller miss), so it's a **pass**. Barely: that's why the v2 prompt rule says to call it "passed but close to its threshold".
+4. **Bonus:** before the fix, the budget side was `budget_new_arr` = 2000 (O9): 1660 / 2000 − 1 = −17.0%. That compared **net** new ARR (after expansion and churn) with **gross** new sales, so churn counted against the actuals but not the budget. Now both sides are net. Because it looks back one quarter, its gaps follow the QoQ rule (Q1 + Q2 2025).
+
+### Answer 7: runway if burn returns to plan, 13.0 mo
+
+1. **Workbook:** row 10, A10 = `"Q3 2026 (Budget)"`, Q10 = 3300 (the other actual columns are empty).
+2. **`clean.py`:** `clean_sheet` → `parse_row` → **`is_budget_only_row`**. `"budget"` is in the label (`BUDGET_LABEL_WORDS`), and no actual column has a value, so it returns True. `clean_sheet` stores it as `next_budget`, not as a quarter. If that row also had revenue filled in, it would stop with an error.
+3. **`metrics.runway_at_next_budget`:** cash = `actuals["ending_cash"].iloc[-1]` = the **latest actual** cash, Q2 2026 = 14300. Budgeted burn = 3300. 14300 / (3300 / 3) = 14300 / 1100 = **13.0**.
+4. **Never flagged:** it isn't in `FLAG_RULES`. CLAUDE.md says the runway flag uses **current** burn, and this number is context: "if the company got back to plan". It appears as `runway_if_burn_returns_to_plan` in the Claude payload (the prompt forbids calling it a projection) and as an uncolored "(context, not a flag)" row on the Excel Flags sheet.
+
+### Answer 8: two blanks that look the same
+
+1. **Why each is blank:** `arr_yoy = growth(ending_arr, 4)`.
+   - **Q4 2024** is the 2nd row. `.shift(4)` points above the top of the table, where nothing exists → NaN.
+   - **Q1 2026** points at **Q1 2025**, the blank quarter: its ending ARR is NaN, and NaN math gives NaN.
+2. **`metrics.data_gaps`** counts a NaN as a gap if **either**:
+   - **has_history:** the quarter's position ≥ `METRIC_LOOKBACK["arr_yoy"]` (4). Q4 2024 is position 1 → no. Q1 2026 is position 6 → **yes**.
+   - **incomplete:** the quarter's **own** inputs have a blank. Q4 2024 → no. (That's why Q1 2025 itself is also a gap, even though it's only position 2.)
+
+   So Q4 2024 is not a gap and Q1 2026 is. `arr_yoy` gaps: Q1 2025, Q1 2026.
+3. **The words:** `excel_output.cell_value(column, value, is_gap)` → "data missing" (plus gray fill from `style_metric_cell`) or "n/a (no prior period)". For Claude, `analyze.metric_trend` makes the same choice.
+4. **Why the printout says "n/a" for both:** `metrics.format_value` is a debugging printout and doesn't know about gaps. It's logged as unresolved in OVERNIGHT_REPORT Task 1, item 3.
+
+### Answer 9: the combo rule trips
+
+1. **Window:** `combo_lookback_quarters: 3` in config.yaml. In `metrics.check_combo`: `end` = position of Q2 2026 (7) + 1 = 8, so the window is rows 5–7 = **Q4 2025, Q1 2026, Q2 2026**.
+2. **NRR** (`metrics.nrr`):
+   - Q4 2025: 1 + 4 × (860 − 140 − 290) / 21460 = **1.0801** (108.0%)
+   - Q1 2026: 1 + 4 × (710 − 200 − 390) / 23790 = **1.0202** (102.0%)
+   - Q2 2026: **0.9706** (97.1%)
+3. **Pipeline** (text cells `"$10.1M"`, `"$11.2M"`, `"$12.5M"` in N7–N9 → `parse_number`): **10,100 → 11,200 → 12,500**.
+4. **The test:** no value in the window is NaN, so it can be evaluated. NRR, rounded to 6 decimals, then `.diff()`: −0.0600, −0.0496, **all < 0**. Pipeline `.diff()`: +1,100, +1,300, **all > 0**. Both true → **trip**.
+5. **Why not Q3 2025's 108.9% peak:** the window is exactly 3 quarters (2 steps) ending at the evaluated quarter. Q3 2025 → Q4 2025 was also a decline, but that step sits outside the window. That's also why the v2 prompt rule says to describe a trend "from the peak, or from the start of the flag's lookback window".
+
+### Answer 10: Fernhollow "7 of 9, 1 cannot evaluate"
+
+1. **The blank:** `make_data_fernhollow.py` → `BLANK_QUARTER = "Q2 2025"`. `write_kpi_sheet` writes only the label. `clean_sheet` keeps it as a row of NaN.
+2. **The flag: Rule of 40.** `rule_of_40` = `growth(revenue, 4)` + `fcf_margin`. For Q2 2026, `.shift(4)` lands on **Q2 2025**: blank. So revenue YoY is NaN, and NaN + anything = NaN.
+3. **"Cannot evaluate":** `evaluate_flags` → `check_threshold(NaN, 0.40, "min")`. The first line, `if math.isnan(value): return MISSING`, returns `"cannot evaluate — data missing"`, never a pass or a trip.
+4. **The summary text:** `main.run_company` collects `result["cannot_evaluate"] = ["Rule of 40"]`. `main.flags_text` → `"7 of 9"` + `", 1 cannot evaluate"`.
+5. **Where 20 comes from:** `data_gaps` finds 19 metric columns with a gap (every metric misses Q2 2025; QoQ ones also Q3 2025; YoY ones also Q2 2026). Then `if flag["status"] == MISSING` adds `"flag: Rule of 40": ["Q2 2026"]`: 19 + 1 = **20**. `main.blank_quarters` → Q2 2025. `main.gaps_text` → "20 metrics/flags (blank: Q2 2025)".
+6. **Bonus, burn multiple ∞:** net new ARR = 180 + 60 − 150 − 330 = **−240**, while net burn is 1650 > 0. In `burn_multiple`, `.mask((net_burn > 0) & (new <= 0), math.inf)` → ∞ (burning cash while ARR shrank). `check_threshold`: ∞ > 2.0 → trip. Excel can't store ∞, so `excel_output.cell_value` writes **"∞ (ARR shrank)"** from `INFINITE_LABELS`.
+
+**Why this company was designed like this:** Fernhollow's blank is exactly 4 quarters before the latest one, so the "cannot evaluate" path is exercised on real data. Northwind's blank quarter (Q1 2025) is 5 quarters back, so none of its latest-quarter flags are affected.
