@@ -77,7 +77,7 @@ python check_deck.py         # 5 slides, slide 2 numbers match the metrics workb
 python check_main.py         # the batch survives a broken workbook; --skip-ai never calls Claude
 ```
 
-Note: `check_deck.py` and `check_main.py` write into `output/`, so afterwards the decks show the AI placeholder. `python build_deck.py data/<company>.xlsx` puts the saved AI text back without an API call.
+Note: `check_main.py` runs `main.py --all --skip-ai` into `output/`, so afterwards the decks show the AI placeholder and `batch_summary.csv` holds its broken-workbook test row. `python build_deck.py data/<company>.xlsx` puts the saved AI text back without an API call (the saved analyses aren't touched).
 
 ---
 
