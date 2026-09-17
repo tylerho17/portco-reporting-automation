@@ -643,3 +643,94 @@ All 3 are logged in LEARNINGS.md.
 - **Blank inputs win:** the two metrics.py fixes put missing input first in both runway-at-budget and the combo rule, the same order as `metric_reasons`.
 - **Delete first:** the old deck and the old analysis are deleted before a rebuild, so a crash never leaves last run's file looking current.
 - **No secrets or real data:** `.env` isn't tracked (only `.env.example`), and every company and number is fictional.
+
+## Task 6: Review and prep (review, STUDY_GUIDE.md, LOOM_SCRIPT.md)
+
+### Where this started
+
+Nothing for this task existed yet. I built it in 4 commits:
+
+| Commit | What |
+|---|---|
+| `29bfab3` | The Review section above, and a one-line docstring fix in check_deck.py |
+| `98bffe9` | LOOM_SCRIPT.md |
+| `a6eaea1` | STUDY_GUIDE.md update, plus 3 new doc tests in tests/test_docs.py |
+| `c0cb502` | LEARNINGS.md rows |
+
+**Now:**
+- **415 tests pass** (412 + 3 new). All 5 check scripts print "All checks passed".
+- **No pipeline code changed.** The only code edit is a docstring in check_deck.py.
+- I didn't call the Anthropic API, and didn't edit config.yaml or CLAUDE.md.
+
+### What I built
+
+1. **The Review section** (above). It has 8 findings, most serious first. The top one needs your decision: a valid AI answer only a little longer than today's doesn't fit slide 1, and main.py then fails the company with no deck.
+2. **tests/test_docs.py: 3 new tests, written first.** They failed on the old guide and pass now:
+   - every `.py` file named in STUDY_GUIDE.md and LOOM_SCRIPT.md exists
+   - build_deck.py, make_template.py, charts.py, text_fit.py and check_deck.py each have a function table in the guide
+   - every function or class in the guide's tables exists in the file its heading names. That's 285 names across 16 tables. It caught `NotWiredError` and `check_unwired_deck_fails_loudly`, which no longer exist, and I proved it rejects a made-up name.
+3. **STUDY_GUIDE.md:**
+   - **Status and commands:** every build step is done. Added the build_deck and check_deck commands, which commands cost money, and the check_main.py placeholder trap.
+   - **Data flow:** the picture, step 4 (the 5 slides and the re-check of Claude's answer) and step 5 (the 3 AI outcomes).
+   - **Glossary:** 9 new words (python-pptx, slide master and layout, placeholder, EMU, figure and axis, PNG and DPI, `lru_cache`, fake client).
+   - **Section 4, new tables:** `make_template.py`, `text_fit.py`, `charts.py`, `build_deck.py` (in 5 groups) and `check_deck.py`.
+   - **Section 4, rewritten:** `main.py`, with a table of what happens to each company, and `check_main.py`.
+   - **Section 4, smaller updates:** `analyze.save_analysis`, 8 new rows in the tests table with today's counts, and the small-files table.
+   - **Section 5:** 5 new deck questions, Q26–Q30:
+     - why the analysis is checked again
+     - what happens when the AI fails
+     - how text fit works
+     - how a blank quarter shows
+     - how you know no number is typed by hand
+   - **Section 5, older answers:** Q1, Q2, Q18, Q23 and Q25 were out of date and are updated.
+4. **LOOM_SCRIPT.md:** a 2-minute script (about 290 spoken words) at the timestamps you gave. It includes:
+   - "Say" and "Show" lines for each part
+   - a checklist to do before you record
+   - a table of where each number said on camera comes from
+   - a timing check
+
+### Decisions I made that you didn't specify
+
+1. **I didn't fix the review's top finding.** Text-fit stopping the build is what CLAUDE.md and the README describe. The problem is what that stop does in a batch, and every fix changes what the AI step does or what a result means. The Review lists 3 options and recommends one.
+2. **Evidence came from probes, not from reading alone.** Each is a small script in /tmp, with a fake Claude client and temporary folders, so no API call was made and output/ wasn't touched. They aren't part of the project.
+3. **I fixed one docstring and nothing else in code.** check_deck.py's docstring was plainly wrong. The low findings (2–7) are listed, not fixed.
+4. **The guide covers more than the 3 files you named.** build_deck.py can't be explained without charts.py and text_fit.py, and main.py's new behavior is proven by check_deck.py, check_main.py and the new tests. I also fixed the older answers that described the deck as not built. I didn't add new trace-the-number exercises.
+5. **The new questions are Q26–Q30, under a new heading "The deck".** The total is now 30.
+6. **Loom, 0:15–0:35:** I read "messy workbook and 20 seconds of the VS Code plus Claude Code workflow" as one 20-second part: about 7 s on the workbook, then 13 s on VS Code and Claude Code. If you meant 20 s for the workflow alone, the deck walk-through has to lose 7 s.
+7. **Loom, the run at 0:35:** the script recommends showing the saved terminal output of today's live run (Option A), not running the AI on camera. By the review's finding 1, a fresh Northwind run could fail. The narration never says "live", so it's accurate either way. Option B (live, about $0.05) is there for after the fix.
+8. **Loom only quotes numbers Python computes** (6 of 9, 97.1%, 11 months). Claude's wording changes every run, so any sentence quoted from it would go out of date.
+9. **Loom avoids Alderpeak's and Fernhollow's slide 1,** because their AI text has the misleading claims found in Task 4.
+10. **Loom, next steps:** SharePoint trigger, portfolio rollup and the trend-word check. I left out parallel runs and the slide-fit fix to stay within 15 seconds.
+11. **I put output/ back after running the checks.** check_main.py leaves placeholder decks and a broken-workbook CSV, so I ran `build_deck.py` for all 3 companies (no API call) and copied `output/day_logs/task4_batch_summary.csv` back to `output/batch_summary.csv`. The decks now have the AI text, ready for the Loom.
+12. **README.md unchanged.** Its Next steps don't mention the slide-fit finding yet. This task didn't ask for README edits, so add it after you decide on finding 1.
+
+### What failed and how I fixed it
+
+All 4 are logged in LEARNINGS.md.
+
+1. **The review found a real reliability gap** (finding 1). It isn't fixed and is waiting on your decision.
+2. **One new doc test failed for the wrong reason.** The guide names test files without `tests/`. Fixed the test to look there too.
+3. **My first Loom draft had 3 mistakes:**
+   - "free" Option A actually ran the AI
+   - "data missing" pointed at the wrong quarter
+   - the combo rule was placed in the tripped list
+   - **Caught:** by checking each line against a text dump of the saved deck.
+4. **One shell command was refused** (two greps joined with `&&`). I used the Grep tool instead.
+
+### Unresolved
+
+1. **Finding 1 needs your decision** before the next live run or a live Loom recording.
+2. **Findings 2–7 are low and not fixed:**
+   - traceback on a text-fit stop
+   - `shrink_to_fit` accepts text that starts below 12 pt
+   - a hand-edited JSON can crash the deck step
+   - private python-pptx attributes and no pinned versions
+   - each workbook read 3 times
+   - chart PNGs not deleted first
+   - Tell me which, if any, you want fixed.
+3. **The Loom timing is an estimate** at 150 words a minute. I can't rehearse it out loud: time yourself once and cut words where you run long.
+4. **"415 passed" in LOOM_SCRIPT.md** will go out of date as tests are added. The narration says "over 400", which stays true.
+5. **Still open from earlier tasks:**
+   - README screenshots aren't taken
+   - CLAUDE.md's 2 out-of-date lines
+   - running check_main.py replaces the AI decks again (run `build_deck.py` afterwards)
