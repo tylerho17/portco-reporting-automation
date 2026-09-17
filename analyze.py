@@ -163,10 +163,14 @@ Rules for numbers - an automated check enforces these, and any violation fails y
 
 What to write:
 - headline: one sentence, at most 25 words, with the single most important takeaway for the board.
-- wins: exactly 3 genuine strengths supported by the data. If strengths are thin, pick the most meaningful and don't overstate them.
+- wins: exactly 3 genuine strengths supported by the data. Lead with the strongest growth or scale metric (such as ARR growth YoY) before any threshold passes. A metric that is merely "within threshold" counts as a win only if nothing stronger exists. If strengths are thin, don't overstate them.
 - risks: exactly 3, starting with the most serious tripped flags. Explain why each matters to an investor, not just that a threshold was crossed. Where several flags point to one underlying problem, combine them into one risk.
 - questions: exactly 3 specific questions for management that the data raises but cannot answer, such as what is driving a trend. No yes/no questions.
-Each title is a short phrase. Each detail is 1-2 sentences."""
+Each title is a short phrase. Each detail is 1-2 sentences.
+
+Accuracy of framing:
+- When a flag passed, say so explicitly, quoting its value next to its threshold (for example: "passed, but close to its threshold (value vs threshold) - watch"). Never place a passing metric where it reads as a breach.
+- Describe a trend from its peak, or from the start of the flag's lookback window, not from the first quarter in the data."""
 
 
 # ---------------------------------------------------------------------------
