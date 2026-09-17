@@ -57,3 +57,10 @@ def test_warning_names_each_quarter_and_its_companies():
     assert quarter_mismatch_warning(results) == (
         "⚠ Companies end on different quarters (Q2 2026: Alderpeak, Fernhollow; Q1 2026: Northwind) "
         "- compare them with care")
+
+
+def test_result_text_says_when_ai_was_skipped():
+    # build_deck.py exists now, so a --skip-ai run built a deck without AI text.
+    assert main.result_text({**ok("Northwind", "Q2 2026"), "ai_skipped": True}) == "OK (AI skipped)"
+    assert main.result_text({**ok("Northwind", "Q2 2026"), "ai_skipped": False}) == "OK"
+    assert main.result_text(failed("Broken", "ValueError: x")) == "FAILED: ValueError: x"

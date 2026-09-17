@@ -4,12 +4,14 @@ Steps for each company:
 1. Clean the workbook (clean.py)
 2. Compute metrics, flags and data gaps (metrics.py)
 3. Save output/<company>_metrics.xlsx (excel_output.py)
-4. AI commentary (analyze.py)  - skipped for now, see below
-5. Deck (build_deck.py)         - skipped for now, see below
+4. AI commentary (analyze.py)  - not connected yet, see below
+5. Deck (build_deck.py)        - output/<company>_board_pack.pptx
 
-Steps 4 and 5 are skipped with a clear message while build_deck.py doesn't exist:
-the commentary has nowhere to go until there is a deck, so no API money is spent.
---skip-ai skips step 4 even once the deck exists.
+Step 4 isn't connected yet, so for now a run needs --skip-ai: without it, each company
+stops with a clear "not connected" error instead of quietly skipping the AI (no API call is
+ever made from here yet). With --skip-ai the deck is built with "AI summary unavailable" on
+slides 1 and 5 (CLAUDE.md decision L). If build_deck.py is missing, steps 4 and 5 are
+skipped with a message.
 
 One company failing never stops the batch. The run ends with a summary table
 (company, flags tripped, data gaps, result), also saved as output/batch_summary.csv, a warning
@@ -26,6 +28,7 @@ import traceback
 from pathlib import Path
 
 from clean import clean_workbook
+from build_deck import PLACEHOLDER_TEXT, save_deck
 from excel_output import save_metrics_workbook
 from metrics import CANNOT_EVALUATE, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config, metric_reasons
 
@@ -39,11 +42,12 @@ SUMMARY_CSV_PATH = PROJECT_DIR / "output" / "batch_summary.csv"
 INPUT_ERRORS = (ValueError, OSError)
 
 NO_DECK_MESSAGE = "skipped (build_deck.py doesn't exist yet - build step 4)"
-NOT_WIRED_MESSAGE = "build_deck.py exists but main.py doesn't call it yet - connect it in main.py"
+NOT_WIRED_MESSAGE = ("AI commentary isn't connected to main.py yet - run with --skip-ai "
+                     "(or analyze.py, then build_deck.py, for one company)")
 
 
 class NotWiredError(Exception):
-    """A later build step exists on disk but main.py hasn't been connected to it."""
+    """A build step that should run hasn't been connected to main.py yet."""
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +68,7 @@ def company_name(workbook_path):
 
 
 # ---------------------------------------------------------------------------
-# Steps 4 and 5: placeholders until build_deck.py exists
+# Steps 4 and 5: AI commentary (not connected yet) and the deck
 # ---------------------------------------------------------------------------
 
 def ai_step(skip_ai):
@@ -76,11 +80,12 @@ def ai_step(skip_ai):
     raise NotWiredError(NOT_WIRED_MESSAGE)
 
 
-def deck_step():
-    """Return a message saying why the deck was skipped, or stop if it should have run."""
+def deck_step(workbook_path, config):
+    """Build and save the deck with the AI placeholder (the only case until step 4 is connected)."""
     if not BUILD_DECK_PATH.exists():
         return NO_DECK_MESSAGE
-    raise NotWiredError(NOT_WIRED_MESSAGE)
+    path, _ = save_deck(workbook_path, config, analysis_file=None)
+    return f"{path.relative_to(PROJECT_DIR)} ({PLACEHOLDER_TEXT} on slides 1 and 5)"
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +118,7 @@ def run_company(workbook_path, config, skip_ai):
         "cannot_evaluate": [flag["flag"] for flag in flags if flag["status"] == CANNOT_EVALUATE],
         "gap_count": len(gaps),
         "blank_quarters": blank_quarters(actuals),
+        "ai_skipped": skip_ai,
     }
     print(f"  ✓ Flags tripped ({result['quarter']}): {flags_text(result)}")
     for name in result["tripped"]:
@@ -122,7 +128,7 @@ def run_company(workbook_path, config, skip_ai):
     excel_path = save_metrics_workbook(workbook_path, config)
     print(f"  ✓ Excel: {excel_path.relative_to(PROJECT_DIR)}")
     print(f"  - AI commentary: {ai_step(skip_ai)}")
-    print(f"  - Deck: {deck_step()}")
+    print(f"  ✓ Deck: {deck_step(workbook_path, config)}")
     return result
 
 
@@ -169,10 +175,12 @@ def gaps_text(result):
 
 
 def result_text(result):
-    """'OK', 'OK (AI + deck skipped)' while there is no deck yet, or 'FAILED: <why>'."""
+    """'OK', 'OK (AI skipped)' with --skip-ai, 'OK (AI + deck skipped)' without build_deck.py, or 'FAILED: <why>'."""
     if result["error"]:
         return f"FAILED: {result['error']}"
-    return "OK" if BUILD_DECK_PATH.exists() else "OK (AI + deck skipped)"
+    if not BUILD_DECK_PATH.exists():
+        return "OK (AI + deck skipped)"
+    return "OK (AI skipped)" if result.get("ai_skipped") else "OK"
 
 
 def summary_rows(results):

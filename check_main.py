@@ -2,20 +2,20 @@
 
 Checks:
 1. `python main.py --all --skip-ai` (a real command, run as a separate process) exits 0,
-   finds exactly the three company workbooks, saves a fresh Excel file for each, skips AI
-   and deck with a clear message, and its summary table shows all three "OK" with the
-   flag and gap counts from each company's story (check_companies.py), not from main.py.
+   finds exactly the three company workbooks, saves a fresh Excel file and a fresh deck for
+   each, skips AI with a clear message, and its summary table shows all three "OK (AI skipped)"
+   with the flag and gap counts from each company's story (check_companies.py), not from main.py.
 2. One company failing doesn't stop the batch: a broken workbook, a missing file and a
    simulated code bug sit between good companies, and every good company still succeeds.
 3. A failed run exits with code 1; wrong arguments exit with code 2 (argparse's usage error).
-4. If build_deck.py appears before main.py calls it, companies fail loudly instead of
-   quietly skipping the deck.
+4. The AI step isn't connected yet, so a run without --skip-ai fails loudly instead of
+   quietly skipping it; and if build_deck.py were missing, the deck is skipped with a message.
 5. --all ignores Excel's "~$" lock files and anything that isn't .xlsx.
 6. The batch also writes output/batch_summary.csv with the same counts, and prints no
    quarter warning when every company ends on the same quarter.
 
-No API calls: every run uses --skip-ai, and main.py never calls Claude while build_deck.py
-doesn't exist anyway.
+No API calls: every run uses --skip-ai, and main.py doesn't call Claude at all yet.
+(check_deck.py checks what is inside the decks.)
 
 Run: python check_main.py  -> prints "All checks passed" or stops at the first failure.
 """
@@ -32,13 +32,14 @@ from pathlib import Path
 from openpyxl import Workbook
 
 import main
+from build_deck import deck_path
 from check_companies import COMPANIES, expected_gaps
 from clean import clean_workbook
 from excel_output import output_path
 from metrics import CANNOT_EVALUATE, TRIP, compute_metrics, load_config
 
 PROJECT_DIR = Path(__file__).parent
-EXPECTED_OK = "OK (AI + deck skipped)"
+EXPECTED_OK = "OK (AI skipped)"
 
 
 # ---------------------------------------------------------------------------
@@ -114,14 +115,15 @@ def check_finds_the_three_companies():
 
 
 def check_batch_run():
-    """main.py --all --skip-ai: exit 0, fresh Excel files, clear skip messages, a correct summary."""
+    """main.py --all --skip-ai: exit 0, fresh Excel files and decks, a clear AI skip message, a correct summary."""
     started = time.time()
     process = run_main("--all", "--skip-ai")
     assert process.returncode == 0, f"Exit code {process.returncode}\n{process.stdout}\n{process.stderr}"
     assert process.stderr == "", f"Unexpected error output:\n{process.stderr}"
     assert process.stdout.count("AI commentary: skipped (--skip-ai)") == len(COMPANIES), "AI skip message missing"
-    assert process.stdout.count("Deck: skipped (build_deck.py doesn't exist yet") == len(COMPANIES), \
-        "Deck skip message missing"
+    assert process.stdout.count("✓ Deck: output/") == len(COMPANIES), "Deck line missing"
+    assert process.stdout.count("AI summary unavailable on slides 1 and 5") == len(COMPANIES), \
+        "--skip-ai decks should say they carry the AI placeholder"
     assert f"{len(COMPANIES)} of {len(COMPANIES)} companies succeeded" in process.stdout, "Success count wrong"
 
     rows = summary_table(process.stdout)
@@ -130,8 +132,8 @@ def check_batch_run():
         expected = [company["name"], story_flags_text(company), story_gaps_text(company), EXPECTED_OK]
         assert rows[company["name"]] == expected, \
             f"Summary row wrong.\nExpected: {expected}\nGot:      {rows[company['name']]}"
-        excel = output_path(company["answer_key"].OUTPUT_PATH)
-        assert excel.exists() and excel.stat().st_mtime >= started - 1, f"{excel} wasn't saved by this run"
+        for saved in (output_path(company["answer_key"].OUTPUT_PATH), deck_path(company["answer_key"].OUTPUT_PATH)):
+            assert saved.exists() and saved.stat().st_mtime >= started - 1, f"{saved} wasn't saved by this run"
     check_summary_csv(started)
     assert "⚠" not in process.stdout, "All three companies end on Q2 2026, so there should be no quarter warning"
     return rows
@@ -204,23 +206,24 @@ def check_exit_codes(broken_path):
         assert "give one workbook path, or --all" in process.stderr, f"main.py {args}: unclear usage error"
 
 
-def check_unwired_deck_fails_loudly(folder, config):
-    """If build_deck.py exists but main.py doesn't call it, a run must fail, not skip silently."""
-    fake_deck = Path(folder) / "build_deck.py"  # a stand-in in the temp folder; the real file is untouched
-    fake_deck.write_text("")
+def check_unwired_ai_fails_loudly(config):
+    """Without --skip-ai, a run must fail (the AI step isn't connected), not skip the AI silently."""
+    results, _, _ = run_quietly(main.run_batch, [COMPANIES[0]["answer_key"].OUTPUT_PATH], config, False)
+    assert results[0]["error"] == f"NotWiredError: {main.NOT_WIRED_MESSAGE}", f"Got: {results[0]['error']}"
+    assert main.ai_step(skip_ai=True) == "skipped (--skip-ai)", "--skip-ai should still skip AI"
+
+
+def check_missing_deck_builder_is_skipped(folder, config):
+    """If build_deck.py weren't there, the deck step says so and the result reads 'OK (AI + deck skipped)'."""
     real_path = main.BUILD_DECK_PATH
-    main.BUILD_DECK_PATH = fake_deck
+    main.BUILD_DECK_PATH = Path(folder) / "no_build_deck.py"  # a path that doesn't exist; the real file is untouched
     try:
-        results, _, _ = run_quietly(main.run_batch, [COMPANIES[0]["answer_key"].OUTPUT_PATH], config, True)
-        try:
-            main.ai_step(skip_ai=False)
-            raise AssertionError("ai_step should stop when build_deck.py exists but isn't wired")
-        except main.NotWiredError:
-            pass
-        assert main.ai_step(skip_ai=True) == "skipped (--skip-ai)", "--skip-ai should still skip AI"
+        results, stdout, _ = run_quietly(main.run_batch, [COMPANIES[0]["answer_key"].OUTPUT_PATH], config, True)
+        result = main.result_text(results[0])
     finally:
         main.BUILD_DECK_PATH = real_path
-    assert results[0]["error"] == f"NotWiredError: {main.NOT_WIRED_MESSAGE}", f"Got: {results[0]['error']}"
+    assert f"Deck: {main.NO_DECK_MESSAGE}" in stdout, "Missing deck builder should print the skip message"
+    assert result == "OK (AI + deck skipped)", f"Got: {result}"
 
 
 def check_ignores_lock_and_other_files(folder):
@@ -245,8 +248,10 @@ def main_check():
         print("✓ Batch continues past an unexpected code error, and prints its traceback")
         check_exit_codes(Path(folder) / "broken.xlsx")
         print("✓ Exit codes: 0 all OK, 1 any company failed, 2 wrong arguments")
-        check_unwired_deck_fails_loudly(folder, config)
-        print("✓ If build_deck.py exists but isn't wired into main.py, the run fails loudly")
+        check_unwired_ai_fails_loudly(config)
+        print("✓ Without --skip-ai the run fails loudly: the AI step isn't connected yet (no API call)")
+        check_missing_deck_builder_is_skipped(folder, config)
+        print("✓ If build_deck.py were missing, the deck is skipped with a message")
 
     with tempfile.TemporaryDirectory() as folder:
         check_ignores_lock_and_other_files(folder)
