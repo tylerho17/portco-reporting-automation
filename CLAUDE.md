@@ -33,15 +33,28 @@ Demo project for a PE AI automation role. Must be clean, explainable, and reliab
 ## Input columns (per quarter, $K)
 starting_arr, new_arr, expansion_arr, contraction_arr, churned_arr, revenue, gross_profit, net_burn, ending_cash, sm_spend, new_customers, headcount, pipeline, budget_new_arr, budget_arr, budget_net_burn
 - This list supersedes the column list in Build order step 1. NRR and gross margin are computed in metrics.py, not stored as inputs.
+- After the actual quarters, the workbook has one budget-only row for next quarter (e.g. "Q3 2026 (Budget)") with only the 3 budget columns filled. It feeds "runway at next quarter's budgeted burn" and is a forecast, not a blank quarter.
 
 ## Metric definitions (put these in metrics.py docstrings later)
-- NRR = (starting_arr + expansion - contraction - churn) / starting_arr
-- GRR = (starting_arr - contraction - churn) / starting_arr
+- NRR (annualized) = 1 + 4 * (expansion - contraction - churn) / starting_arr
+- GRR (annualized) = 1 - 4 * (contraction + churn) / starting_arr
+  - Annualized so thresholds keep their usual annual meaning; uses one quarter's data only. Deck labels them "annualized".
 - Net new ARR = new + expansion - contraction - churn
+- Ending ARR = starting_arr + net new ARR
+- Net new ARR vs budget = net new ARR / (budget_arr this quarter - budget_arr last quarter) - 1
+  - Both sides are net of expansion and churn. Needs the prior quarter, so it follows the QoQ gap rule.
+- ARR vs budget = ending ARR / budget_arr - 1 (budget_arr is budgeted *ending* ARR)
 - Burn multiple = net_burn / net new ARR
 - Rule of 40 = YoY revenue growth % + FCF margin, where FCF margin = -net_burn / revenue
 - CAC payback (months) = sm_spend / (new_arr * gross margin) * 12
 - Runway (months) = ending_cash / (net_burn / 3), at current burn and at next quarter's budgeted burn
+  - The runway flag uses current burn. Runway at next quarter's budgeted burn is shown as context, not flagged.
+- Flags are evaluated on the latest actual quarter (functions accept any quarter, for step 4b).
+- Edge cases ("not meaningful" must never look like "data missing"):
+  - Burn multiple when net new ARR <= 0 and net_burn > 0 -> infinite, trips ("ARR shrank")
+  - Burn multiple when net_burn <= 0 -> 0, passes ("not burning")
+  - Runway when net_burn <= 0 -> infinite, passes ("not burning")
+  - CAC payback when new_arr * gross margin <= 0 -> infinite, trips
 - Combo rule (retention problem) = NRR falling AND pipeline rising over the last `combo_lookback_quarters` quarters (config.yaml)
   - Window = the last N quarters, including the latest (N=3 means 2 quarter-over-quarter comparisons)
   - Falling = NRR decreased in every quarter-over-quarter comparison in the window
@@ -52,7 +65,7 @@ starting_arr, new_arr, expansion_arr, contraction_arr, churned_arr, revenue, gro
 - Parse "$1.2M" / "850K" text to numbers; normalize header names
 - Blank quarter stays blank and is flagged "data missing" on the deck. Never impute numbers that could reach a board.
 - Missing values spread to every metric that uses them. Any metric whose inputs include the blank quarter shows "data missing":
-  - QoQ: the blank quarter and the next quarter
+  - QoQ (and net new ARR vs budget): the blank quarter and the next quarter
   - YoY: the blank quarter and the quarter 4 quarters later
 - Any flag or combo rule that depends on a missing value returns "cannot evaluate — data missing" instead of pass/fail
 - The Risks/Flags slide gets a "Data gaps" line listing every metric and flag affected
