@@ -1,0 +1,19 @@
+# Flag thresholds for the board pack.
+# Ratios are decimals (1.00 = 100%).
+# Each line says why an investor cares.
+
+nrr_min: 1.00                   # below 100% the base shrinks without new sales
+grr_min: 0.85                   # below 85% signals a product/churn problem
+burn_multiple_max: 2.0          # above 2x, growth is too expensive
+burn_over_budget_max: 0.15      # burning >15% over plan means the budget the board approved is no longer credible
+runway_min_months: 12           # under 12 months means raising within ~6
+cac_payback_max_months: 24      # over 24 months to earn back acquisition cost ties up too much cash per customer
+net_new_arr_vs_budget_min: -0.20  # missing net new ARR plan by >20% means the growth case is off track
+rule_of_40_min: 0.40            # below 40, growth isn't paying for the burn — a board will ask
+
+# Combo rule: NRR falling while pipeline is rising = retention problem, not a sales problem.
+# Sales is filling the funnel, but existing customers are leaking, so more pipeline won't fix it.
+# Falling = NRR down in every quarter-over-quarter step in the window; rising = pipeline up in every step.
+# If any quarter in the window is missing, the result is "cannot evaluate", not False.
+nrr_falling_pipeline_rising_flag: true
+combo_lookback_quarters: 3      # last 3 quarters (2 QoQ steps): long enough to be a trend, not one bad quarter
