@@ -203,6 +203,9 @@ def clean_workbook(path):
                 raise ValueError("Workbook has more than one budget-only row")
             next_budget = pd.Series({c: row[c] for c in BUDGET_COLUMNS}, name=label)
         else:
+            # A repeated label would overwrite the earlier row without a word, so stop instead.
+            if label in actual_rows:
+                raise ValueError(f"Quarter {label!r} appears twice - check the workbook")
             actual_rows[label] = row  # blank quarters land here too, as all-NaN rows
 
     actuals = pd.DataFrame.from_dict(actual_rows, orient="index", columns=STANDARD_COLUMNS)
