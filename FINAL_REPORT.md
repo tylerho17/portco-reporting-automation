@@ -2545,3 +2545,104 @@ Every pair, after the fix:
 - **The portfolio page's "DRAFT - NOT REVIEWED" status** uses the watermark's words for an unwatermarked
   deck. Worth rewording to "not reviewed" on the page, like the footer; left alone here because it's code,
   not the script.
+
+## Task D: final verification
+
+### Results (2026-09-18, no API calls)
+
+| What | Command | Result |
+|---|---|---|
+| Northwind answer key | `python check_northwind.py` | All checks passed |
+| Three companies | `python check_companies.py` | All checks passed |
+| Metrics workbook | `python check_excel_output.py` | All checks passed |
+| Deck (with and without --appendix) | `python check_deck.py` | All checks passed |
+| main.py end to end | `python check_main.py` | All checks passed |
+| Memo | `python check_memo.py` | All checks passed |
+| Rollup | `python check_rollup.py` | All checks passed |
+| What changed | `python check_diff.py` | All checks passed |
+| Exports | `python check_export.py` | All checks passed |
+| Evaluation set | `python eval/run_eval.py` | 12 of 12 companies match their answer keys |
+| Golden files | `python golden.py` | 9 of 9 match their goldens |
+| Full test suite | `python -m pytest -q` | 1384 passed in 175 s |
+
+### Every output rebuilt with no API call
+
+- `python demo_reset.py`: deleted 21 built files, kept the 3 saved AI analyses, built last quarter's run
+  then today's for Alderpeak, Fernhollow and Northwind. "Ready for the demo." All three manifests show
+  `input_tokens: null` and `cost_usd: null`: nothing was sent to Claude.
+- `python rollup.py`: output/portfolio_rollup.pptx (3 slides) and .xlsx (Ranking, By status, Runway).
+- `python export.py --all`: the metrics and flags CSVs, the export JSON and the email HTML per company.
+- Read back from the rebuilt files: Northwind 6 of 9 flags tripped, 19 metrics/flags data missing (blank
+  Q1 2025); Alderpeak 0 of 9, no gaps; Fernhollow 7 of 9 and 1 cannot evaluate, 20 gaps (blank Q2 2025).
+  Northwind and Alderpeak carry the saved AI text on slide 4 and in the memo. Fernhollow shows "AI summary
+  unavailable", the known warning from Task C: its saved analysis no longer passes today's checks.
+- `git status` after the rebuild: clean (everything under output/ is git-ignored).
+
+### Screenshots to capture, and from which file
+
+Take number 2 first: `--skip-ai` rebuilds every deck without AI text. Then rebuild as above, so every
+other file comes from the same commit. Close PowerPoint before opening the decks: an Alderpeak deck was
+open during this run (output/~$alderpeak_board_pack.pptx is its lock file), and an open copy shows the old file.
+
+| # | README placeholder | Open this | Capture |
+|---|---|---|---|
+| 1 | Before: the messy input | data/northwind.xlsx, tab "KPI Tracker" | the inconsistent headers, a "$14.3M" text value, the blank Q1 2025 row, the "Q3 2026 (Budget)" row at the bottom |
+| 2 | The run | Terminal: `python main.py --all --skip-ai` | the ✓ lines for Northwind and the summary table (free; a live run costs about $0.27 for all three) |
+| 3 | Northwind slide 1 | output/northwind_board_pack.pptx, slide 1 | "Northwind: key metrics, Q2 2026 vs Q1 2026" with the red, green and gray status cells |
+| 4 | Northwind slide 2 | same deck, slide 2 | both charts, with the Q1 2025 gap visible |
+| 5 | Northwind slide 3 | same deck, slide 3 | "6 of 9 flags tripped", NRR 97.1% against 100.0%, the combo rule, the Data gaps line |
+| 6 | Northwind slide 4 | same deck, slide 4 | "AI-drafted from computed metrics - review before use", headline, 3 risks, 3 questions, and the footer ending "AI-drafted, not reviewed" |
+| 7 | Web page: Portfolio | double-click run_app.command (http://localhost:8501) | the three rows (0, 7 and 6 of 9 flags; gaps "none", "20 metrics/flags (blank: Q2 2025)", "19 metrics/flags (blank: Q1 2025)"), the navy Generate all button, each row's buttons |
+| 8 | Web page: Northwind | click Northwind on the Portfolio page | "6 of 9 flags tripped", the red and green flag rows, the gray "data missing" cells, both charts |
+| 9 | Email summary | output/northwind_email.html in a browser, copied into a new Outlook email | the key metrics table with its navy header and status colors, the Data gaps lines |
+| 10 | Workbook: Metrics | output/northwind_metrics.xlsx, sheet "Metrics" | red tripped cells, gray "data missing" cells around Q1 2025 |
+| 11 | Workbook: Flags | same workbook, sheet "Flags" | value, threshold and status for all 9 flags |
+| 12 | Alderpeak slide 3 | output/alderpeak_board_pack.pptx, slide 3 | "0 of 9 flags tripped", "None", the combo rule passed |
+| 13 | Fernhollow slide 3 | output/fernhollow_board_pack.pptx, slide 3 | "7 of 9 flags tripped, 1 cannot evaluate", Rule of 40 "cannot evaluate: missing input" |
+
+Optional, not in the README yet: output/portfolio_rollup.pptx slide 1 ("Portfolio ranked by flags tripped,
+Q2 2026": Fernhollow, Northwind, Alderpeak) and page 1 of output/northwind_board_memo.pdf. The chart images
+on their own are already in output/charts/ (six company charts and portfolio_rollup_runway_chart.png).
+
+### Commands for tomorrow
+
+From the project folder (`cd ~/board-pack-generator`), after `source .venv/bin/activate`:
+
+- **Start the app:** double-click `run_app.command` in Finder, or `streamlit run app.py` and open
+  http://localhost:8501.
+- **Rebuild every output with no API call:** `python demo_reset.py`, then `python rollup.py`, then
+  `python export.py --all`.
+- **Rebuild with fresh AI text (paid, about $0.09 a company):** `python main.py --all`, then
+  `python rollup.py` and `python export.py --all`. Fernhollow needs this once to get its AI text back.
+- **Run the eval:** `python eval/run_eval.py`.
+- **Run every check and the tests:** `for f in check_*.py; do python "$f" || break; done`, then
+  `python -m pytest -q`, then `python golden.py`.
+- **Smoke test from a fresh clone:** no script exists (scripts/smoke_test.sh was never built). By hand, in
+  a temporary folder: `git clone` the repo, `python3 -m venv .venv`, `source .venv/bin/activate`,
+  `pip install -r requirements.txt`, then `python main.py --all --skip-ai`.
+
+### What failed and how I fixed it (logged in LEARNINGS.md)
+
+1. **README's Screenshots section was stale in three places:** it said Northwind is approved, pointed at a
+   log file that doesn't exist, and promised the saved AI text on every deck. Rewritten against the rebuilt
+   files; tests/test_docs.py passed after the edit.
+
+### Decisions you didn't specify
+
+1. **demo_reset.py is the rebuild,** not `main.py --all`. main.py reuses a saved analysis only when the
+   numbers match it exactly; Fernhollow's don't, so main.py would call Claude. demo_reset.py never does.
+   `--skip-ai` would also be free, but it would drop the saved AI text from Northwind and Alderpeak.
+2. **Rollup and exports built separately:** demo_reset.py builds what Generate all builds, and that
+   doesn't include them.
+3. **Screenshots show the unapproved footer,** matching the Loom script. Approving Northwind just for a
+   picture would record a review nobody gave; README says how to approve it if you want that footer.
+
+### Unresolved
+
+- **Fernhollow has no AI text** until one paid run (`python main.py data/fernhollow.xlsx`, about $0.09).
+- **Fernhollow's footer reads "no AI text | AI-drafted | not reviewed".** "AI-drafted" beside "no AI
+  text" contradicts itself. It is existing, tested behavior (tests/test_memo.py pins it), so a
+  verification task left it alone.
+- **No smoke test script and no tasks.sh:** the overnight task list stopped before them, so the
+  fresh-clone steps above were not run today.
+- **The portfolio page's "DRAFT - NOT REVIEWED" status** (from Task C) is unchanged.
