@@ -44,17 +44,20 @@ from check_companies import COMPANIES
 from clean import clean_workbook
 from excel_output import save_metrics_workbook
 from make_template import FOOTER_RULE
-from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, CONFIG_PATH, TRIP, compute_metrics, load_config
+from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, CONFIG_PATH, PASS, TRIP, compute_metrics, load_config
 from provenance import NOT_REVIEWED, approval_status, file_sha256, manifest_path, read_manifest
 from text_fit import MIN_FONT_PT, paragraph, text_height_pt, text_width_pt
+from theme import STATUS_COLORS
 
 PROJECT_DIR = Path(__file__).parent
 LATEST, PRIOR, FIRST = "Q2 2026", "Q1 2026", "Q3 2024"
 TOLERANCE_PT = 0.5   # rounding when sizes are saved in EMU
 PICTURE = 13         # MSO_SHAPE_TYPE.PICTURE
 
-# Status colors by the words in the status cell (Excel's "Bad" red, "Good" green, and gray).
-STATUS_FILLS = {"Tripped": "FFC7CE", "Passed": "C6EFCE", "Cannot evaluate": "D9D9D9"}
+# Status fills by the words in the status cell: theme.py's red, green and gray fills (the deck's palette;
+# the Excel workbook keeps Excel's own). tests/test_theme.py types these values by hand.
+STATUS_FILLS = {"Tripped": STATUS_COLORS[TRIP][0], "Passed": STATUS_COLORS[PASS][0],
+                "Cannot evaluate": STATUS_COLORS[CANNOT_EVALUATE][0]}
 
 # Excel number format -> the same display written as a Python format (what Excel shows in the cell).
 EXCEL_FORMATS = {"0.0%": "{:.1%}", '0.00"x"': "{:.2f}x", '0.0" mo"': "{:.1f} mo", "#,##0": "{:,.0f}"}

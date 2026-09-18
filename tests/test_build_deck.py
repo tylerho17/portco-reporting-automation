@@ -37,8 +37,9 @@ TEST_CONFIG = {
     "combo_min_nrr_drop": 0.01,
 }
 
-# Colors from excel_output.STATUS_COLORS (fill): red, green, gray.
-RED, GREEN, GRAY = "FFC7CE", "C6EFCE", "D9D9D9"
+# Status fills from theme.STATUS_COLORS, typed from the Task 3 brief: red, green, gray.
+# (The Excel workbook keeps Excel's own fills; the deck takes the palette's.)
+RED, GREEN, GRAY = "FDE8E6", "EAF6EF", "EDF0F3"
 
 
 def flag(name, status, reason=None, metric="nrr", threshold=1.0):
@@ -278,6 +279,40 @@ def test_status_cells_are_red_green_or_gray(tmp_path):
     assert fills["Rule of 40"] == GRAY
 
 
+def status_text_colors(table):
+    """{row label: status cell text color} for rows that are flags."""
+    last = len(table.columns) - 1
+    return {row.cells[0].text: str(row.cells[last].text_frame.paragraphs[0].runs[0].font.color.rgb)
+            for row in list(table.rows)[1:] if row.cells[last].text != "—"}
+
+
+def test_status_text_is_red_green_or_slate_and_the_table_is_navy_over_white_and_surface(tmp_path):
+    table = shape(build(tmp_path).slides[0], "KPI table").table
+    colors = status_text_colors(table)
+    assert colors["NRR (annualized)"] == "C0392B" and colors["Runway at current burn"] == "1E8449"
+    assert colors["Rule of 40"] == "334155"
+    header = table.cell(0, 0)
+    assert str(header.fill.fore_color.rgb) == "0B2545"
+    assert str(header.text_frame.paragraphs[0].runs[0].font.color.rgb) == "FFFFFF"
+    stripes = [str(table.cell(row, 0).fill.fore_color.rgb) for row in (1, 2)]
+    assert stripes == ["FFFFFF", "F8FAFC"]                     # white, then the surface color
+
+
+def test_type_sizes_on_the_slides(tmp_path):
+    # Title 28, section 20, body 15, caption 13, table 14; the footer stays at the 12 pt floor.
+    deck = build(tmp_path)
+    assert run_sizes(deck.slides[0].shapes.title) == {28}
+    assert max(run_sizes(shape(deck.slides[2], "Data gaps"))) == 20       # its heading
+    assert min(run_sizes(shape(deck.slides[2], "Data gaps"))) == 15       # its lines
+    slide_4 = build(tmp_path, summary=summary_dict()).slides[3]
+    assert run_sizes(shape(slide_4, "AI-drafted line")) == {13}
+    assert run_sizes(shape(slide_4, "Headline")) == {20}
+    assert run_sizes(shape(deck.slides[0], "Footer")) == {12}
+    table = shape(deck.slides[0], "KPI table").table
+    assert {run.font.size.pt for row in table.rows for cell in row.cells
+            for run in cell.text_frame.paragraphs[0].runs} <= {14, 13, 12}   # 14, shrunk only if it must
+
+
 def test_kpi_table_shows_why_a_value_is_missing(tmp_path):
     # Q1 2026 blank: the prior-quarter column says "data missing"; Rule of 40 says no prior period.
     table = shape(build(tmp_path, blank="Q1 2026").slides[0], "KPI table").table
@@ -307,7 +342,7 @@ def test_side_by_side_columns_use_the_same_font_sizes(tmp_path):
     summary["risks"] = [{"title": "Steady base", "detail": " ".join(["Customers stayed with the product."] * 5)}] * 3
     slide = build(tmp_path, summary=summary).slides[3]
     risks, questions = shape(slide, "Risks"), shape(slide, "Questions")
-    assert max(run_sizes(risks)) < 18      # the risks heading had to shrink from 18 pt...
+    assert max(run_sizes(risks)) < 20      # the risks heading had to shrink from 20 pt...
     assert run_sizes(risks) == run_sizes(questions)  # ...and the questions column shrank with it
 
 

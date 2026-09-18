@@ -6,7 +6,10 @@ Run from the project folder:  pytest
 import math
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_hex
+from matplotlib.text import Text
 
+import theme
 from charts import arr_chart, cash_chart
 
 NAN = math.nan
@@ -64,3 +67,33 @@ def test_figure_is_the_size_it_will_have_on_the_slide():
     figure = cash_chart(QUARTERS, [900.0, 800.0, 700.0, 600.0], "x", (6.1, 5.2))
     assert list(figure.get_size_inches()) == [6.1, 5.2]
     plt.close(figure)
+
+
+# ---------------------------------------------------------------------------
+# Task 3: the look comes from theme.py
+# ---------------------------------------------------------------------------
+
+def every_text(figure):
+    """Every piece of text in a figure: titles, tick labels, value labels and gap labels."""
+    return [text for text in figure.findobj(Text) if text.get_text().strip()]
+
+
+def test_chart_text_is_arial_or_the_next_installed_font_at_caption_size():
+    figure = arr_chart(QUARTERS, [100.0, 120.0, NAN, 150.0], [10.0, 20.0, NAN, -5.0], (6, 5))
+    found = every_text(figure)
+    assert found
+    assert {text.get_fontname() for text in found} == {theme.first_installed_font()}
+    assert {text.get_fontsize() for text in found} == {13}          # the caption size
+    plt.close(figure)
+
+
+def test_bars_and_line_are_navy_titles_slate_and_gap_labels_mid_gray():
+    arr = arr_chart(QUARTERS, [100.0, 120.0, 130.0, 150.0], [10.0, 20.0, 10.0, -5.0], (6, 5))
+    assert {to_hex(bar.get_facecolor()) for bar in arr.axes[0].patches} == {"#0b2545"}
+    assert to_hex(arr.axes[0]._left_title.get_color()) == "#334155"
+    cash = cash_chart(QUARTERS, [900.0, 800.0, NAN, 600.0], "x", (6, 5))
+    assert to_hex(cash.axes[0].lines[0].get_color()) == "#0b2545"
+    gap = [text for text in cash.axes[0].texts if "data" in text.get_text()][0]
+    assert to_hex(gap.get_color()) == "#64748b"
+    plt.close(arr)
+    plt.close(cash)

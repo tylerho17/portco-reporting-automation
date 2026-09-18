@@ -26,6 +26,7 @@ from clean import clean_workbook
 from metrics import (CANNOT_EVALUATE, DOLLAR_COLUMNS, FLAG_RULES, METRIC_LABELS, MISSING_INPUT, MONTH_COLUMNS,
                      PASS, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config, metric_reasons,
                      reason_text, runway_at_next_budget, runway_context_label)
+from theme import EXCEL_STATUS_COLORS
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 SHEET_NAMES = ["Metrics", "Flags", "Data gaps"]
@@ -43,11 +44,8 @@ KIND_LABELS = {"min": "below threshold", "max": "above threshold"}  # when a fla
 FLAG_KINDS = {name: kind for name, _, _, kind in FLAG_RULES}      # flag name -> "min" or "max"
 
 # Status -> (fill color, text color) as hex RGB. Same light red/green Excel uses for "Bad"/"Good".
-STATUS_COLORS = {
-    TRIP: ("FFC7CE", "9C0006"),
-    PASS: ("C6EFCE", "006100"),
-    CANNOT_EVALUATE: ("D9D9D9", "404040"),
-}
+# Kept in theme.py with the rest of the palette; the workbook keeps Excel's own fills (Task 3).
+STATUS_COLORS = EXCEL_STATUS_COLORS
 
 RUNWAY_CONTEXT_LABEL = "Runway at next quarter's budgeted burn (context, not a flag)"
 NO_GAPS_LABEL = "None — every metric and flag has the data it needs"

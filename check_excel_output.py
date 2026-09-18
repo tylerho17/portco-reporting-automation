@@ -13,8 +13,9 @@ from disk with openpyxl, and checks:
 4. Flags sheet: name, value, threshold, status and row color match the company's story.
 5. Data gaps sheet lists exactly the gaps metrics.data_gaps found, no more and no fewer.
 
-Expected labels, formats and colors are written out here on purpose instead of imported
-from excel_output.py, so a wrong constant there can't make its own check pass.
+Expected labels and formats are written out here on purpose instead of imported from
+excel_output.py, so a wrong constant there can't make its own check pass. Colors come from
+theme.py, the only file that types one (tests/test_theme.py types them by hand).
 
 Run: python check_excel_output.py  -> prints "All checks passed" or stops at the first failure.
 """
@@ -30,6 +31,7 @@ from excel_output import save_metrics_workbook
 from metrics import (CANNOT_EVALUATE, DOLLAR_COLUMNS, FLAG_RULES, METRIC_LABELS, MISSING_INPUT, MONTH_COLUMNS,
                      NO_PRIOR_PERIOD, NOT_MEANINGFUL, PASS, TRIP, compute_metrics, data_gaps, evaluate_flags,
                      load_config, metric_reasons, runway_at_next_budget)
+from theme import EXCEL_STATUS_COLORS
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 
@@ -41,8 +43,9 @@ INFINITE_TEXT = {
     "runway_months": "∞ (not burning)",
     "cac_payback_months": "∞ (never pays back)",
 }
-RED, GREEN, GRAY = "FFC7CE", "C6EFCE", "D9D9D9"
-STATUS_FILL = {TRIP: RED, PASS: GREEN, CANNOT_EVALUATE: GRAY}
+# Fills from theme.py, the only file that types a color (tests/test_theme.py types these values by hand).
+STATUS_FILL = {status: fill for status, (fill, _) in EXCEL_STATUS_COLORS.items()}
+RED, GRAY = STATUS_FILL[TRIP], STATUS_FILL[CANNOT_EVALUATE]
 
 
 def status_text(status, reason):
@@ -55,7 +58,7 @@ def status_text(status, reason):
 # ---------------------------------------------------------------------------
 
 def fill_color(cell):
-    """The cell's fill as 6-digit hex (e.g. 'FFC7CE'), or None if it has no fill."""
+    """The cell's fill as 6-digit hex (FFC7CE is Excel's red), or None if it has no fill."""
     if cell.fill.fill_type is None:
         return None
     return cell.fill.fgColor.rgb[-6:]  # openpyxl adds 2 alpha digits in front: '00FFC7CE'

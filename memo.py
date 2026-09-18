@@ -39,7 +39,6 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 from docx.shared import Inches as DocxInches
-from matplotlib import font_manager
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import ParagraphStyle
@@ -54,10 +53,10 @@ from build_deck import (AI_DRAFTED, FICTIONAL_NOTE, NO_AI_MODEL, OUTPUT_DIR, QUE
                         analysis_path, collect_deck_data, commit_text, flag_count_text, gaps_lines, kpi_header,
                         load_analysis, review_text, threshold_text, value_text)
 from clean import clean_workbook
-from excel_output import STATUS_COLORS, flag_row, runway_context_value, status_label
-from make_template import DARK_GRAY, FONT, LIGHT_GRAY, MID_GRAY, NAVY, WHITE
+from excel_output import flag_row, runway_context_value, status_label
 from metrics import CANNOT_EVALUATE, CONFIG_PATH, METRIC_LABELS, TRIP, format_value, load_config
 from provenance import approval_status, file_sha256, git_commit, manifest_path, read_manifest, save_manifest
+from theme import FONT, MID_GRAY, NAVY, SLATE, STATUS_COLORS, SURFACE, WHITE, css_color, font_file
 
 MEMO_UNAVAILABLE = "AI commentary unavailable"
 MEMO_UNAVAILABLE_NOTE = ("The headline and questions are written by Claude, and no validated version is "
@@ -74,7 +73,9 @@ EM_DASH = chr(0x2014)                   # the em dash, by its Unicode number, so
 CONTEXT_ROWS = [("ending_arr", "arr_vs_budget"), ("net_new_arr", None), ("arr_yoy", None), ("gross_margin", None)]
 
 # ---------------------------------------------------------------------------
-# Look: font sizes (pt), page margins (inches) and table column shares
+# Look: font sizes (pt), page margins (inches) and table column shares. Colors and the font come
+# from theme.py. The sizes are a printed page's, not the slides' (theme.py's 28 / 20 / 15 would
+# turn a 1 to 2 page memo into four).
 # ---------------------------------------------------------------------------
 
 TITLE_SIZE = 18
@@ -88,13 +89,13 @@ SPACE_AFTER_TEXT = 3
 PAGE_MARGIN = 0.7                   # inches, every side, in both files
 KPI_COLUMN_SHARES = [0.30, 0.13, 0.13, 0.24, 0.20]
 
-# The PDF embeds DejaVu Sans (it ships with matplotlib, and text_fit.py measures with it): the
-# PDF's built-in fonts have no "∞" and would print a box.
-PDF_FONT, PDF_BOLD_FONT = "DejaVuSans", "DejaVuSans-Bold"
+# The PDF embeds Arial (else DejaVu Sans, theme.font_file): the PDF's built-in fonts have no "∞"
+# and would print a box.
+PDF_FONT, PDF_BOLD_FONT = "MemoFont", "MemoFont-Bold"
 
 # A text block's style -> (font size, bold, color). Both files use this, so they look alike.
 TEXT_STYLES = {
-    "body": (BODY_SIZE, False, DARK_GRAY),
+    "body": (BODY_SIZE, False, SLATE),
     "note": (BODY_SIZE, False, MID_GRAY),
     "headline": (HEADLINE_SIZE, True, NAVY),
     "unavailable": (HEADLINE_SIZE, True, MID_GRAY),
@@ -292,7 +293,7 @@ def memo_footer(data, run_date, model, approval, commit=None):
 # 4. Writing the Word file (python-docx)
 # ---------------------------------------------------------------------------
 
-def docx_run(paragraph, words, size, bold=False, color=DARK_GRAY):
+def docx_run(paragraph, words, size, bold=False, color=SLATE):
     """Add one run of text in the memo's font."""
     run = paragraph.add_run(words)
     run.font.name, run.font.size, run.font.bold = FONT, Pt(size), bold
@@ -300,7 +301,7 @@ def docx_run(paragraph, words, size, bold=False, color=DARK_GRAY):
     return run
 
 
-def docx_paragraph(document, words, size, bold=False, color=DARK_GRAY, space_before=0, style=None):
+def docx_paragraph(document, words, size, bold=False, color=SLATE, space_before=0, style=None):
     """Add a paragraph with one run and the memo's spacing."""
     paragraph = document.add_paragraph(style=style)
     paragraph.paragraph_format.space_before = Pt(space_before)
@@ -342,9 +343,9 @@ def docx_table(document, block):
     for column, words in enumerate(block["header"]):
         docx_cell(table.cell(0, column), words, NAVY, WHITE, bold=True)
     for row_number, (cells, status) in enumerate(block["rows"], start=1):
-        stripe = LIGHT_GRAY if row_number % 2 == 0 else WHITE
+        stripe = SURFACE if row_number % 2 == 0 else WHITE
         for column, words in enumerate(cells):
-            fill_hex, text_hex = stripe, DARK_GRAY
+            fill_hex, text_hex = stripe, SLATE
             if status is not None and column == len(cells) - 1:
                 fill_hex, text_hex = STATUS_COLORS[status]
             docx_cell(table.cell(row_number, column), words, fill_hex, text_hex)
@@ -392,18 +393,18 @@ def write_docx(blocks, footer, path):
 # ---------------------------------------------------------------------------
 
 def register_pdf_fonts():
-    """Tell reportlab where DejaVu Sans is (regular and bold). Safe to call more than once."""
-    for name, weight in ((PDF_FONT, "normal"), (PDF_BOLD_FONT, "bold")):
+    """Tell reportlab where the memo's font is (regular and bold): Arial, else DejaVu Sans. Safe to call again."""
+    for name, bold in ((PDF_FONT, False), (PDF_BOLD_FONT, True)):
         if name not in pdfmetrics.getRegisteredFontNames():
-            path = font_manager.findfont(font_manager.FontProperties(family="DejaVu Sans", weight=weight))
+            _, path = font_file(bold)
             pdfmetrics.registerFont(TTFont(name, path))
 
 
 def pdf_color(hex_text):
-    return colors.HexColor("#" + hex_text)
+    return colors.HexColor(css_color(hex_text))
 
 
-def pdf_style(size, bold=False, color=DARK_GRAY, space_before=0):
+def pdf_style(size, bold=False, color=SLATE, space_before=0):
     """A reportlab paragraph style in the memo's font."""
     return ParagraphStyle("memo", fontName=PDF_BOLD_FONT if bold else PDF_FONT, fontSize=size,
                           leading=size * 1.25, textColor=pdf_color(color), spaceBefore=space_before,
@@ -422,9 +423,9 @@ def pdf_table(block):
     rows = [[pdf_paragraph(words, header_style) for words in block["header"]]]
     commands = [("BACKGROUND", (0, 0), (-1, 0), pdf_color(NAVY)), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]
     for row_number, (cells, status) in enumerate(block["rows"], start=1):
-        stripe = LIGHT_GRAY if row_number % 2 == 0 else WHITE
+        stripe = SURFACE if row_number % 2 == 0 else WHITE
         commands.append(("BACKGROUND", (0, row_number), (-1, row_number), pdf_color(stripe)))
-        text_colors = [DARK_GRAY] * len(cells)
+        text_colors = [SLATE] * len(cells)
         if status is not None:
             fill_hex, text_colors[-1] = STATUS_COLORS[status]
             commands.append(("BACKGROUND", (-1, row_number), (-1, row_number), pdf_color(fill_hex)))

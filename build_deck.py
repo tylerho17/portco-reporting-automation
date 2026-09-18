@@ -49,14 +49,16 @@ from pydantic import ValidationError
 from analyze import BoardSummary, build_payload, payload_to_text, validate_summary
 from charts import arr_chart, cash_chart, save_chart
 from clean import clean_workbook
-from excel_output import INFINITE_LABELS, NO_GAPS_LABEL, STATUS_COLORS, gap_label, status_label
-from make_template import CONTENT_LAYOUT, DARK_GRAY, LIGHT_GRAY, MID_GRAY, NAVY, TEMPLATE_PATH, WHITE
+from excel_output import INFINITE_LABELS, NO_GAPS_LABEL, gap_label, status_label
+from make_template import CONTENT_LAYOUT, TEMPLATE_PATH
 from metrics import (CANNOT_EVALUATE, CONFIG_PATH, FLAG_RULES, METRIC_LABELS, NO_PRIOR_PERIOD, REASON_DISPLAY,
                      TRIP, compute_metrics, data_gaps, evaluate_flags, format_value, load_config, metric_reasons,
                      reason_text, runway_at_next_budget, runway_context_label)
 from provenance import (NOT_REVIEWED, approval_status, deck_status, file_sha256, git_commit, manifest_path,
                         read_manifest, save_manifest)
 from text_fit import MIN_FONT_PT, TextDoesNotFitError, fit_table, paragraph, shrink_to_fit, text_width_pt
+from theme import (BODY_PT, CAPTION_PT, MID_GRAY, NAVY, SECTION_PT, SLATE, STATUS_COLORS, SURFACE, TABLE_PT, TITLE_PT,
+                   WHITE)
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 CHART_FOLDER = "charts"   # PNGs go in output/charts/
@@ -78,16 +80,18 @@ COMBO_TABLE_TEXT = "rule on Risks and flags slide"
 QUESTIONS_HEADING = "Questions for management"
 
 # ---------------------------------------------------------------------------
-# Look: font sizes (pt), spacing (pt) and layout sizes. Positions come from the template.
+# Look: font sizes (pt), spacing (pt) and layout sizes. Positions come from the template;
+# colors and the type scale from theme.py.
 # ---------------------------------------------------------------------------
 
-TITLE_SIZE = 28
-HEADLINE_SIZE = 22
-HEADING_SIZE = 18
-BODY_SIZE = 14        # risks and questions: two columns of AI text, so a little smaller
-LIST_SIZE = 16        # risks and flags, data gaps
-TABLE_SIZE = 14
-FOOTER_SIZE = MIN_FONT_PT
+TITLE_SIZE = TITLE_PT         # 28
+HEADLINE_SIZE = SECTION_PT    # 20: slide 4's AI headline
+HEADING_SIZE = SECTION_PT     # 20: headings above lists and columns
+BODY_SIZE = BODY_PT           # 15: risks and questions
+LIST_SIZE = BODY_PT           # 15: risks and flags, data gaps
+NOTE_SIZE = CAPTION_PT        # 13: the "AI-drafted ..." line and the placeholder's note
+TABLE_SIZE = TABLE_PT         # 14
+FOOTER_SIZE = MIN_FONT_PT     # 12: the footer line needs every point of width (add_footer)
 
 HEADING_SPACE = 6     # after a heading
 POINT_TITLE_SPACE = 2  # between a point's title and its detail
@@ -103,7 +107,7 @@ WATERMARK_HEIGHT = Inches(1.2)
 
 GAP = Inches(0.15)            # vertical gap between boxes
 COLUMN_GAP = Inches(0.35)     # between two columns (the charts, flags/data gaps, risks/questions)
-AI_LINE_HEIGHT = Inches(0.4)  # the "AI-drafted ... review before use" line: one line at 14 pt
+AI_LINE_HEIGHT = Inches(0.4)  # the "AI-drafted ... review before use" line: one line at 13 pt
 HEADLINE_HEIGHT = Inches(1.05)
 TEXT_MARGIN_X = Inches(0.1)
 TEXT_MARGIN_Y = Inches(0.05)
@@ -310,7 +314,7 @@ def write_paragraphs(frame, paragraphs):
         run.text = item["text"]
         run.font.size = Pt(item["size"])
         run.font.bold = item["bold"]
-        run.font.color.rgb = RGBColor.from_string(item["color"] or DARK_GRAY)
+        run.font.color.rgb = RGBColor.from_string(item["color"] or SLATE)
 
 
 def fitted(paragraphs, width, height, where):
@@ -438,7 +442,7 @@ def add_footer(slide, deck, run_date):
 def set_alpha(run, percent):
     """Make a run's text see-through. python-pptx sets a colour but not its opacity.
 
-    The colour is stored as <a:solidFill><a:srgbClr val="1F2A44"/>, and DrawingML puts opacity inside
+    The colour is stored as <a:solidFill><a:srgbClr val="(hex)"/>, and DrawingML puts opacity inside
     that colour as <a:alpha val="25000"/> - a percentage in thousandths.
     """
     colour = run._r.get_or_add_rPr().find(qn("a:solidFill")).find(qn("a:srgbClr"))
@@ -513,13 +517,13 @@ def write_cell(cell, text, size, fill_hex, text_hex, bold=False):
 
 
 def fill_table(table, header, rows, size):
-    """Header in navy; rows striped white / light gray; each flag's status cell in its status color."""
+    """Header in navy; rows striped white / surface; each flag's status cell in its status color (theme.py)."""
     for column, text in enumerate(header):
         write_cell(table.cell(0, column), text, size, NAVY, WHITE, bold=True)
     for row_number, (cells, status) in enumerate(rows, start=1):
-        stripe = LIGHT_GRAY if row_number % 2 == 0 else WHITE
+        stripe = SURFACE if row_number % 2 == 0 else WHITE
         for column, text in enumerate(cells):
-            fill_hex, text_hex = stripe, DARK_GRAY
+            fill_hex, text_hex = stripe, SLATE
             if status is not None and column == len(cells) - 1:
                 fill_hex, text_hex = STATUS_COLORS[status]
             write_cell(table.cell(row_number, column), text, size, fill_hex, text_hex)
@@ -673,9 +677,9 @@ def commentary_slide(slide, deck):
 
     if summary is None:  # nothing here is AI-drafted, so the AI-drafted line is left off
         add_text_box(slide, "Headline", headline_box, [headline_paragraph(PLACEHOLDER_TEXT, from_ai=False)], deck)
-        add_text_box(slide, "AI note", columns_box, [paragraph(PLACEHOLDER_NOTE, BODY_SIZE, color=MID_GRAY)], deck)
+        add_text_box(slide, "AI note", columns_box, [paragraph(PLACEHOLDER_NOTE, NOTE_SIZE, color=MID_GRAY)], deck)
         return
-    add_text_box(slide, "AI-drafted line", line_box, [paragraph(AI_DRAFTED_LINE, BODY_SIZE, color=MID_GRAY)], deck)
+    add_text_box(slide, "AI-drafted line", line_box, [paragraph(AI_DRAFTED_LINE, NOTE_SIZE, color=MID_GRAY)], deck)
     add_text_box(slide, "Headline", headline_box, [headline_paragraph(summary.headline, from_ai=True)], deck)
     _, columns_top, _, columns_height = columns_box
     add_columns(slide, commentary_columns(summary), columns_top, columns_height, deck)

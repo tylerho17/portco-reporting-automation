@@ -367,6 +367,34 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 ---
 
+### `theme.py`: the one palette, font and sizes (final Task 3)
+
+**What it's for:** every color, the font and the type sizes live here and nowhere else. The deck, its template, the charts, the memo and the web page all import them; a test (`test_no_file_but_theme_py_types_a_color`) fails if any other code file types a color. Like a firm's brand guide, but one the code has to follow.
+
+**Constants worth knowing:**
+- Palette (hex, no "#"): `NAVY = "0B2545"` (titles, table headers, primary buttons, chart bars), `NAVY_DARK` (a primary button under the mouse), `SLATE` (body text), `MID_GRAY` (captions, footers, notes), `LINE` (borders, the footer rule), `SURFACE` (page background, table stripes), `WHITE`.
+- Status: `RED` on `RED_FILL` (tripped), `GREEN` on `GREEN_FILL` (passed), `SLATE` on `GRAY_FILL` (cannot evaluate), in `STATUS_COLORS`. Red and green mean a flag's status and nothing else, so no button is ever red or green.
+- `EXCEL_STATUS_COLORS`: the metrics workbook keeps Excel's own "Bad" / "Good" fills, as before.
+- `FONT = "Arial"`, `FONT_STACK = ("Arial", "Helvetica", "DejaVu Sans")`: the first one installed wins. DejaVu Sans ships with matplotlib, so there is always one.
+- Sizes: `TITLE_PT = 28`, `SECTION_PT = 20`, `BODY_PT = 15`, `CAPTION_PT = 13`, `TABLE_PT = 14`, and `MIN_PT = 12`, the floor `text_fit.py` uses.
+- The web page: `PAGE_WIDTH_PX = 1100`, `ROW_HEIGHT_PX = 40`, `BUTTON_RADIUS_PX = 6`, `BUTTON_PADDING = "10px 18px"`.
+
+| Function | What it does, in plain English | Example / why it exists |
+|---|---|---|
+| `css_color(value)` | `"0B2545"` → `"#0B2545"`. | PowerPoint and Word colors have no #; web pages and matplotlib need one. |
+| `css_font_stack()` | The font list as a web page writes it. | `"Arial, Helvetica, 'DejaVu Sans', sans-serif"`: a name with a space needs quotes. |
+| `installed(family, bold)` | The font file for a family if this computer has it, else None. | |
+| `first_installed_font()` | The first of Arial, Helvetica, DejaVu Sans that is installed. | The family the charts come out in. |
+| `font_file(bold)` | (family, path) of the first font in the list installed as a single `.ttf` file. | For the PDF memo. A Mac keeps Helvetica in a `.ttc` (several fonts in one file), which the PDF can't embed without knowing which is bold, so there the memo falls to DejaVu Sans. |
+| `css_rule(selector, **declarations)` | One line of web-page style: `css_rule("h1", font_size="28px")` → `h1 { font-size: 28px; }`. | Keeps the style sheet readable as Python. |
+| `page_rules()` | Arial everywhere, the type sizes, one column about 1100 px wide on the surface color. | |
+| `button_rules()` | Primary: navy, white text, 6 px corners, 10 by 18 padding, navy dark under the mouse, surface with mid gray when greyed out. Secondary: white, navy text, 1 px navy border. | Streamlit tags each button with its kind (`stBaseButton-primary`), which the rules pick out. |
+| `card_and_table_rules()` | White cards with a 1 px border; tables and the portfolio's rows 40 px tall under a navy header with white text. | A container made with `key="card-..."` gets the class `st-key-card-...`, which the rules pick out. |
+| `streamlit_css()` | All of the above as one style sheet. | `app.py` puts it on every page. |
+| `streamlit_theme()` | What `.streamlit/config.toml`'s `[theme]` must say. | Streamlit's own accents (the checkbox tick, the progress bar, links) can only be set in that file, so it repeats the palette; `test_streamlit_s_config_carries_the_same_colors_and_font` fails if the two ever differ. |
+
+---
+
 ### `make_template.py`: the brand template (build step 4)
 
 **What it's for:** builds `templates/base.pptx`, the PowerPoint template every deck starts from. You run it once (`python make_template.py`); the file is committed, so decks build without running it. Like a firm's PowerPoint template: colors, fonts and footer are set once, not on every slide.
@@ -374,7 +402,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 **Why it's built by code:** python-pptx can't create a template from nothing. So it starts from python-pptx's built-in default (4:3, 11 Office layouts), resizes it to 16:9, restyles it and deletes 9 layouts. Some steps edit the file's XML directly, because python-pptx has no function for them.
 
 **Constants worth knowing:**
-- Brand: `BRAND_NAME = "Example Capital"` (fictional), `NAVY = "1F2A44"`, `DARK_GRAY`, `MID_GRAY`, `LIGHT_GRAY`, `WHITE`, `FONT = "Arial"`. `build_deck.py` and `charts.py` import these, so the colors live in one place.
+- Brand: the name (`BRAND_NAME = "Example Capital"`, fictional), colors, font and sizes come from `theme.py`. After changing them, run `python make_template.py` again: `test_the_saved_template_was_rebuilt_with_the_palette` fails until you do.
 - Layout names: `TITLE_LAYOUT = "Title Slide"`, `CONTENT_LAYOUT = "Title and Content"`.
 - Geometry, as `(left, top, width, height)`: `TITLE_BOX`, `BODY_BOX` (the content area, ends at 6.75 in), `FOOTER_BOX`, `BRAND_BOX`, `TOP_BAR`, `FOOTER_RULE` (the hairline; `check_deck.py` checks nothing runs past it).
 
@@ -382,18 +410,18 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 |---|---|---|
 | `set_theme(presentation)` | Rewrites the theme's colors (navy, grays) and both fonts (headings and body) to Arial, in the theme's XML. | Everything that uses "theme colors" turns navy and gray at once. |
 | `set_text_style(level_element, size_pt, hex_color, bold, align)` | Sets size, color and bold on one text level of the master. | PowerPoint stores 28 pt as `sz="2800"` (hundredths of a point). |
-| `set_master_text_styles(master)` | Titles: navy, bold, 28 pt, left-aligned. Body: dark gray, 20 then 18 pt. | |
+| `set_master_text_styles(master)` | Titles: navy, bold, 28 pt, left-aligned. Body: slate, 15 pt, then 13 pt one level down. | |
 | `keep_only_two_layouts(presentation)` | Deletes every layout except Title Slide and Title and Content. | Fewer choices, so a deck can't pick the wrong layout. |
 | `remove_unused_placeholders(shapes)` | Removes the date and slide-number boxes. | The run date is in the footer text instead. |
 | `place(shape, box)` | Moves and resizes a shape to a box. | |
 | `box_for(placeholder_type, cover)` | Which box a placeholder goes to: title, subtitle, body or footer (None = leave it). | The cover slide's title sits lower than a content slide's. |
 | `position_placeholders(shapes, cover)` | Moves every placeholder on a master or layout to its 16:9 position. | |
 | `set_placeholder_style(placeholder, size_pt, hex_color, bold)` | Gives one placeholder its own text style. | Used for the white cover title. |
-| `style_cover_layout(layout)` | Title Slide: navy background, white title, hides the master's bar and footer rule. | The 4-slide deck doesn't use it; it's there for a cover page. |
+| `style_cover_layout(layout)` | Title Slide: navy background, white 28 pt title, 20 pt subtitle, hides the master's bar and footer rule. | The 4-slide deck doesn't use it; it's there for a cover page. |
 | `add_master_shape(master, name, box, textbox)` | Adds a rectangle or text box to the slide master, behind everything, by writing its XML. | python-pptx can only add shapes to slides, not to a master. |
 | `fill_solid(shape, hex_color)` | Solid fill, no outline. | |
-| `add_brand_name(master)` | "Example Capital", navy, bold, 12 pt, bottom right. | |
-| `decorate_master(master)` | Adds the navy top bar, the gray hairline above the footer and the brand name. | Every content slide gets them without build_deck.py drawing them. |
+| `add_brand_name(master)` | "Example Capital", navy, bold, 12 pt, bottom right. | 12 pt like the footer line beside it, which needs every point of width. |
+| `decorate_master(master)` | Adds the navy top bar, the hairline (in the line color) above the footer and the brand name. | Every content slide gets them without build_deck.py drawing them. |
 | `build_template()` | Runs all of the above in order and returns the template in memory, with no slides. | |
 | `save_template(path)` | Builds and saves `templates/base.pptx`. | |
 
@@ -408,7 +436,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 - **Wrapping:** words go onto a line until the next one doesn't fit, like PowerPoint.
 - **Height:** lines × font size × 1.2 (`LINE_SPACING`), plus the space after each paragraph.
 
-**Constants worth knowing:** `MIN_FONT_PT = 12` (the floor), `LINE_SPACING = 1.2`, `MEASURE_SIZE = 100` (fonts load once at 100 pt and are scaled).
+**Constants worth knowing:** `MIN_FONT_PT = 12` (the floor, `theme.MIN_PT`), `LINE_SPACING = 1.2`, `MEASURE_SIZE = 100` (fonts load once at 100 pt and are scaled).
 
 | Function / class | What it does, in plain English | Example / why it exists |
 |---|---|---|
@@ -433,11 +461,10 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 - **Two panels, not two y-axes.** Net new ARR is small next to ARR and can go negative, so it gets its own panel and zero line. A chart with two y-axes lets the reader compare heights that aren't comparable.
 - **A blank quarter stays visible.** Bars: no bar, and "data missing" written where it would be. Line: the NaN stays in the data, so matplotlib stops the line at the gap instead of joining across it (joining would draw numbers that don't exist).
 
-**Constants worth knowing:** `FONT_SIZE = 12` (same floor as the slides), `DPI = 200`, `HEADROOM = 1.2` (cash axis top = 1.2 × highest cash), `GAP_LABEL` ("data missing", from metrics.py).
+**Constants worth knowing:** `FONT_SIZE = 13` (theme.py's caption size), `DPI = 200`, `HEADROOM = 1.2` (cash axis top = 1.2 × highest cash), `GAP_LABEL` ("data missing", from metrics.py). Colors come from `theme.py` (navy bars and line, slate text, mid gray axes and "data missing"); the font is the first of Arial, Helvetica, DejaVu Sans installed, set once for every chart through matplotlib's `rcParams`.
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
-| `hex_color(value)` | `"1F2A44"` → `"#1F2A44"`. | PowerPoint colors have no #, matplotlib's need one. |
 | `style_axis(axis, quarters, money_column)` | Quiet styling: no top/right border, light grid, "Q2\n2026" labels, y-axis in $K. | |
 | `label_gaps(axis, values)` | Writes "data missing" at every blank quarter. | |
 | `label_latest(axis, values, column, below)` | Writes the latest value next to its bar or point (below a negative bar). | Only the latest value is labelled, so the chart stays readable. |
@@ -460,7 +487,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 - **No watermark unless asked.** With `--draft` (here or in main.py), every slide of an unreviewed deck also gets a see-through "DRAFT - NOT REVIEWED" drawn on top. `--draft` never stamps an approved deck, because the stamp would be false.
 - **The old deck is deleted first**, so a failed build never leaves last run's deck looking current.
 
-**Constants worth knowing:** `PLACEHOLDER_TEXT = "AI summary unavailable"`, `PLACEHOLDER_NOTE` (says the numbers are unaffected), font sizes (`TITLE_SIZE` 28, `HEADLINE_SIZE` 22, `BODY_SIZE` 14, `LIST_SIZE` 16, `TABLE_SIZE` 14), `KPI_COLUMN_SHARES` (table column widths), `CONTEXT_ROWS` (the 3 non-flag rows on slide 1), `SLIDE_BUILDERS` (the 4 slide functions in order), `AI_DRAFTED_LINE` (the line under slide 4's title).
+**Constants worth knowing:** `PLACEHOLDER_TEXT = "AI summary unavailable"`, `PLACEHOLDER_NOTE` (says the numbers are unaffected), font sizes from theme.py (`TITLE_SIZE` 28, `HEADLINE_SIZE` and `HEADING_SIZE` 20, `BODY_SIZE` and `LIST_SIZE` 15, `NOTE_SIZE` 13 for the AI-drafted line, `TABLE_SIZE` 14, `FOOTER_SIZE` 12 because the footer line needs every point of width), colors from theme.py (navy header, white and surface stripes, status cells in the palette's red, green and gray), `KPI_COLUMN_SHARES` (table column widths), `CONTEXT_ROWS` (the 3 non-flag rows on slide 1), `SLIDE_BUILDERS` (the 4 slide functions in order), `AI_DRAFTED_LINE` (the line under slide 4's title).
 
 **The call order:** `save_deck` → `clean_workbook` → `collect_deck_data` → `load_analysis` → `approval_status` (from the manifest) → `build_presentation` → for each slide: `new_slide`, that slide's function, `add_footer`, and `add_watermark` only with `--draft` on an unapproved deck → save → `record_deck_status`.
 
@@ -549,6 +576,8 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 **The one rule the deck doesn't have:** every number in the memo must be one the metrics workbook shows. Claude may quote any number in its payload, which includes raw inputs (net burn, ending cash in $K) that the metrics workbook doesn't have. So the memo checks the AI headline and questions against the workbook's numbers too, and says "AI commentary unavailable" if one is missing. An analysis can therefore be on the deck and not in the memo.
 
+**Look:** colors and the font (Arial) come from `theme.py`: a navy table header, white and surface stripes, and the status cells in the palette's red, green and gray fills. The sizes stay a printed page's (title 18, body 9.5, table 8.5, footer 7): theme.py's slide sizes would turn a 1 to 2 page memo into four.
+
 **No em dashes:** two labels it shares with the deck and Excel have one (the "Cannot evaluate" status and the "None" data gaps line); the memo shows a colon instead, e.g. "Cannot evaluate: missing input".
 
 | Function | What it does, in plain English | Example / why it exists |
@@ -570,7 +599,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `memo_footer(data, run_date, model, approval, commit)` | "Fictional data \| northwind.xlsx \| 2026-09-17 \| 2a215a9 \| claude-sonnet-5 \| AI-drafted \| not reviewed". | The same parts as the deck's footer, and the same review status from the manifest. |
 | `docx_run` / `docx_paragraph` / `keep_with_next` / `shade_cell` / `docx_cell` / `docx_table` / `docx_block` | Write text, a paragraph, a colored table cell, the table and each block into the Word file. `keep_with_next` stops a heading ending a page. | python-docx has no setting for a cell's color, so `shade_cell` writes the XML itself. |
 | `write_docx(blocks, footer, path)` | Saves the Word file: US Letter, 0.7 inch margins, the footer on every page. | |
-| `register_pdf_fonts()` | Tells reportlab where DejaVu Sans is. | The PDF's built-in fonts have no "∞", and Fernhollow's burn multiple is "∞ (ARR shrank)". |
+| `register_pdf_fonts()` | Tells reportlab where the memo's font is: Arial, else DejaVu Sans (`theme.font_file`). | The PDF's built-in fonts have no "∞", and Fernhollow's burn multiple is "∞ (ARR shrank)". Arial has it. |
 | `pdf_color` / `pdf_style` / `pdf_paragraph` / `pdf_table` / `pdf_flowables` | The same blocks in reportlab's terms. `pdf_paragraph` escapes &, < and >, which reportlab would read as markup. | |
 | `pdf_sections(blocks)` | Groups the PDF into sections (a heading and what follows), each kept on one page when it fits. | Northwind's first memo left "Questions for management" alone at the foot of page 1. |
 | `write_pdf(blocks, footer, path)` | Saves the PDF with the footer drawn on every page; a long footer wraps instead of running off the page. | |

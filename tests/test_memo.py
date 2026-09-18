@@ -8,12 +8,15 @@ Run from the project folder:  pytest
 import datetime
 import json
 import math
+import re
 
 import pandas as pd
 import pytest
 from docx import Document
+from docx.oxml.ns import qn
 from pypdf import PdfReader
 
+import theme
 from analyze import BoardSummary, build_payload
 from build_deck import collect_deck_data
 from clean import STANDARD_COLUMNS
@@ -302,10 +305,52 @@ def test_word_keeps_headings_with_the_text_under_them(tmp_path):
 
 
 def test_the_pdf_draws_characters_outside_basic_fonts(tmp_path):
-    # "∞ (ARR shrank)" must come out as ∞, not a missing-glyph box: the PDF embeds DejaVu Sans.
+    # "∞ (ARR shrank)" must come out as ∞, not a missing-glyph box: the PDF embeds Arial (or DejaVu Sans).
     blocks = [{"kind": "text", "text": "Burn multiple: ∞ (ARR shrank)", "style": "body"}]
     text = PdfReader(write_pdf(blocks, "footer", tmp_path / "memo.pdf")).pages[0].extract_text()
     assert "∞ (ARR shrank)" in text
+
+
+def pdf_font_names(path):
+    """The fonts that draw text in a PDF, e.g. {'/AAAAAA+ArialMT', '/AAAAAA+Arial-BoldMT'}.
+
+    Only fonts used inside a text block that draws something (Tj): reportlab's page setup names
+    Helvetica once in an empty block, which draws nothing.
+    """
+    names = set()
+    for page in PdfReader(path).pages:
+        fonts = {key: str(font.get_object()["/BaseFont"]) for key, font in page["/Resources"]["/Font"].items()}
+        for block in re.findall(r"BT(.*?)ET", page.get_contents().get_data().decode("latin-1"), re.DOTALL):
+            if "Tj" in block:
+                names |= {fonts[key] for key in re.findall(r"(/F[\w+]+) [\d.]+ Tf", block)}
+    return names
+
+
+def test_the_pdf_is_set_in_arial_or_the_next_installed_font(tmp_path):
+    blocks = [{"kind": "title", "text": "Title"}, {"kind": "text", "text": "Body", "style": "body"}]
+    names = pdf_font_names(write_pdf(blocks, "footer", tmp_path / "memo.pdf"))
+    family, _ = theme.font_file()
+    assert names and all(family.replace(" ", "") in name for name in names)
+
+
+def cell_fill(cell):
+    """A Word table cell's shading color, as memo.shade_cell wrote it."""
+    shading = cell._tc.tcPr.find(qn("w:shd"))
+    return shading.get(qn("w:fill"))
+
+
+def test_word_table_is_navy_over_white_and_surface_with_status_fills(tmp_path):
+    blocks = memo_blocks(memo_data(), summary_from(summary_dict()))
+    table = Document(write_docx(blocks, "footer", tmp_path / "memo.docx")).tables[0]
+    header = table.cell(0, 0)
+    assert cell_fill(header) == "0B2545" and str(header.paragraphs[0].runs[0].font.color.rgb) == "FFFFFF"
+    assert [cell_fill(table.cell(row, 0)) for row in (1, 2)] == ["FFFFFF", "F8FAFC"]
+    statuses = {table.cell(row, 0).text: cell_fill(table.cell(row, len(table.columns) - 1))
+                for row in range(1, len(table.rows))}
+    assert statuses["NRR (annualized)"] == "FDE8E6"                        # tripped: the palette's red fill
+    assert statuses["Runway at current burn"] == "EAF6EF"                  # passed: green fill
+    body_run = Document(tmp_path / "memo.docx").paragraphs[0].runs[0]
+    assert body_run.font.name == "Arial"
 
 
 def test_save_memo_writes_both_files_beside_the_deck(tmp_path, monkeypatch):

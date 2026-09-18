@@ -16,3 +16,17 @@ gatherUsageStats = false
 showErrorDetails = "none"
 # Hide the developer menu (rerun, settings, deploy) - the page is for non-technical users.
 toolbarMode = "minimal"
+
+[theme]
+# Streamlit's own accents (checkbox tick, progress bar, focus ring, links), which only this file can set.
+# The values repeat theme.py's palette; tests/test_theme.py fails if the two ever differ.
+base = "light"
+primaryColor = "#0B2545"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#334155"
+linkColor = "#0B2545"
+borderColor = "#E2E8F0"
+font = "Arial, Helvetica, 'DejaVu Sans', sans-serif"
+baseFontSize = 15
+buttonRadius = "6px"
