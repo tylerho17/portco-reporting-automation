@@ -6,6 +6,8 @@
   (a renamed file breaks the docs quietly).
 - Every function or class in STUDY_GUIDE.md's function tables must exist in the file its
   heading names (a removed function would otherwise stay in the guide as if it were real).
+- INTERVIEW_PREP.md: every file it names exists, every `module.function` and
+  `tests/file.py::test_name` it points to exists, and its sections come in interview order.
 
 Run from the project folder:  pytest
 """
@@ -20,6 +22,7 @@ README = PROJECT_DIR / "README.md"
 CLAUDE_MD = PROJECT_DIR / "CLAUDE.md"
 STUDY_GUIDE = PROJECT_DIR / "STUDY_GUIDE.md"
 LOOM_SCRIPT = PROJECT_DIR / "LOOM_SCRIPT.md"
+INTERVIEW_PREP = PROJECT_DIR / "INTERVIEW_PREP.md"
 
 
 def python_files_named(text):
@@ -92,6 +95,50 @@ def test_study_guide_and_loom_script_name_only_files_that_exist():
         missing = [name for name in python_files_named(doc.read_text())
                    if not (PROJECT_DIR / name).exists() and not (PROJECT_DIR / "tests" / name).exists()]
         assert missing == [], f"{doc.name} names files that don't exist"
+
+
+def files_named(text):
+    """Every project file a piece of text names, e.g. 'metrics.py', 'config.yaml', 'data/northwind.xlsx'.
+
+    Files under output/ are left out: they are made by a run and git ignores them, so a fresh
+    clone doesn't have them.
+    """
+    pattern = r"[\w./-]+\.(?:py|md|ya?ml|toml|command|ini|txt|xlsx)\b"
+    return {name for name in re.findall(pattern, text) if not name.startswith("output/")}
+
+
+def functions_named(text):
+    """Every `module.function` and `tests/file.py::test_name` a piece of text names, as (file, name)."""
+    pairs = {(f"{module}.py", name) for module, name in re.findall(r"`(\w+)\.(\w+)", text)
+             if name != "py"}  # `metrics.py` is a file name, not a function called "py"
+    pairs |= set(re.findall(r"([\w/]+\.py)::(\w+)", text))
+    return {(file, name) for file, name in pairs if (PROJECT_DIR / file).exists()}
+
+
+def defined_or_assigned_in(file, name):
+    """True if the file defines `name` as a function or class, or sets it as a constant (NAME = ...)."""
+    assigned = re.compile(rf"^{name}\s*=", re.MULTILINE)
+    return defined_in([file], name) or bool(assigned.search((PROJECT_DIR / file).read_text()))
+
+
+def test_interview_prep_names_only_files_that_exist():
+    # Like the study guide, a bare test file name ("test_metrics.py") counts if it is in tests/.
+    missing = [name for name in files_named(INTERVIEW_PREP.read_text())
+               if not (PROJECT_DIR / name).exists() and not (PROJECT_DIR / "tests" / name).exists()]
+    assert missing == []
+
+
+def test_interview_prep_names_only_functions_that_exist():
+    missing = [f"{file}: {name}" for file, name in sorted(functions_named(INTERVIEW_PREP.read_text()))
+               if not defined_or_assigned_in(file, name)]
+    assert missing == []
+
+
+def test_interview_prep_groups_the_questions_in_interview_order():
+    headings = re.findall(r"^## (.+)$", INTERVIEW_PREP.read_text(), re.MULTILINE)
+    expected = ["The project", "Design decisions", "The AI layer", "What broke",
+                "Scale and risk", "Working method", "When you can't recall a detail"]
+    assert [h for h in headings if h in expected] == expected
 
 
 def test_study_guide_tables_cover_the_deck_files():
