@@ -20,6 +20,7 @@ import theme
 from analyze import BoardSummary, build_payload
 from build_deck import collect_deck_data
 from clean import STANDARD_COLUMNS
+from diff_runs import HEADING, run_results
 from memo import (AI_DRAFTED_LINE, MEMO_UNAVAILABLE, block_texts, memo_analysis, memo_approval, memo_blocks,
                   memo_footer, memo_paths, save_memo, unlisted_numbers, workbook_numbers, write_docx, write_pdf)
 from metrics import CONFIG_PATH
@@ -396,6 +397,54 @@ def test_a_deck_only_approval_leaves_the_memo_footer_not_reviewed(tmp_path, monk
         save_manifest(manifest_path(workbook, tmp_path), {"company": "Testco", "approval": approval})
         result = save_memo(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
         assert Document(result["docx"]).sections[0].footer.paragraphs[0].text.endswith("AI-drafted | " + review)
+
+
+# ---------------------------------------------------------------------------
+# What changed since the last run (Task 10): only when an earlier run exists
+# ---------------------------------------------------------------------------
+
+def changes_report():
+    """An earlier run's comparison, written by hand: one flag flipped, NRR down 12 points."""
+    return {"since": "2026-06-18T09:05:41", "quarter_before": "Q1 2026", "quarter_now": "Q2 2026",
+            "flags": [("Runway at current burn", "Passed", "Tripped")],
+            "moved": [("NRR (annualized)", "102.0%", "90.0%", "down 12.0 pts")],
+            "new_gaps": {}, "resolved_gaps": {"flag: Rule of 40": ["Q1 2026"]}}
+
+
+def test_a_memo_with_no_earlier_run_has_no_what_changed_section():
+    assert HEADING not in all_text(memo_blocks(memo_data(), None))
+
+
+def test_what_changed_comes_after_the_headline_and_before_key_metrics():
+    text = all_text(memo_blocks(memo_data(), None, changes=changes_report()))
+    positions = [text.index(words) for words in ("Headline", HEADING, "Key metrics")]
+    assert positions == sorted(positions)
+    for line in ("Compared with the run of 2026-06-18 09:05, whose latest quarter was Q1 2026 (now Q2 2026).",
+                 "Flags that flipped", "Runway at current burn: Tripped (was Passed)",
+                 "NRR (annualized): 102.0% to 90.0% (down 12.0 pts)", "Resolved data gaps",
+                 "Q1 2026: Flag: Rule of 40"):
+        assert line in text
+
+
+def test_what_changed_uses_the_move_settings_from_config():
+    data = memo_data()
+    data["config"] = {**TEST_CONFIG, "diff_min_points": 0.1}
+    assert "Metrics that moved more than 10.0 pts (percentages)" in all_text(
+        memo_blocks(data, None, changes=changes_report()))
+
+
+def test_save_memo_compares_with_the_run_in_the_manifest(tmp_path, monkeypatch):
+    workbook = tmp_path / "testco.xlsx"
+    workbook.write_bytes(b"not read: clean_workbook is replaced")
+    monkeypatch.setattr("memo.clean_workbook", lambda path: (three_quarters(), None))
+    earlier = run_results(memo_data())
+    earlier["flags"]["Runway at current burn"] = "Tripped"
+    save_manifest(manifest_path(workbook, tmp_path), {"company": "Testco", "run_at": "2026-06-18T09:05:41",
+                                                      "results": earlier})
+    result = save_memo(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert "Runway at current burn: Passed (was Tripped)" in docx_text(result["docx"])
+    pdf_words = " ".join(" ".join(page.extract_text() for page in PdfReader(result["pdf"]).pages).split())
+    assert "Runway at current burn: Passed (was Tripped)" in pdf_words
 
 
 def test_memo_paths():

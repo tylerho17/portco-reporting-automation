@@ -18,8 +18,11 @@ from pptx import Presentation
 
 import analyze
 import main
+import make_data
 from analyze import BoardSummary
 from build_deck import PLACEHOLDER_TEXT
+from check_diff import last_quarter_workbook
+from diff_runs import HEADING, NO_EARLIER_RUN
 from main import quarter_mismatch_warning, write_summary_csv
 from provenance import NOT_REVIEWED, file_sha256, git_commit, manifest_path, read_manifest, save_manifest
 from text_fit import TextDoesNotFitError
@@ -411,6 +414,56 @@ def test_a_run_after_the_workbook_changed_drops_back_to_draft(tmp_path):
 
     run_northwind(tmp_path, skip_ai=True)
     assert northwind_manifest(tmp_path)["deck"]["status"] == NOT_REVIEWED
+
+
+# ---------------------------------------------------------------------------
+# What changed since the last run (Task 10)
+# ---------------------------------------------------------------------------
+
+def run_last_quarter_then_today(tmp_path):
+    """Northwind as it stood at Q1 2026, then today's workbook, into the same output folder (tmp_path/out)."""
+    earlier = last_quarter_workbook(make_data, tmp_path)
+    main.run_batch([earlier], main.load_config(), True, output_dir=tmp_path / "out")
+    run_northwind(tmp_path / "out", skip_ai=True)
+    return northwind_manifest(tmp_path / "out")
+
+
+def test_a_first_run_records_its_results_and_has_nothing_to_compare_with(tmp_path, capsys):
+    run_northwind(tmp_path, skip_ai=True)
+    saved = northwind_manifest(tmp_path)
+    assert saved["results"]["quarter"] == "Q2 2026"
+    assert saved["results"]["flags"]["Runway at current burn"] == "Tripped"
+    assert saved["previous_run"] is None
+    assert HEADING not in memo_text(tmp_path)
+    assert f"✓ {HEADING}: {NO_EARLIER_RUN}" in capsys.readouterr().out
+
+
+def test_a_run_a_quarter_later_is_compared_with_the_last_one(tmp_path, capsys):
+    saved = run_last_quarter_then_today(tmp_path)
+    assert saved["previous_run"]["results"]["quarter"] == "Q1 2026"
+    memo = memo_text(tmp_path / "out")
+    assert HEADING in memo and "Runway at current burn: Tripped (was Passed)" in memo
+    assert "whose latest quarter was Q1 2026 (now Q2 2026)" in memo
+    assert f"✓ {HEADING}: 5 flags flipped" in capsys.readouterr().out
+
+
+def test_a_rebuild_from_the_same_numbers_keeps_last_quarter_s_comparison(tmp_path):
+    # approve.py, then a rebuild: the memo must still say what changed since last quarter.
+    first = run_last_quarter_then_today(tmp_path)
+    run_northwind(tmp_path / "out", skip_ai=True)
+    again = northwind_manifest(tmp_path / "out")
+    assert again["previous_run"] == first["previous_run"]
+    assert again["run_at"] >= first["run_at"]
+    assert "Runway at current burn: Tripped (was Passed)" in memo_text(tmp_path / "out")
+
+
+def test_run_company_straight_into_output_compares_too(tmp_path):
+    # The batch above builds in a private folder; the web page's Generate calls run_company on output/ itself.
+    earlier = last_quarter_workbook(make_data, tmp_path)
+    main.run_company(earlier, main.load_config(), True, output_dir=tmp_path / "out", reuse_saved=True)
+    main.run_company(NORTHWIND, main.load_config(), True, output_dir=tmp_path / "out", reuse_saved=True)
+    assert northwind_manifest(tmp_path / "out")["previous_run"]["results"]["quarter"] == "Q1 2026"
+    assert "Runway at current burn: Tripped (was Passed)" in memo_text(tmp_path / "out")
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,8 @@ Steps for each company:
 4. AI commentary (analyze.py): output/<company>_analysis.json, saved whether it passed or failed
 5. Deck (build_deck.py): output/<company>_board_pack.pptx
 6. Memo (memo.py): output/<company>_board_memo.docx and .pdf, from the same numbers and analysis
-7. Manifest (provenance.py): output/<company>_manifest.json
+7. Manifest (provenance.py): output/<company>_manifest.json, with this run's results and the
+   earlier run they were compared with (diff_runs.py, Task 10: what changed since the last run)
 
 The deck and the memo are always built, because their numbers come from Python (CLAUDE.md decisions K and L):
 - AI passed validation      -> the AI text is on slide 4 (AI commentary), result "OK"
@@ -60,10 +61,11 @@ import anthropic
 from dotenv import load_dotenv
 
 from analyze import PROMPT_VERSION, AnalysisError, analyze, build_payload, payload_to_text, save_analysis
-from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, commentary_slide, deck_path, load_analysis,
-                        save_deck, slide_number)
+from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, collect_deck_data, commentary_slide,
+                        deck_path, load_analysis, save_deck, slide_number)
 from clean import clean_workbook
 from compare_models import run_cost
+from diff_runs import HEADING, baseline, move_settings, report_for, run_results, summary_text
 from excel_output import save_metrics_workbook
 from mapping import mapping_record
 from memo import MEMO_UNAVAILABLE, save_memo
@@ -275,7 +277,22 @@ def ai_record(ai, analysis_file):
     }
 
 
-def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo=None, draft=False):
+def changes_step(workbook_path, actuals, next_budget, config, output_dir):
+    """This run's results, and the earlier run they're compared with (diff_runs.py). Prints a one-line summary.
+
+    Returns {"results", "previous_run"} for the manifest. The earlier run is read from the last
+    manifest (in a batch, the copy in the company's private folder), before this run replaces it.
+    """
+    data = collect_deck_data(company_name(workbook_path), Path(workbook_path).name, actuals, next_budget, config)
+    results = run_results(data)
+    earlier = baseline(read_manifest(manifest_path(workbook_path, output_dir)), results)
+    report = None if earlier is None else report_for(earlier, results, move_settings(config))
+    print(f"  ✓ {HEADING}: {summary_text(report)}")
+    return {"results": results, "previous_run": earlier}
+
+
+def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo=None, draft=False,
+                  changes=None):
     """Write output/<company>_manifest.json: where this deck came from, and who has approved it.
 
     Any approval already recorded is carried over. Whether it still counts is decided by
@@ -283,6 +300,7 @@ def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable,
     mapping - so a deck goes back to DRAFT on its own once any of them changes. memo = memo_step's result: the memo's files,
     and whether it carries the AI text (it can differ from the deck). The batch events (skips,
     timeouts, stops, failures) are carried over too, and whether --draft was asked for (--resume checks it).
+    changes = changes_step's answer: this run's results and the earlier run they were compared with (Task 10).
     """
     path = manifest_path(workbook_path, output_dir)
     previous = read_manifest(path) or {}
@@ -296,6 +314,8 @@ def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable,
         manifest["batch_events"] = previous["batch_events"]
     if memo is not None:
         manifest["memo"] = {"files": [memo["docx"].name, memo["pdf"].name], "ai_text": memo["why_unavailable"] is None}
+    if changes is not None:
+        manifest.update(changes)
     save_manifest(path, manifest)
     print(f"  ✓ Manifest: {shown_path(path)} (deck status: {manifest['deck']['status']})")
     return manifest
@@ -351,6 +371,7 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
     for name in result["tripped"]:
         print(f"      tripped: {name}")
     print(f"  ✓ Data gaps: {gaps_text(result)}")
+    changes = changes_step(workbook_path, actuals, next_budget, config, output_dir)
 
     control.checkpoint()
     excel_path = save_metrics_workbook(workbook_path, config, output_dir)
@@ -363,7 +384,7 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
     control.checkpoint()
     memo = memo_step(workbook_path, config, analysis_file, output_dir)
     control.checkpoint()
-    manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo, draft)
+    manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo, draft, changes)
     result["ai"] = ai_status(ai is None, why_unavailable)   # a reused analysis isn't "skipped"
     result["deck_status"] = manifest["deck"]["status"]
     result["cost_usd"] = manifest["ai"]["cost_usd"]

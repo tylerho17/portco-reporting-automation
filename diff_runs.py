@@ -3,8 +3,8 @@
 Every run saves its results in output/<company>_manifest.json ("results"): the latest quarter,
 every metric's value and the words the deck shows for it, every flag's status, and every data gap.
 This file compares one run's results with an earlier run's and says what changed:
-- Flags that flipped:  a flag whose status changed ("Runway at current burn: Passed to Tripped"),
-                       including a change of reason ("Cannot evaluate: missing input" to "Tripped")
+- Flags that flipped:  a flag whose status changed ("Runway at current burn: Tripped (was Passed)"),
+                       including to or from "Cannot evaluate", or from one reason to another
 - Metrics that moved:  the latest quarter's value moved more than a set amount. Percentages move
                        by points (default 5 points); everything else ($K, months, multiples) by
                        percent of its old value (default 10%). A value that became or stopped
@@ -224,6 +224,15 @@ def threshold_words(settings):
     return f"{points_text(settings['min_points'])} (percentages) or {settings['min_relative']:.1%} (other metrics)"
 
 
+def flip_line(name, before, after):
+    """'Runway at current burn: Tripped (was Passed)': today's status first.
+
+    Not "Passed to Tripped": a status with a reason has a colon of its own, and "Cannot evaluate:
+    missing input to Tripped" reads as one muddle.
+    """
+    return f"{name}: {after} (was {before})"
+
+
 def moved_line(label, before, after, size):
     """'NRR (annualized): 102.0% to 90.0% (down 12.0 pts)'."""
     return f"{label}: {before} to {after}" + (f" ({size})" if size else "")
@@ -235,7 +244,7 @@ def change_sections(report, settings):
     When nothing changed, one section says so and what was checked.
     """
     sections = [
-        ("Flags that flipped", [f"{name}: {before} to {after}" for name, before, after in report["flags"]]),
+        ("Flags that flipped", [flip_line(*flip) for flip in report["flags"]]),
         (f"Metrics that moved more than {threshold_words(settings)}",
          [moved_line(*move) for move in report["moved"]]),
         ("New data gaps", gaps_lines(report["new_gaps"]) if report["new_gaps"] else []),

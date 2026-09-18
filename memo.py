@@ -3,7 +3,9 @@
 A 1 to 2 page written update for board members who read rather than present:
 1. Title and quarter:          "<Company> board update: Q2 2026", compared with the prior quarter
 2. Headline:                   the AI headline under "AI-drafted from computed metrics - review before use"
-3. Key metrics:                the same table as slide 1 (latest, prior, budget or threshold, status),
+   What changed since the last run (Task 10, only when an earlier run is on record): flags that
+                               flipped, metrics that moved, new and resolved data gaps (diff_runs.py)
+3. Key metrics:               the same table as slide 1 (latest, prior, budget or threshold, status),
                                then runway at next quarter's budgeted burn
 4. Flags:                      "6 of 9 flags tripped", each tripped flag with its value and threshold,
                                flags that can't be evaluated, and the combo rule
@@ -53,6 +55,7 @@ from build_deck import (AI_DRAFTED, FICTIONAL_NOTE, NO_AI_MODEL, OUTPUT_DIR, QUE
                         analysis_path, collect_deck_data, commit_text, flag_count_text, gaps_lines, kpi_header,
                         load_analysis, review_text, threshold_text, value_text)
 from clean import clean_workbook
+from diff_runs import HEADING, change_sections, changes_since_last_run, compared_with_text, move_settings
 from excel_output import flag_row, runway_context_value, status_label
 from mapping import mapping_sha256
 from metrics import CANNOT_EVALUATE, CONFIG_PATH, METRIC_LABELS, TRIP, format_value, load_config
@@ -251,8 +254,24 @@ def ai_blocks(summary, part):
     return [text(AI_DRAFTED_LINE, "note", ai=True), body]
 
 
-def memo_blocks(data, summary):
-    """Every block of the memo, top to bottom. summary = a validated BoardSummary, or None."""
+def change_blocks(changes, config):
+    """What changed since the last run (diff_runs.py): a heading, which run, then each kind of change.
+
+    None (no earlier run to compare with) gives no blocks: a first memo has nothing to say here.
+    """
+    if changes is None:
+        return []
+    blocks = [heading(HEADING), text(compared_with_text(changes), "note")]
+    for title, lines in change_sections(changes, move_settings(config)):
+        blocks += [text(title), bullets([no_em_dash(line) for line in lines])]
+    return blocks
+
+
+def memo_blocks(data, summary, changes=None):
+    """Every block of the memo, top to bottom. summary = a validated BoardSummary, or None.
+
+    changes = diff_runs.changes_since_last_run's answer, or None when there's no earlier run.
+    """
     prior = f", compared with {data['prior']}" if data["prior"] else ""
     return [
         {"kind": "title", "text": f"{data['company']} board update: {data['latest']}"},
@@ -260,6 +279,7 @@ def memo_blocks(data, summary):
              f"company's KPI workbook; the headline and questions are drafted by AI.", "note"),
         heading("Headline"),
         *ai_blocks(summary, "headline"),
+        *change_blocks(changes, data["config"]),
         heading("Key metrics"),
         {"kind": "table", "header": kpi_header(data), "rows": kpi_rows(data)},
         text(f"{RUNWAY_CONTEXT}: {runway_context_text(data)}", "note"),
@@ -517,14 +537,15 @@ def save_memo(workbook_path, config, analysis_file=None, run_date=None, output_d
     data = collect_deck_data(company, workbook_path.name, actuals, next_budget, config)
     summary, why_unavailable = memo_analysis(analysis_file, build_payload(company, actuals, next_budget, config), data)
 
-    approval, _ = approval_status(read_manifest(manifest_path(workbook_path, output_dir)),
-                                  file_sha256(workbook_path), file_sha256(CONFIG_PATH), mapping_sha256(workbook_path))
+    manifest = read_manifest(manifest_path(workbook_path, output_dir))   # main.py writes this run's after the memo
+    approval, _ = approval_status(manifest, file_sha256(workbook_path), file_sha256(CONFIG_PATH),
+                                  mapping_sha256(workbook_path))
     details = analysis_details(analysis_file) if summary else None
     footer = memo_footer(data, run_date or datetime.date.today(), details["model"] if details else None,
                          memo_approval(approval), git_commit())
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    blocks = memo_blocks(data, summary)
+    blocks = memo_blocks(data, summary, changes_since_last_run(data, manifest, move_settings(config)))
     write_docx(blocks, footer, docx_path)
     write_pdf(blocks, footer, pdf_path)
     record_memo_status(workbook_path, output_dir, [docx_path.name, pdf_path.name], ai_text=summary is not None)

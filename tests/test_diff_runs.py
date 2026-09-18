@@ -236,7 +236,7 @@ def test_sections_list_flips_moves_and_gaps_in_that_order_leaving_out_empty_ones
                      flags={"Runway at current burn": "Passed"}, gaps={"flag: Rule of 40": ["Q1 2026"]})
     after = results(metrics={"nrr": metric(0.9, "90.0%")}, flags={"Runway at current burn": "Tripped"})
     assert change_sections(report(before, after), SETTINGS) == [
-        ("Flags that flipped", ["Runway at current burn: Passed to Tripped"]),
+        ("Flags that flipped", ["Runway at current burn: Tripped (was Passed)"]),
         ("Metrics that moved more than 5.0 pts (percentages) or 10.0% (other metrics)",
          ["NRR (annualized): 102.0% to 90.0% (down 12.0 pts)"]),
         ("Resolved data gaps", ["Q1 2026: Flag: Rule of 40"]),
@@ -246,6 +246,11 @@ def test_sections_list_flips_moves_and_gaps_in_that_order_leaving_out_empty_ones
 def test_a_metric_at_zero_both_runs_has_not_moved():
     # Found writing these tests: zero to zero was listed as "down from zero".
     assert moves({"net_new_arr": metric(0.0, "0")}, {"net_new_arr": metric(0.0, "0")}) == []
+
+
+def test_a_flip_reads_today_s_status_first_so_a_reason_s_colon_stays_clear():
+    assert diff_runs.flip_line("Rule of 40", "Cannot evaluate: missing input", "Tripped") == (
+        "Rule of 40: Tripped (was Cannot evaluate: missing input)")
 
 
 def test_nothing_changed_says_what_was_checked():
@@ -295,7 +300,7 @@ def test_the_command_line_prints_the_changes(tmp_path, capsys, monkeypatch):
     printed = capsys.readouterr().out.splitlines()
     assert printed[:2] == ["Northwind: " + HEADING, compared_with_text(
         {"since": "2026-06-18T09:05:41", "quarter_before": "Q2 2026", "quarter_now": "Q2 2026"})]
-    assert "Flags that flipped:" in printed and "  - Runway at current burn: Passed to Tripped" in printed
+    assert "Flags that flipped:" in printed and "  - Runway at current burn: Tripped (was Passed)" in printed
 
 
 def changes_input(workbook):
