@@ -78,7 +78,7 @@ def cell_value(actuals, metrics, reasons, column, quarter):
     value = metrics.loc[quarter, column]
     if math.isinf(value):
         return INFINITE_LABELS[column]  # compute_metrics only lets these three metrics be infinite
-    return float(value)  # plain Python float; openpyxl writes it exactly
+    return float(value)  # plain Python float; openpyxl saves 16 significant digits of it ("%.16g")
 
 
 def runway_context_value(runway, has_budget_row):
@@ -172,15 +172,22 @@ def write_metrics_sheet(sheet, actuals, metrics, reasons, config):
 FLAG_HEADERS = ["Flag", "Quarter", "Value", "Threshold", "Trips when", "Status"]
 
 
+def combo_window_text(config):
+    """The combo rule's window, from config.yaml: 'last 3 quarters'."""
+    return f"last {config['combo_lookback_quarters']} quarters"
+
+
+def combo_rule_words(config):
+    """What trips the combo rule, from config.yaml: 'NRR falls at least 1 pt and pipeline rises at every step'."""
+    return f"NRR falls at least {config['combo_min_nrr_drop'] * 100:g} pt and pipeline rises at every step"
+
+
 def flag_row(flag, actuals, metrics, reasons, config):
     """One flag as a list of cell values, in FLAG_HEADERS order."""
     status = status_label(flag)
     if flag["metric"] is None:  # the combo rule is a trend test with no single value
-        size = config["combo_lookback_quarters"]
-        drop = config["combo_min_nrr_drop"]
         return [flag["flag"], flag["quarter"], "see NRR and Pipeline on Metrics sheet",
-                f"last {size} quarters", f"NRR falls at least {drop * 100:g} pt and pipeline rises at every step",
-                status]
+                combo_window_text(config), combo_rule_words(config), status]
     value = cell_value(actuals, metrics, reasons, flag["metric"], flag["quarter"])
     return [flag["flag"], flag["quarter"], value, flag["threshold"],
             KIND_LABELS[FLAG_KINDS[flag["flag"]]], status]
