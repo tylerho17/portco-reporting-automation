@@ -149,6 +149,52 @@ def saved_analysis(tmp_path):
     return json.loads((tmp_path / "northwind_analysis.json").read_text())
 
 
+# ---------------------------------------------------------------------------
+# Reusing a saved analysis (the web page's Generate button, Task 2 of the final run)
+# ---------------------------------------------------------------------------
+
+def run_northwind_reusing(tmp_path, skip_ai=True, client=None):
+    """run_company on Northwind with reuse_saved=True, saving into tmp_path."""
+    return main.run_company(NORTHWIND, main.load_config(), skip_ai, client=client, output_dir=tmp_path,
+                            reuse_saved=True)
+
+
+def test_a_saved_analysis_of_the_same_numbers_is_reused_with_no_api_call(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary("First headline.")))
+    client = FakeClient(summary("Second headline."))
+    result = run_northwind_reusing(tmp_path, skip_ai=False, client=client)
+    assert client.calls == 0
+    assert headline_on_deck(tmp_path) == "First headline."
+    assert main.RESULT_TEXTS[result["ai"]] == "OK"
+    ai = read_manifest(manifest_path(NORTHWIND, tmp_path))["ai"]
+    assert ai["validation"] == main.AI_REUSED
+    assert ai["cost_usd"] is None and ai["input_tokens"] is None   # nothing was spent in this run
+
+
+def test_reuse_with_ai_skipped_still_puts_the_saved_text_on_the_deck(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary("First headline.")))
+    result = run_northwind_reusing(tmp_path, skip_ai=True)
+    assert headline_on_deck(tmp_path) == "First headline."
+    assert main.RESULT_TEXTS[result["ai"]] == "OK"
+
+
+def test_reuse_with_no_saved_analysis_and_ai_skipped_gives_the_placeholder(tmp_path):
+    result = run_northwind_reusing(tmp_path, skip_ai=True)
+    assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
+    assert main.RESULT_TEXTS[result["ai"]] == "OK (AI skipped)"
+
+
+def test_a_saved_analysis_of_other_numbers_is_not_reused(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary("Old headline.")))
+    path = tmp_path / "northwind_analysis.json"
+    saved = json.loads(path.read_text())
+    saved["payload"]["flags"] = []                     # same company and quarter, different facts
+    path.write_text(json.dumps(saved))
+    client = FakeClient(summary("New headline."))
+    run_northwind_reusing(tmp_path, skip_ai=False, client=client)
+    assert client.calls == 1 and headline_on_deck(tmp_path) == "New headline."
+
+
 def test_ai_that_passes_goes_on_the_deck_and_is_saved(tmp_path):
     client = FakeClient(summary())
     result = run_northwind(tmp_path, client=client)

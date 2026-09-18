@@ -34,7 +34,7 @@ from build_deck import (PLACEHOLDER_TEXT, analysis_path, collect_deck_data, flag
                         load_analysis, points_text, save_deck, threshold_text, value_text)
 from clean import clean_workbook
 from excel_output import STATUS_COLORS, save_metrics_workbook, status_label, tripped_cells
-from main import INPUT_ERRORS, OUTPUT_DIR, ai_step, api_key_problem, company_name
+from main import INPUT_ERRORS, OUTPUT_DIR, ai_step, api_key_problem, company_name, reusable_analysis
 from metrics import CANNOT_EVALUATE, METRIC_LABELS, MISSING_INPUT, TRIP, load_config
 
 PAGE_TITLE = "Board Pack Generator"
@@ -154,27 +154,6 @@ def flags_colors(data):
 # ---------------------------------------------------------------------------
 # AI commentary: reuse a saved analysis, or ask Claude
 # ---------------------------------------------------------------------------
-
-def reusable_analysis(workbook_path, saved_dir, config):
-    """The saved analysis in saved_dir if it was made from exactly these numbers and still passes, else None.
-
-    "Exactly these numbers": the facts Claude saw (the payload) must equal today's, not just the
-    company and quarter - so an edited workbook is never described by an old analysis.
-    """
-    path = analysis_path(workbook_path, saved_dir)
-    if not path.exists():
-        return None
-    try:
-        saved = json.loads(path.read_text())
-    except json.JSONDecodeError:
-        return None
-    actuals, next_budget = clean_workbook(workbook_path)
-    payload = build_payload(company_name(workbook_path), actuals, next_budget, config)
-    if not isinstance(saved, dict) or saved.get("payload") != json.loads(json.dumps(payload)):
-        return None
-    summary, _ = load_analysis(path, payload)  # the same checks the deck makes
-    return path if summary else None
-
 
 def ai_commentary(workbook_path, config, folder, include_ai, saved_dir, client):
     """(analysis file for the deck or None, a note for the page saying what happened)."""

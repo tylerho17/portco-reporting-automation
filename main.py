@@ -32,6 +32,7 @@ Run: python main.py data/northwind.xlsx
 
 import argparse
 import csv
+import json
 import os
 import sys
 import traceback
@@ -41,8 +42,8 @@ import anthropic
 from dotenv import load_dotenv
 
 from analyze import PROMPT_VERSION, AnalysisError, analyze, build_payload, payload_to_text, save_analysis
-from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, commentary_slide, deck_path, save_deck,
-                        slide_number)
+from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, commentary_slide, deck_path, load_analysis,
+                        save_deck, slide_number)
 from clean import clean_workbook
 from compare_models import run_cost
 from excel_output import save_metrics_workbook
@@ -66,7 +67,9 @@ INPUT_ERRORS = (ValueError, OSError, TextDoesNotFitError)
 AI_OK, AI_SKIPPED, AI_FAILED = "ok", "skipped", "failed"
 RESULT_TEXTS = {AI_OK: "OK", AI_SKIPPED: "OK (AI skipped)", AI_FAILED: "OK (AI failed)"}
 
-NO_KEY_MESSAGE = "ANTHROPIC_API_KEY isn't set: add it to .env, or run with --skip-ai"
+AI_REUSED = "reused a saved analysis of exactly these numbers (no API call)"   # the manifest's validation
+
+NO_KEY_MESSAGE ="ANTHROPIC_API_KEY isn't set: add it to .env, or run with --skip-ai"
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +132,45 @@ def ai_step(workbook_path, actuals, next_budget, config, output_dir, client=None
           f"{run_info['input_tokens']} in / {run_info['output_tokens']} out tokens, {run_info['seconds']}s): "
           f"{shown_path(path)}")
     return {"analysis_file": path, "run_info": run_info, "validation": "passed"}
+
+
+def reusable_analysis(workbook_path, saved_dir, config):
+    """The saved analysis in saved_dir if it was made from exactly these numbers and still passes, else None.
+
+    "Exactly these numbers": the facts Claude saw (the payload) must equal today's, not just the
+    company and quarter - so an edited workbook is never described by an old analysis.
+    """
+    path = analysis_path(workbook_path, saved_dir)
+    if not path.exists():
+        return None
+    try:
+        saved = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
+    actuals, next_budget = clean_workbook(workbook_path)
+    payload = build_payload(company_name(workbook_path), actuals, next_budget, config)
+    if not isinstance(saved, dict) or saved.get("payload") != json.loads(json.dumps(payload)):
+        return None
+    summary, _ = load_analysis(path, payload)  # the same checks the deck makes
+    return path if summary else None
+
+
+def ai_part(workbook_path, actuals, next_budget, config, output_dir, skip_ai, client, reuse_saved):
+    """(what happened to the AI step or None, the analysis file for the deck or None).
+
+    reuse_saved=True (the web page) first looks for a saved analysis of exactly these numbers: it
+    costs nothing, so it's used even when the AI step is skipped. Otherwise skip, or ask Claude.
+    """
+    saved = reusable_analysis(workbook_path, output_dir, config) if reuse_saved else None
+    if saved:
+        details = analysis_details(saved)
+        print(f"  ✓ AI commentary: {AI_REUSED} ({shown_path(saved)})")
+        return {"analysis_file": saved, "run_info": {"model": details["model"]}, "validation": AI_REUSED}, saved
+    if skip_ai:
+        print("  - AI commentary: skipped (--skip-ai)")
+        return None, None
+    ai = ai_step(workbook_path, actuals, next_budget, config, output_dir, client)
+    return ai, ai["analysis_file"]
 
 
 def deck_step(workbook_path, config, analysis_file, output_dir, draft=False):
@@ -217,10 +259,11 @@ def blank_quarters(actuals):
     return list(actuals.index[actuals.isna().any(axis=1)])
 
 
-def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_DIR, draft=False):
+def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_DIR, draft=False, reuse_saved=False):
     """Run every step for one workbook and print a line per step.
 
     Returns a result dict for the summary table. Raises if any step fails.
+    reuse_saved=True (the web page) uses a saved analysis of exactly these numbers instead of asking Claude.
     """
     actuals, next_budget = clean_workbook(workbook_path)
     budget_label = next_budget.name if next_budget is not None else "none"
@@ -246,16 +289,11 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
 
     excel_path = save_metrics_workbook(workbook_path, config, output_dir)
     print(f"  ✓ Excel: {shown_path(excel_path)}")
-    if skip_ai:
-        ai, analysis_file = None, None
-        print("  - AI commentary: skipped (--skip-ai)")
-    else:
-        ai = ai_step(workbook_path, actuals, next_budget, config, output_dir, client)
-        analysis_file = ai["analysis_file"]
+    ai, analysis_file = ai_part(workbook_path, actuals, next_budget, config, output_dir, skip_ai, client, reuse_saved)
     why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir, draft)
     memo = memo_step(workbook_path, config, analysis_file, output_dir)
     manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo)
-    result["ai"] = ai_status(skip_ai, why_unavailable)
+    result["ai"] = ai_status(ai is None, why_unavailable)   # a reused analysis isn't "skipped"
     result["deck_status"] = manifest["deck"]["status"]
     return result
 
