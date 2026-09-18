@@ -12,6 +12,8 @@ Run from the project folder:  python -m pytest -q
 """
 
 import sys
+import zipfile
+from pathlib import Path
 from types import SimpleNamespace
 
 import anthropic
@@ -27,6 +29,7 @@ from clean import clean_workbook
 from run_log import error_text
 from test_bad_inputs import SHEET, drop_column, error_from, good_table, write_workbook
 
+NORTHWIND = Path(__file__).parent.parent / "data" / "northwind.xlsx"
 API_REQUEST = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
 
 
@@ -54,6 +57,16 @@ def test_a_file_that_is_not_an_excel_workbook_says_how_to_fix_it(tmp_path, conte
         clean_workbook(path)
     assert str(caught.value) == ("notes.xlsx isn't a readable Excel workbook: open it in Excel, save it as an "
                                  "Excel Workbook (.xlsx), then run again")
+
+
+def test_a_powerpoint_file_renamed_xlsx_gets_the_same_words(tmp_path):
+    # Added after a planted bug escaped: every .pptx is a real zip too, so "is it a zip?" isn't enough.
+    path = tmp_path / "deck.xlsx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("ppt/presentation.xml", "<presentation/>")
+    with pytest.raises(ValueError) as caught:
+        clean_workbook(path)
+    assert str(caught.value).startswith("deck.xlsx isn't a readable Excel workbook: open it in Excel")
 
 
 def test_no_kpi_tab_lists_the_tabs_in_plain_words_and_says_what_to_add(tmp_path):
@@ -262,6 +275,15 @@ def test_a_missing_template_says_how_to_build_it(tmp_path, monkeypatch):
         build_deck.open_template()
     assert str(caught.value) == ("The slide template base.pptx is missing: build it with python make_template.py, "
                                  "then run again")
+
+
+def test_a_batch_with_no_template_says_how_to_build_it(tmp_path, monkeypatch, capsys):
+    # Added after a planted bug escaped: the deck step must open the template through open_template too.
+    build_deck.content_area()   # measured from the real template first, so only the deck step opens it
+    monkeypatch.setattr(build_deck, "TEMPLATE_PATH", tmp_path / "base.pptx")
+    [result] = main.run_batch([NORTHWIND], main.load_config(), True, output_dir=tmp_path / "out")
+    assert result["error"] == ("The slide template base.pptx is missing: build it with python make_template.py, "
+                               "then run again")
 
 
 def test_a_template_layout_without_its_text_box_names_the_layout(monkeypatch):
