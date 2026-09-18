@@ -505,7 +505,7 @@ def test_deck_path():
 # No number typed by hand
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("file_name", ["build_deck.py", "charts.py"])
+@pytest.mark.parametrize("file_name", ["build_deck.py", "charts.py", "memo.py"])
 def test_no_digit_in_any_text_written_in_the_code(file_name):
     # Every number a reader sees comes from metrics, flags, config or the analysis - never from a
     # string typed into the code. (Layout sizes like 0.2 inches are code numbers, not text.)
