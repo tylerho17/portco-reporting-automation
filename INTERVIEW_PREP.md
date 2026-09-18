@@ -346,7 +346,7 @@ Four layers:
 1. The fake data's answer key is checked to tie out: ARR and cash roll forward.
 2. The `check_*.py` scripts run the real workbooks end to end and compare with hand formulas typed
    like Excel (`3900 / (1850 + 580 - 260 - 510)`), written independently of the code.
-3. Over 500 pytest unit tests check each function, including every edge case, with the hand math in
+3. Over 1,300 pytest unit tests check each function, including every edge case, with the hand math in
    comments. `check_deck.py` also opens each saved deck and checks every number on slide 1 against
    the metrics workbook.
 4. The tests were tested: the code was broken on purpose (in throwaway copies) to confirm the tests
@@ -1058,6 +1058,43 @@ deck undermines the rest.
   away. That's the same habit as logging every break in LEARNINGS.md.
 - **Offer to show it.** "I can open the manifest and show you" beats guessing.
 
+**Know which kind of detail you've lost.** There are three, and each has its own honest answer:
+
+- **A number** (a wait time, a count, a default). Give the shape and the file: "The waits double from
+  a few seconds and never go past a minute. The exact values are constants at the top of
+  resilience.py." Never round a guess into a precise-sounding figure.
+- **A name** (a function, a test, a setting). Describe what it does and where it lives: "There's one
+  function that decides whether an approval still holds. It's in provenance.py, and it compares three
+  hashes." The name is the least important part.
+- **A mechanism** (how exactly something works). Go back to the principle it follows, then say what
+  you'd check: "It follows the stop-don't-guess rule, so I'm confident it stops rather than reads it.
+  How it detects that case I'd want to look at in clean.py before I told you."
+
+**Four situations the deep dives make likely:**
+
+- **"Did you build that?" when you only designed it.** Say so plainly. Scoring the AI commentary
+  offline (Q47), a model call for column mapping (Q42), an output folder per run and a SharePoint
+  trigger are designs or next steps, not code. "That's designed, not built; the design is in the
+  final report" is a strong answer. Claiming it's built, and then being asked to show it, is not.
+- **"How many planted bugs?"** Every task in the final run planted bugs in a throwaway copy to prove
+  its tests notice. You won't remember every count. Remember the pattern and the exceptions: nearly
+  all were caught; each task's section in FINAL_REPORT.md has the table; and the survivors had a
+  reason, like the timeout (Q50), where two guards protect one case so no test can show either one
+  alone doing the work.
+- **A decision you didn't make yourself.** Many small choices were made by Claude Code and flagged in
+  each report's "Decisions you didn't specify". Own the review, not the authorship: "That was flagged
+  for me, I checked it, and I kept it because..." If you can't remember why, say you'd reread the
+  reasoning, which is written next to it.
+- **A question about scale you haven't measured.** Workers against the real rate limit, review time
+  per deck, the page with 275 rows: none is measured. Say "unmeasured", give the plan to measure it,
+  and give any number as an assumption ("if a read takes 10 minutes..."), never as a finding.
+
+**Useful sentences, in your own words:**
+- "I don't want to give you a wrong number. It's in [file], and I can show you."
+- "What I do know is the rule it follows: [rule]. The detail of how is in [file]."
+- "I'd have to check that. It's exactly the kind of thing I'd look up rather than guess in a board pack."
+- "Let me correct what I said a moment ago: [correction]."
+
 **Numbers worth knowing cold** (from Northwind, Q2 2026, and the live runs):
 
 | What | Number | Where it's from |
@@ -1070,4 +1107,20 @@ deck undermines the rest.
 | 275 companies per quarter | about $25 ($12.81 before) | README.md "Cost" |
 | API time per company | about 70 s, so 5 hours for 275 one at a time | README.md "Cost" |
 | Blind model scores | Sonnet 4.0, Haiku 2.0 (rule: Haiku needs 4.0) | README.md "Model comparison" |
-| Unit tests | over 500 | `python -m pytest -q` |
+| Unit tests | 1,384 (say "over 1,300") | `python -m pytest -q` |
+
+**And for the deep dives** (roughly is fine; the file is where to check):
+
+| What | Number | Where it's from |
+|---|---|---|
+| Renamed headers proposed right | 29 of 29, across the three companies | `tests/test_mapping.py` |
+| Proposal floor, and the cap | none below 40%; never above 99%, and even 99% needs confirming | `mapping.py` constants |
+| Eval set | 12 companies, 12 of 12 match; 24 of 24 planted bugs caught | `eval/run_eval.py`; FINAL_REPORT.md Task 6 |
+| Rate-limit waits | 5, 10, 20, 40 s (or what the API asks), no single wait over 60 s, then give up | `resilience.py` constants |
+| Cost ceiling overshoot | at most what the companies already running spend, about 9 cents each | `main.start_or_settle` |
+| Goldens | 9 files (3 companies × deck, memo, metrics); caught 17 of 17 look-only bugs, number checks 2 | FINAL_REPORT.md Task 8 |
+| Approval is voided by | a changed workbook, config.yaml or column mapping (three hashes) | `provenance.approval_status` |
+| Diff defaults | more than 5 points for percentages, more than 10% for everything else | `diff_runs.py` constants |
+| Northwind, Q1 to Q2 | 5 flags flipped, 8 metrics moved, 1 gap closed | `check_diff.py` |
+| Rollup | 7 companies per ranking slide; Fernhollow first, worst flag runway 6.0 months | `rollup.py`, `check_rollup.py` |
+| Exports | 152 metric values per company (19 × 8 quarters), 16 significant digits | `check_export.py` |
