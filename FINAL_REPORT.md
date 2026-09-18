@@ -1275,3 +1275,111 @@ same bug planted again now fails it.
 - **No history beyond one run.** The manifest keeps this run and the one it compared with, not every
   quarter. "Since two quarters ago" would need a history file per company.
 - **Seen on the page only through Streamlit's test runner**, not in a browser.
+
+## Task 11: exports (export.py, check_export.py, the company page's Export)
+
+### What I built
+
+- **`export.py`** writes four files per company into `output/` (or `--output-dir`), from the same
+  numbers as the deck and the metrics workbook (`build_deck.collect_deck_data`):
+  - `<company>_metrics.csv`: one row per quarter and metric (152 for 8 quarters): company, quarter,
+    metric, label, unit (`$K`, `ratio`, `months`, `multiple`), value, text, status, flag_tripped.
+  - `<company>_flags.csv`: the 9 flags for the latest quarter: value, text, threshold, trips when,
+    status, reason, and the workbook's status words.
+  - `<company>_export.json`: both, plus the flag count, runway at next quarter's budgeted burn, the data
+    gaps, and the SHA-256 hashes of the workbook, `config.yaml` and column mapping.
+  - `<company>_email.html`: slide 1's key metrics table in the status colors, the flag count, runway at
+    budget, the data gaps and a note (fictional data, computed in Python, no AI text). Open in a
+    browser, select all, copy, paste into Outlook.
+  `python export.py data/northwind.xlsx`, or `--all` (a workbook that can't be read is reported and the
+  rest carry on; exit code 1).
+- **The company page** has an **Export** popover with four download buttons: Metrics (CSV), Flags (CSV),
+  Metrics and flags (JSON), Email summary (HTML). Each file is built when clicked, from today's workbook,
+  never on a redraw and never into `output/`; the popover is off when the workbook can't be read.
+- **`check_export.py`**: for each company, in a temporary folder, saves the metrics workbook and runs
+  `python export.py`, reads everything back from disk as another tool would, and compares: every one of
+  the 152 metric values (CSV and JSON) with its workbook cell, exactly; each text with the cell as Excel
+  shows it (worked out from the cell's own number format, not export.py's code); units against number
+  formats; `flag_tripped` exactly where the cell is red and "missing input" exactly where it's gray; the
+  flags against the Flags sheet and its colors; runway at budget, data gaps and source hashes; the latest
+  values against the hand formulas in check_companies.py; the email's table, flag count, runway line
+  and gaps against the workbook; the email against every Outlook rule; the page's bytes against the
+  command line's files. No API.
+- `excel_output.combo_window_text` and `combo_rule_words`: the combo rule's words, moved out of
+  `flag_row` so the exports and the workbook share them (the workbook is unchanged; goldens pass).
+- **Tests:** `tests/test_export.py` (48, written first) and 4 in `test_app.py`. 987 tests in all, passing.
+
+### The main promise, and how it's proved
+
+"The exports carry the same values as the metrics workbook" is tested through the files: the workbook
+saved by excel_output.py and read back by openpyxl, the exports saved by export.py and read back by
+the csv and json modules. Equality is exact, not "close". **Planted bugs:** 39, one at a time, in
+temporary copies of the project, plus an unchanged control:
+
+| Caught by | Bugs |
+|---|---|
+| Both the unit tests and check_export.py (29) | values with 17 digits; ∞ called a number; every row's text from the latest quarter; wrong units; flag_tripped always false; the last quarter left out; every threshold NRR's; every flag "below"; the combo rule without its window; a flag's reason dropped; CSV True/False; CSV rounded to 6 digits; NaN for no number; a gap's key for its label; runway at budget for the prior quarter; passed counting tripped flags; the JSON hashing the wrong file; a run time in the JSON; labels without "(annualized)"; a byte order mark; the email's first column colored instead of the status; cells without a font; fills without `bgcolor`; a style sheet; the combo row pointing at slide 3; 800 px wide; runway at current burn instead of budget; no data gaps listed; no charset |
+| The unit tests only (10) | the email's title not escaped; `--all` stopping at a bad workbook; exit 0 after a failure; the page building exports on every redraw; Export on for an unreadable workbook; no email button; the page reading exports from `output/`; and three that weaken check_export.py itself (numbers compared to 9 digits, classes allowed, extra rows not reported) |
+| Nothing | none (after two fixes, below) |
+
+The control passed both. **At first one bug passed everything** (check_export.py not reporting an
+exported row the workbook lacks: no test ever fed it one) **and one passed check_export.py** (the
+JSON hashing the wrong file: the check never looked at hashes). I added a test for the first and a hash
+check to check_export.py; both, planted again, are caught.
+
+### Decisions you didn't specify
+
+1. **Exports are made on demand, not by `main.py`.** `python export.py` and the page's Export button.
+   Adding four files to every batch run would touch `--resume`'s file list, the manifests and the
+   goldens, for files most runs don't need. Downstream tools can check the JSON's hashes to see which
+   inputs a file reflects. **Please check you agree;** wiring it into `main.py` is a small change.
+2. **A long CSV** (one row per quarter and metric), not the workbook's wide one: it's what a database or
+   Power BI reads without reshaping, and two companies' files stack. Flags get their own CSV, because
+   their columns (threshold, trips when, status) differ.
+3. **No number is empty (CSV) or `null` (JSON)**, never 0 or NaN, with a `status` column: the deck's
+   three reasons plus `infinite`. `text` keeps the deck's words ("∞ (ARR shrank)").
+4. **16 significant digits, as the workbook stores them** (`as_stored`), not Python's 17. Without it a
+   tool comparing the CSV with the workbook finds 36 of Northwind's 152 values "different". The 17th
+   digit is float noise.
+5. **Ratios as decimals** (0.9705540488182874), with the deck's text beside them ("97.1%"): CLAUDE.md's
+   rule that % formatting happens only at output, and a downstream tool wants the number.
+6. **The email has no AI text.** The AI commentary is "review before use"; an email is the easiest place
+   for unreviewed text to escape. It's the deck's slide 1 table (with the combo rule's own words in
+   place of "rule on Risks and flags slide"), the flag count, runway at budget and data gaps.
+7. **No run time in any file**, so the same workbook and thresholds give byte-for-byte the same files,
+   and a tool can tell a real change from a re-run.
+8. **"Outlook-safe" means rules I can test**: inline styles only, a font on every cell and paragraph,
+   tables with width, cellpadding, cellspacing and border attributes, fills also as `bgcolor`, 6-digit
+   hex colors, 640 px wide, UTF-8 declared, no images, scripts, style sheets or classes. These are the
+   known ways Word's engine (which Outlook uses) mangles HTML; they are not a paste into real Outlook.
+9. **UTF-8 without a byte order mark.** Tools read it cleanly; Excel on a Mac opening the CSV directly
+   may show "∞" as junk. The metrics workbook is the file for Excel.
+10. **Export only on the company page**, not in the portfolio row's Download popover, which already
+    holds three buttons; `python export.py --all` covers the whole portfolio.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **The workbook doesn't hold Python's numbers exactly.** The main test, written first, failed on 36
+   of 152 values: openpyxl saves `%.16g`. excel_output.py's comment claimed "openpyxl writes it
+   exactly". Fixed as decision 4, and the comment corrected.
+2. **The theme test** found two hex colors in check_export.py's docstrings; now named by constant.
+3. **The planted-bug run**: two gaps, above, each closed with a test or check.
+4. **Refused commands**: a Python heredoc and a `cp` from `/private/tmp`. Edits went through the Edit
+   tool; the planted-bug script is in `output/task11_plant_bugs.py` (git-ignored, with its log).
+5. My first commit message said test_export.py had 48 tests when it had 47; with the test added after
+   the planted-bug run it has 48.
+
+### Unresolved
+
+- **Not pasted into real Outlook.** The email follows every rule check_export.py tests, but I have no
+  Outlook here. Worth one paste (Outlook for Mac and the web) before telling anyone it works; the
+  README has a screenshot placeholder for it.
+- **The page's six buttons in a row are unseen in a browser.** Generate, four downloads and Export now
+  share the width that held five; a label may wrap. Seen only through Streamlit's test runner.
+- **CLAUDE.md doesn't list `export.py` or `check_export.py`.** You said not to edit it. Suggested
+  Architecture line: "export.py: a company's metrics and flags as CSV and JSON (16 significant digits,
+  as the metrics workbook stores them; no number is empty or null with its reason) and an Outlook-safe
+  HTML email summary; `python export.py <workbook> | --all`; the company page's Export", and add
+  `check_export.py` to the check scripts line.
+- **No combined portfolio file.** `--all` writes one set per company; a tool wanting one table stacks
+  the CSVs (same columns, a company column in each).
