@@ -48,6 +48,16 @@ python main.py --all --workers 4       # 4 companies side by side (default 1)
 
 A rate-limited API call waits and tries again on its own (what the API asks, else 5, 10, 20, 40 s). Every skip, timeout and stop is in the company's manifest, the summary table and `output/batch_manifest.json`.
 
+To look before building (each runs on its own, and neither builds or writes anything):
+
+```bash
+python main.py --list-companies        # every company in data/: latest quarter, flags, last run, deck status
+python main.py --version               # which code (the commit every deck footer shows), model and prompt
+python main.py --help                  # every option, grouped, with examples and the exit codes below
+```
+
+`--list-companies` prints the web page's portfolio table in the page's own words: one row per company with its workbook, latest quarter ("Q2 2026"), flags ("7 of 9 flags tripped, 1 cannot evaluate"), when it was last built, and its deck status (not generated yet, not reviewed, approved by NAME, or out of date). A workbook that can't be read is still listed, with clean.py's message saying why. It exits 1 only when `data/` has no workbooks.
+
 For each company it prints a ✓ line per step, then a summary table:
 
 ```
@@ -73,6 +83,15 @@ Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK
 | `<company>_metrics.csv`, `_flags.csv`, `_export.json`, `_email.html` | From `python export.py` (below), not `main.py`: the metrics and flags for other tools, and a summary to paste into an email |
 
 Results: `OK`, `OK (AI failed)` (deck built with the placeholder), `OK (AI skipped)`, or `FAILED: ...` with the reason. One company failing never stops the batch; the exit code is 1 if any company failed.
+
+**Exit codes.** What `python main.py` ends with, so a scheduled job or another script can tell what happened (`echo $?` shows it after a run). `--help` prints the same table; `tests/test_cli.py` fails if the two ever differ.
+
+| Code | When |
+|---|---|
+| `0` | Done: every company was built (OK, OK (AI skipped) or OK (AI failed), whose deck was built with the placeholder) or skipped by --resume. Also after --version, --list-companies and --help. |
+| `1` | Something needs fixing, and the printout says what: config.yaml has a problem, data/ has no workbooks, the API key isn't set, or a company failed, timed out or was stopped by --max-cost. An unexpected error (a bug) also ends with 1, after a Python traceback. |
+| `2` | The command itself is wrong, so nothing ran: an unknown option, a bad value (--workers 0), a workbook and --all together or neither, or --version or --list-companies with anything else. |
+| `130` | Stopped with Ctrl+C. Companies that finished are in output/; any still being built keep their earlier files, and no batch summary is saved. |
 
 **Other commands.**
 

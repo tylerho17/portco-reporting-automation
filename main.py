@@ -39,18 +39,26 @@ output/batch_manifest.json (with the options and the batch's total AI spend).
 Each company is built in a private folder and moved into output/ only when it succeeds, so a
 company that fails or times out never leaves half-replaced files.
 
+Information (Task 14; each runs on its own, and neither builds anything):
+- --version         which code (the commit every deck footer shows), model and prompt this is
+- --list-companies  every company in data/ as the web page's portfolio table shows it
+- --help            every option, examples, and what each exit code means (EXIT_CODES)
+
 Run: python main.py data/northwind.xlsx
      python main.py --all --skip-ai
      python main.py --all --draft
      python main.py --all --resume --max-cost 5 --timeout 300 --workers 4
+     python main.py --list-companies
 """
 
 import argparse
 import csv
 import json
 import os
+import platform
 import queue
 import sys
+import textwrap
 import threading
 import time
 import traceback
@@ -60,9 +68,9 @@ from types import SimpleNamespace
 import anthropic
 from dotenv import load_dotenv
 
-from analyze import PROMPT_VERSION, AnalysisError, analyze, build_payload, payload_to_text, save_analysis
+from analyze import DEFAULT_MODEL, PROMPT_VERSION, AnalysisError, analyze, build_payload, payload_to_text, save_analysis
 from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, collect_deck_data, commentary_slide,
-                        deck_path, load_analysis, save_deck, slide_number)
+                        commit_text, deck_path, load_analysis, save_deck, slide_number)
 from clean import clean_workbook
 from compare_models import run_cost
 from config_schema import ConfigError
@@ -99,6 +107,25 @@ RESULT_TEXTS = {AI_OK: "OK", AI_SKIPPED: "OK (AI skipped)", AI_FAILED: "OK (AI f
 AI_REUSED = "reused a saved analysis of exactly these numbers (no API call)"   # the manifest's validation
 
 NO_KEY_MESSAGE ="ANTHROPIC_API_KEY isn't set: add it to .env, or run with --skip-ai"
+
+# Every exit code main.py ends with, and when. --help prints these, and README's table must say the
+# same words (tests/test_cli.py checks both).
+EXIT_OK, EXIT_PROBLEM, EXIT_USAGE, EXIT_STOPPED = 0, 1, 2, 130
+EXIT_CODES = {
+    EXIT_OK: "Done: every company was built (OK, OK (AI skipped) or OK (AI failed), whose deck was built with "
+             "the placeholder) or skipped by --resume. Also after --version, --list-companies and --help.",
+    EXIT_PROBLEM: "Something needs fixing, and the printout says what: config.yaml has a problem, data/ has no "
+                  "workbooks, the API key isn't set, or a company failed, timed out or was stopped by --max-cost. "
+                  "An unexpected error (a bug) also ends with 1, after a Python traceback.",
+    EXIT_USAGE: "The command itself is wrong, so nothing ran: an unknown option, a bad value (--workers 0), a "
+                "workbook and --all together or neither, or --version or --list-companies with anything else.",
+    EXIT_STOPPED: "Stopped with Ctrl+C. Companies that finished are in output/; any still being built keep their "
+                  "earlier files, and no batch summary is saved.",
+}
+STOPPED_MESSAGE = ("Stopped (Ctrl+C). Companies that finished are in output/; any still being built keep their "
+                   "earlier files. No batch summary was saved.")
+
+PRODUCT_NAME = "Board Pack Generator"
 
 
 # ---------------------------------------------------------------------------
@@ -617,14 +644,19 @@ def outcome_counts_text(results):
     return ", ".join(counts) or None
 
 
+def aligned_lines(headers, rows):
+    """A table as lines of text: the headers, a dashed line, then the rows, each column padded to line up."""
+    widths = [max(len(row[i]) for row in [headers] + rows) for i in range(len(headers))]
+    return ["  ".join(text.ljust(width) for text, width in zip(row, widths)).rstrip()
+            for row in [headers, ["-" * width for width in widths]] + rows]
+
+
 def print_summary(results):
     """Print the summary table with columns padded to line up."""
     headers = ["Company", "Flags tripped", "Data gaps", "Result", "Notes"]
-    rows = summary_rows(results)
-    widths = [max(len(row[i]) for row in [headers] + rows) for i in range(len(headers))]
     print("\n=== Summary ===")
-    for row in [headers, ["-" * width for width in widths]] + rows:
-        print("  ".join(text.ljust(width) for text, width in zip(row, widths)).rstrip())
+    for line in aligned_lines(headers, summary_rows(results)):
+        print(line)
     failed = sum(1 for result in results if result["error"])
     print(f"\n{len(results) - failed} of {len(results)} companies succeeded")
     if outcome_counts_text(results):
@@ -730,42 +762,162 @@ def at_least_one(text):
     return value
 
 
-def parse_args(argv=None):
-    """Exactly one of: a workbook path, or --all. Plus the options."""
-    parser = argparse.ArgumentParser(description="Build board-pack outputs for one or all KPI workbooks.")
-    parser.add_argument("workbook", nargs="?", help="path to one KPI workbook, e.g. data/northwind.xlsx")
-    parser.add_argument("--all", action="store_true", help="run every .xlsx workbook in data/")
-    parser.add_argument("--skip-ai", action="store_true", help="don't call Claude; decks show the AI placeholder")
-    parser.add_argument("--draft", action="store_true", help="stamp DRAFT - NOT REVIEWED on decks nobody has approved")
-    parser.add_argument("--resume", action="store_true",
-                        help="skip companies whose outputs were built from today's workbook and config.yaml")
-    parser.add_argument("--max-cost", type=more_than_zero, metavar="DOLLARS",
-                        help="start no more companies once the AI spend reaches this many dollars")
-    parser.add_argument("--timeout", type=more_than_zero, metavar="SECONDS",
-                        help="give up on a company after this many seconds (default: no limit)")
-    parser.add_argument("--workers", type=at_least_one, default=1,
-                        help="how many companies to run side by side (default: 1)")
-    args = parser.parse_args(argv)
-    if bool(args.workbook) == args.all:  # both given, or neither
+DESCRIPTION = ("Turn KPI workbooks (.xlsx) into board-pack outputs. For each company: a metrics workbook, AI "
+               "commentary, a 4-slide deck, a board memo and a manifest, all in output/. Python computes every "
+               "number; Claude only writes the commentary, and a person approves the deck with approve.py.")
+
+# (command, what it does): shown under Examples in --help. Each must be a valid command (tests/test_cli.py).
+EXAMPLES = [
+    ("python main.py data/northwind.xlsx", "one company"),
+    ("python main.py --all", "every workbook in data/"),
+    ("python main.py --all --skip-ai", "no API call and no key needed: decks say AI summary unavailable"),
+    ("python main.py --all --draft", "also stamp DRAFT - NOT REVIEWED on every deck nobody has approved"),
+    ("python main.py --all --resume --max-cost 5", "a long batch: skip what's up to date, stop spending at $5"),
+    ("python main.py --list-companies", "which companies are in data/, and each deck's status"),
+    ("python main.py --version", "which code, model and prompt this is"),
+]
+
+ON_ITS_OWN = ("version", "list_companies")   # options that answer a question and never build anything
+
+# The two ways to call it, instead of argparse's one long line of every option.
+USAGE = ("python main.py (WORKBOOK | --all) [--skip-ai] [--draft] [--resume] [--max-cost DOLLARS]\n"
+         "                      [--timeout SECONDS] [--workers WORKERS]\n"
+         "       python main.py --list-companies | --version | --help")
+
+
+def help_epilog():
+    """The end of --help: the examples, then every exit code, wrapped to fit a terminal."""
+    width = max(len(command) for command, _ in EXAMPLES)
+    lines = ["Examples:"] + [f"  {command.ljust(width)}  {meaning}" for command, meaning in EXAMPLES]
+    lines += ["", "Exit codes:"]
+    for code, meaning in EXIT_CODES.items():
+        lines += textwrap.wrap(meaning, 100, initial_indent=f"  {code:<5}", subsequent_indent=" " * 7,
+                               break_on_hyphens=False, break_long_words=False)   # keeps "--max-cost" whole
+    return "\n".join(lines)
+
+
+def build_parser():
+    """The command line: what to build, AI and review, long batches, and information. Options are grouped in --help."""
+    parser = argparse.ArgumentParser(prog="python main.py", usage=USAGE, description=textwrap.fill(DESCRIPTION, 100),
+                                     epilog=help_epilog(), formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     add_help=False)
+    build = parser.add_argument_group("what to build (give one)")
+    build.add_argument("workbook", nargs="?", help="path to one KPI workbook, e.g. data/northwind.xlsx")
+    build.add_argument("--all", action="store_true", help="every .xlsx workbook in data/")
+    review = parser.add_argument_group("AI and review")
+    review.add_argument("--skip-ai", action="store_true", help="don't call Claude; decks show the AI placeholder")
+    review.add_argument("--draft", action="store_true", help="stamp DRAFT - NOT REVIEWED on decks nobody has approved")
+    batch = parser.add_argument_group("long batches")
+    batch.add_argument("--resume", action="store_true",
+                       help="skip companies whose outputs were built from today's workbook and config.yaml")
+    batch.add_argument("--max-cost", type=more_than_zero, metavar="DOLLARS",
+                       help="start no more companies once the AI spend reaches this many dollars")
+    batch.add_argument("--timeout", type=more_than_zero, metavar="SECONDS",
+                       help="give up on a company after this many seconds (default: no limit)")
+    batch.add_argument("--workers", type=at_least_one, default=1,
+                       help="how many companies to run side by side (default: 1)")
+    info = parser.add_argument_group("information (each runs on its own and builds nothing)")
+    info.add_argument("--list-companies", action="store_true",
+                      help="every company in data/: latest quarter, flags, last run and deck status")
+    info.add_argument("--version", action="store_true", help="which code, model and prompt this is")
+    info.add_argument("-h", "--help", action="help", help="show this help and exit")
+    return parser
+
+
+def option_name(dest):
+    """'list_companies' -> '--list-companies'; 'workbook' -> 'a workbook path'."""
+    return "a workbook path" if dest == "workbook" else "--" + dest.replace("_", "-")
+
+
+def check_combination(parser, args):
+    """Stop with a usage error (exit 2) on a combination argparse can't catch by itself.
+
+    --version and --list-companies run on their own: an option beside them would be silently ignored.
+    Otherwise exactly one of a workbook path or --all.
+    """
+    given = [dest for dest, value in vars(args).items() if value != parser.get_default(dest)]
+    for alone in ON_ITS_OWN:
+        if alone in given and len(given) > 1:
+            others = ", ".join(option_name(dest) for dest in given if dest != alone)
+            parser.error(f"{option_name(alone)} runs on its own: leave out {others}")
+    if not any(alone in given for alone in ON_ITS_OWN) and bool(args.workbook) == args.all:  # both, or neither
         parser.error("give one workbook path, or --all (not both)")
+
+
+def parse_args(argv=None):
+    """The command line, checked: a usage error prints what's wrong and exits 2 (EXIT_USAGE)."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    check_combination(parser, args)
     return args
 
 
+def version_text():
+    """Which code this is (the commit every deck footer shows), the model and prompt, and the Python version."""
+    return (f"{PRODUCT_NAME}, code {commit_text()} (the commit every deck footer shows; a * means uncommitted "
+            f"changes)\nAI commentary: {DEFAULT_MODEL}, prompt {PROMPT_VERSION}\nPython {platform.python_version()}")
+
+
+def list_companies(config, data_dir=DATA_DIR, output_dir=OUTPUT_DIR):
+    """Print every company in data_dir as the web page's portfolio table shows it. Builds and writes nothing.
+
+    Returns EXIT_OK, or EXIT_PROBLEM when there are no workbooks. A workbook that can't be read is
+    still listed, with clean.py's message saying why.
+    """
+    import portfolio   # here, not at the top: portfolio.py imports this file
+    rows = portfolio.portfolio_rows(config, data_dir, output_dir)
+    if not rows:
+        print(f"No .xlsx workbooks found in {data_dir}")
+        return EXIT_PROBLEM
+    headers = ["Company", "Workbook", "Latest quarter", "Flags", "Last run", "Deck status"]
+    table = [[row["company"], str(shown_path(row["workbook"])), row["latest"], row["flags"], row["last_run"],
+              portfolio.plain(row["status"])] for row in rows]
+    count = "1 company" if len(rows) == 1 else f"{len(rows)} companies"
+    print(f"{count} in {shown_path(data_dir)}/:\n")
+    for line in aligned_lines(headers, table):
+        print(line)
+    for row in rows:
+        if row["problem"]:
+            print(f"\n{row['company']} can't be read:\n  " + portfolio.plain(row["problem"]).replace("\n", "\n  "))
+    print("\nBuild every one: python main.py --all    Build one: python main.py data/<file>.xlsx")
+    return EXIT_OK
+
+
 def main(argv=None):
+    """Run the command line and return its exit code (EXIT_CODES). Ctrl+C ends in plain words, not a traceback."""
     args = parse_args(argv)
+    try:
+        return run_command(args)
+    except KeyboardInterrupt:
+        print("\n" + STOPPED_MESSAGE)
+        return EXIT_STOPPED
+
+
+def run_command(args):
+    """--version, else check config.yaml, then --list-companies or the batch."""
+    if args.version:
+        print(version_text())
+        return EXIT_OK
     try:
         config = load_config()   # checked first: a bad setting stops the run before any company, in plain words
     except ConfigError as error:
         print(error)
-        return 1
-    paths = find_workbooks() if args.all else [Path(args.workbook)]
+        return EXIT_PROBLEM
+    if args.list_companies:
+        return list_companies(config, DATA_DIR, OUTPUT_DIR)
+    return run_workbooks(args, config)
+
+
+def run_workbooks(args, config):
+    """Build one workbook or every one in data/, print the summary, and return the exit code."""
+    paths = find_workbooks(DATA_DIR) if args.all else [Path(args.workbook)]
     if not paths:
         print(f"No .xlsx workbooks found in {DATA_DIR}")
-        return 1
+        return EXIT_PROBLEM
     problem = None if args.skip_ai else api_key_problem()
     if problem:  # stop before any company runs, rather than fail the AI step for every one
         print(problem)
-        return 1
+        return EXIT_PROBLEM
     options = {"resume": args.resume, "max_cost": args.max_cost, "timeout": args.timeout, "workers": args.workers,
                "skip_ai": args.skip_ai, "draft": args.draft}
     spend = SpendMeter()
@@ -779,7 +931,7 @@ def main(argv=None):
             print(warning)
     print(f"Summary saved: {shown_path(write_summary_csv(results))}")
     print(f"Batch manifest saved: {shown_path(save_batch_manifest(results, options, spend.total))}")
-    return 1 if any(result["error"] for result in results) else 0   # failed, timed out or stopped
+    return EXIT_PROBLEM if any(result["error"] for result in results) else EXIT_OK   # failed, timed out or stopped
 
 
 if __name__ == "__main__":
