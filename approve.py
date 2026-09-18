@@ -38,6 +38,15 @@ def reviewer_name(given, folder=PROJECT_DIR):
     return name
 
 
+def reviewed_documents(manifest):
+    """What this approval covers: the deck, and the memo if this run built one.
+
+    An approval recorded before memos existed has no list, and memo.py then treats the memo as not
+    reviewed: nobody can have read a memo that wasn't there.
+    """
+    return ["deck", "memo"] if manifest.get("memo") else ["deck"]
+
+
 def approve(company, reviewer=None, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, config_path=CONFIG_PATH, now=None):
     """Write the approval into the company's manifest and return the saved manifest.
 
@@ -60,7 +69,8 @@ def approve(company, reviewer=None, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, co
         raise ValueError("config.yaml has changed since this deck was built - run main.py again before approving")
 
     manifest["approval"] = {"reviewer": name, "approved_at": now or timestamp(),
-                            "input_sha256": input_hash, "config_sha256": config_hash}
+                            "input_sha256": input_hash, "config_sha256": config_hash,
+                            "documents": reviewed_documents(manifest)}
     manifest["deck"]["status"] = deck_status(approval_status(manifest, input_hash, config_hash)[0])
     save_manifest(path, manifest)
     return manifest
@@ -81,6 +91,8 @@ def main(argv=None, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, config_path=CONFIG
     approval = manifest["approval"]
     print(f"Approved {manifest['company']} by {approval['reviewer']} on {approval['approved_at']}")
     print(f"Rebuild the deck so its footer says reviewed: python build_deck.py data/{args.company}.xlsx")
+    if "memo" in approval["documents"]:
+        print(f"and the memo: python memo.py data/{args.company}.xlsx")
     return 0
 
 

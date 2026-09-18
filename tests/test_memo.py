@@ -17,9 +17,10 @@ from pypdf import PdfReader
 from analyze import BoardSummary, build_payload
 from build_deck import collect_deck_data
 from clean import STANDARD_COLUMNS
-from memo import (AI_DRAFTED_LINE, MEMO_UNAVAILABLE, block_texts, memo_analysis, memo_blocks, memo_footer,
-                  memo_paths, save_memo, unlisted_numbers, workbook_numbers, write_docx, write_pdf)
-from provenance import manifest_path, read_manifest, save_manifest
+from memo import (AI_DRAFTED_LINE, MEMO_UNAVAILABLE, block_texts, memo_analysis, memo_approval, memo_blocks,
+                  memo_footer, memo_paths, save_memo, unlisted_numbers, workbook_numbers, write_docx, write_pdf)
+from metrics import CONFIG_PATH
+from provenance import file_sha256, manifest_path, read_manifest, save_manifest
 
 NAN = math.nan
 RUN_DATE = datetime.date(2026, 9, 17)
@@ -329,6 +330,27 @@ def test_a_memo_rebuilt_on_its_own_updates_an_existing_manifest(tmp_path, monkey
     save_memo(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
     assert read_manifest(manifest_path(workbook, tmp_path))["memo"] == {
         "files": ["testco_board_memo.docx", "testco_board_memo.pdf"], "ai_text": False}
+
+
+def test_the_memo_counts_as_reviewed_only_if_the_approval_covers_it():
+    # An approval recorded before memos existed (no "documents") approved a deck; nobody read a memo.
+    approval = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00"}
+    assert memo_approval(approval) is None
+    assert memo_approval({**approval, "documents": ["deck"]}) is None
+    assert memo_approval({**approval, "documents": ["deck", "memo"]})["reviewer"] == "Tyler Ho"
+    assert memo_approval(None) is None
+
+
+def test_a_deck_only_approval_leaves_the_memo_footer_not_reviewed(tmp_path, monkeypatch):
+    workbook = tmp_path / "testco.xlsx"
+    workbook.write_bytes(b"not read: clean_workbook is replaced")
+    monkeypatch.setattr("memo.clean_workbook", lambda path: (three_quarters(), None))
+    hashes = {"input_sha256": file_sha256(workbook), "config_sha256": file_sha256(CONFIG_PATH)}
+    for documents, review in ((["deck"], "not reviewed"), (["deck", "memo"], "reviewed by Tyler Ho on 2026-09-17")):
+        approval = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00", "documents": documents, **hashes}
+        save_manifest(manifest_path(workbook, tmp_path), {"company": "Testco", "approval": approval})
+        result = save_memo(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+        assert Document(result["docx"]).sections[0].footer.paragraphs[0].text.endswith("AI-drafted | " + review)
 
 
 def test_memo_paths():

@@ -15,7 +15,8 @@ otherwise with "AI commentary unavailable"), open both saved files, and check:
    before use", and none of its wins or risks; or "AI commentary unavailable" and no AI-drafted line.
 6. The PDF carries every piece of text the Word file does; neither has an em dash.
 7. Footer (Word footer, and on every PDF page): fictional-data note, source file, today's date,
-   the git commit, the analysis's model, and the review status from the manifest.
+   the git commit, the analysis's model, and the review status from the manifest: "reviewed by" only
+   if a still-valid approval lists the memo in its documents (an older approval covers the deck only).
 Plus, in a temporary folder:
 - An analysis with an invented number, and one quoting a raw input that analyze.py and the deck
   accept but the metrics workbook doesn't show (Northwind's ending cash), both give
@@ -40,12 +41,11 @@ from pypdf import PdfReader
 
 from build_deck import analysis_path, save_deck
 from check_companies import COMPANIES
-from check_deck import (excel_display, expected_flag_count, expected_review, number_tokens, read_metrics_workbook,
-                        allowed_numbers)
+from check_deck import allowed_numbers, excel_display, expected_flag_count, number_tokens, read_metrics_workbook
 from excel_output import save_metrics_workbook
 from memo import save_memo
-from metrics import COMBO_FLAG_NAME, TRIP, load_config
-from provenance import git_commit
+from metrics import COMBO_FLAG_NAME, CONFIG_PATH, TRIP, load_config
+from provenance import approval_status, file_sha256, git_commit, manifest_path, read_manifest
 
 PROJECT_DIR = Path(__file__).parent
 LATEST, PRIOR = "Q2 2026", "Q1 2026"
@@ -187,12 +187,24 @@ def check_ai_text(paragraphs, summary, name):
         assert point["detail"] not in text, f"{name}: a win or risk is in the memo: {point['title']!r}"
 
 
+def expected_memo_review(workbook, output_dir):
+    """How the memo's footer must end: "reviewed by" only if an approval still valid today lists the memo.
+
+    An approval from before memos existed covers the deck only (approve.py's "documents").
+    """
+    manifest = read_manifest(manifest_path(workbook, output_dir))
+    approval, _ = approval_status(manifest, file_sha256(workbook), file_sha256(CONFIG_PATH))
+    if approval is None or "memo" not in approval.get("documents", []):
+        return "AI-drafted | not reviewed"
+    return f"AI-drafted | reviewed by {approval['reviewer']} on {approval['approved_at'][:10]}"
+
+
 def expected_footer(workbook, output_dir, model):
     """What the footer must say, worked out here from git, the analysis and the manifest (not from memo.py)."""
     commit = git_commit()
     code = commit["commit"] + ("*" if commit["uncommitted_changes"] else "")
     return " | ".join(["Fictional data", workbook.name, datetime.date.today().isoformat(), code,
-                       model or "no AI text", expected_review(workbook, output_dir)])
+                       model or "no AI text", expected_memo_review(workbook, output_dir)])
 
 
 def check_footer(docx_path, pages, footer, name):
@@ -256,7 +268,7 @@ def check_company(company, config, output_dir):
     ai = "AI headline and questions from the JSON" if summary else f"unavailable ({result['why_unavailable']})"
     print(f"✓ {name}: {len(pages)} page PDF + Word file, {ai}, {count}; {numbers} distinct numbers, all in "
           f"the metrics workbook; the PDF has all {pieces} pieces of the Word text; footer ends "
-          f"'{expected_review(workbook, output_dir)}'")
+          f"'{expected_memo_review(workbook, output_dir)}'")
     return result
 
 

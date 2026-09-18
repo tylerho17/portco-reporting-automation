@@ -92,7 +92,9 @@ python build_deck.py data/northwind.xlsx         # rebuild: the footer now says 
 ```
 
 The approval is recorded in the manifest against the hashes of the workbook and `config.yaml` it was
-built from. Change either one and the footer goes back to "not reviewed" on its own the next time the
+built from, with the documents it covers: the deck, and the memo if that run built one (then rebuild
+it too: `python memo.py data/northwind.xlsx`). An approval recorded before memos existed covers the
+deck only, so the memo's footer keeps saying "not reviewed" until someone approves again. Change either one and the footer goes back to "not reviewed" on its own the next time the
 deck is built, because what you reviewed is no longer what the deck says.
 
 Want it louder while a deck circulates for review? Build with `--draft` (`python build_deck.py data/northwind.xlsx --draft`, or `python main.py --all --draft`) and every slide of an unreviewed deck also carries a see-through DRAFT - NOT REVIEWED watermark. `--draft` never stamps an approved deck, and without `--draft` there is no watermark.

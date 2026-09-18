@@ -515,7 +515,7 @@ def save_memo(workbook_path, config, analysis_file=None, run_date=None, output_d
                                   file_sha256(workbook_path), file_sha256(CONFIG_PATH))
     details = analysis_details(analysis_file) if summary else None
     footer = memo_footer(data, run_date or datetime.date.today(), details["model"] if details else None,
-                         approval, git_commit())
+                         memo_approval(approval), git_commit())
 
     output_dir.mkdir(parents=True, exist_ok=True)
     blocks = memo_blocks(data, summary)
@@ -523,6 +523,16 @@ def save_memo(workbook_path, config, analysis_file=None, run_date=None, output_d
     write_pdf(blocks, footer, pdf_path)
     record_memo_status(workbook_path, output_dir, [docx_path.name, pdf_path.name], ai_text=summary is not None)
     return {"docx": docx_path, "pdf": pdf_path, "why_unavailable": why_unavailable}
+
+
+def memo_approval(approval):
+    """The approval, if it covers the memo (approve.py lists "memo" in its documents), else None.
+
+    provenance.approval_status decides whether an approval still counts for these inputs; this adds
+    one more question: did the reviewer have a memo in front of them? An approval recorded before
+    memos existed approved a deck only, so the memo's footer says "not reviewed".
+    """
+    return approval if approval and "memo" in approval.get("documents", []) else None
 
 
 def record_memo_status(workbook_path, output_dir, files, ai_text):
