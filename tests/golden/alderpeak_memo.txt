@@ -1,0 +1,137 @@
+== Word file ==
+  page 8.50 x 11.00 in, margins 0.70 in
+  'Alderpeak board update: Q2 2026'  18 pt, bold, 0B2545
+  "Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI workbook; the headline and questions are drafted by AI."  9.5 pt, 64748B
+  'Headline'  12 pt, bold, 0B2545, keep with next
+  'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
+  'All 9 flags passed this quarter, but ARR growth YoY declined every quarter from 53.9% to 47.5%, signaling decelerating momentum despite strong scale.'  11 pt, bold, 0B2545
+  'Key metrics'  12 pt, bold, 0B2545, keep with next
+  table, aligned center
+  row 1: 'Metric' fill 0B2545 | 'Q2 2026' fill 0B2545 | 'Q1 2026' fill 0B2545 | 'Budget or threshold' fill 0B2545 | 'Status' fill 0B2545
+  row 2: 'Ending ARR ($K)' fill FFFFFF | '18,450' fill FFFFFF | '16,820' fill FFFFFF | 'vs budget: 2.6%' fill FFFFFF | '-' fill FFFFFF
+  row 3: 'Net new ARR ($K)' fill F8FAFC | '1,630' fill F8FAFC | '1,530' fill F8FAFC | '-' fill F8FAFC | '-' fill F8FAFC
+  row 4: 'ARR growth YoY' fill FFFFFF | '47.5%' fill FFFFFF | '49.5%' fill FFFFFF | '-' fill FFFFFF | '-' fill FFFFFF
+  row 5: 'Gross margin' fill F8FAFC | '78.0%' fill F8FAFC | '77.9%' fill F8FAFC | '-' fill F8FAFC | '-' fill F8FAFC
+  row 6: 'NRR (annualized)' fill FFFFFF | '109.8%' fill FFFFFF | '109.7%' fill FFFFFF | 'trips below 100.0%' fill FFFFFF | 'Passed' fill EAF6EF
+  row 7: 'GRR (annualized)' fill F8FAFC | '96.0%' fill F8FAFC | '96.1%' fill F8FAFC | 'trips below 85.0%' fill F8FAFC | 'Passed' fill EAF6EF
+  row 8: 'Burn multiple' fill FFFFFF | '0.12x' fill FFFFFF | '0.16x' fill FFFFFF | 'trips above 2.00x' fill FFFFFF | 'Passed' fill EAF6EF
+  row 9: 'Net burn vs budget' fill F8FAFC | '-9.1%' fill F8FAFC | '-7.4%' fill F8FAFC | 'trips above 15.0%' fill F8FAFC | 'Passed' fill EAF6EF
+  row 10: 'Runway at current burn' fill FFFFFF | '108.0 mo' fill FFFFFF | '88.8 mo' fill FFFFFF | 'trips below 12.0 mo' fill FFFFFF | 'Passed' fill EAF6EF
+  row 11: 'CAC payback' fill F8FAFC | '17.7 mo' fill F8FAFC | '17.7 mo' fill F8FAFC | 'trips above 24.0 mo' fill F8FAFC | 'Passed' fill EAF6EF
+  row 12: 'Net new ARR vs budget' fill FFFFFF | '5.8%' fill FFFFFF | '4.8%' fill FFFFFF | 'trips below -20.0%' fill FFFFFF | 'Passed' fill EAF6EF
+  row 13: 'Rule of 40' fill F8FAFC | '42.7%' fill F8FAFC | '42.7%' fill F8FAFC | 'trips below 40.0%' fill F8FAFC | 'Passed' fill EAF6EF
+  row 14: 'NRR falling while pipeline rising' fill FFFFFF | '-' fill FFFFFF | '-' fill FFFFFF | 'see Flags below' fill FFFFFF | 'Passed' fill EAF6EF
+  "Runway at next quarter's budgeted burn (context, not a flag): 144.0 mo"  9.5 pt, 64748B
+  'Flags: 0 of 9 flags tripped'  12 pt, bold, 0B2545, keep with next
+  'No flag tripped'  List Bullet, 9.5 pt, 334155, keep with next
+  'NRR falling while pipeline rising: Passed (trips when NRR falls at least 1 pt and pipeline rises at every step, over the last 3 quarters)'  List Bullet, 9.5 pt, 334155
+  'Data gaps (data missing)'  12 pt, bold, 0B2545, keep with next
+  'None: every metric and flag has the data it needs'  List Bullet, 9.5 pt, 334155
+  'Questions for management'  12 pt, bold, 0B2545, keep with next
+  'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
+  'What specific factors are driving the steady deceleration in ARR growth YoY from 53.9% to 47.5% over the past year?'  List Bullet, 9.5 pt, 334155, keep with next
+  'What is causing CAC payback to lengthen gradually from 17.3 mo to 17.7 mo despite continued net new ARR growth?'  List Bullet, 9.5 pt, 334155, keep with next
+  'What levers does management plan to pull to keep Rule of 40 above the 40.0% threshold if growth continues decelerating?'  List Bullet, 9.5 pt, 334155
+-- Footer --
+  'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
+== PDF page 1 ==
+  Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Alderpeak board update: Q2 2026
+  Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI
+  workbook; the headline and questions are drafted by AI.
+  Headline
+  AI-drafted from computed metrics - review before use
+  All 9 flags passed this quarter, but ARR growth YoY declined every quarter from 53.9% to
+  47.5%, signaling decelerating momentum despite strong scale.
+  Key metrics
+  Metric
+  Q2 2026
+  Q1 2026
+  Budget or threshold
+  Status
+  Ending ARR ($K)
+  18,450
+  16,820
+  vs budget: 2.6%
+  -
+  Net new ARR ($K)
+  1,630
+  1,530
+  -
+  -
+  ARR growth YoY
+  47.5%
+  49.5%
+  -
+  -
+  Gross margin
+  78.0%
+  77.9%
+  -
+  -
+  NRR (annualized)
+  109.8%
+  109.7%
+  trips below 100.0%
+  Passed
+  GRR (annualized)
+  96.0%
+  96.1%
+  trips below 85.0%
+  Passed
+  Burn multiple
+  0.12x
+  0.16x
+  trips above 2.00x
+  Passed
+  Net burn vs budget
+  -9.1%
+  -7.4%
+  trips above 15.0%
+  Passed
+  Runway at current burn
+  108.0 mo
+  88.8 mo
+  trips below 12.0 mo
+  Passed
+  CAC payback
+  17.7 mo
+  17.7 mo
+  trips above 24.0 mo
+  Passed
+  Net new ARR vs budget
+  5.8%
+  4.8%
+  trips below -20.0%
+  Passed
+  Rule of 40
+  42.7%
+  42.7%
+  trips below 40.0%
+  Passed
+  NRR falling while pipeline rising
+  -
+  -
+  see Flags below
+  Passed
+  Runway at next quarter's budgeted burn (context, not a flag): 144.0 mo
+  Flags: 0 of 9 flags tripped
+  •
+  No flag tripped
+  •
+  NRR falling while pipeline rising: Passed (trips when NRR falls at least 1 pt and pipeline rises at every step, over
+  the last 3 quarters)
+  Data gaps (data missing)
+  •
+  None: every metric and flag has the data it needs
+  Questions for management
+  AI-drafted from computed metrics - review before use
+  •
+  What specific factors are driving the steady deceleration in ARR growth YoY from 53.9% to 47.5% over the past
+  year?
+  •
+  What is causing CAC payback to lengthen gradually from 17.3 mo to 17.7 mo despite continued net new ARR
+  growth?
+  •
+  What levers does management plan to pull to keep Rule of 40 above the 40.0% threshold if growth continues
+  decelerating?

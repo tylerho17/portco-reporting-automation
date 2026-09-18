@@ -8,8 +8,9 @@ a printed slide can trace it back to the exact inputs that produced it.
 The manifest also holds the approval: a deck's footer says "not reviewed" (and a --draft deck is
 stamped "DRAFT - NOT REVIEWED") until a person records their name with approve.py. `approval_status` is the only place that decides whether an
 approval still counts, so main.py, build_deck.py and approve.py can never disagree about it. An
-approval is void as soon as the workbook or config.yaml changes, because the reviewer approved what
-the deck said, and either change can change that.
+approval is void as soon as the workbook, config.yaml or the company's confirmed column mapping
+(mappings/<company>.yaml, Task 5) changes, because the reviewer approved what the deck said, and any
+of them can change that.
 
 Nothing here calls an API or needs one.
 """
@@ -87,11 +88,14 @@ def read_manifest(path):
     return saved if isinstance(saved, dict) else None
 
 
-def approval_status(manifest, input_hash, config_hash):
+def approval_status(manifest, input_hash, config_hash, mapping_hash=None):
     """(the approval, None) if this deck is approved, else (None, why it isn't).
 
-    The reviewer approved a deck built from one workbook and one set of thresholds. If either has
-    changed since, the deck in front of them isn't the deck they signed off, so it goes back to draft.
+    The reviewer approved a deck built from one workbook, one set of thresholds and one column
+    mapping (mapping_hash: mapping.mapping_sha256, None when the company has no mapping file). If
+    any has changed since, the deck in front of them isn't the deck they signed off, so it goes back
+    to draft. An approval recorded before mappings existed has no mapping hash: it holds only while
+    there is still no mapping file.
     """
     approval = (manifest or {}).get("approval")
     if not approval:
@@ -100,6 +104,8 @@ def approval_status(manifest, input_hash, config_hash):
         return None, f"{NOT_REVIEWED}: the workbook has changed since it was approved"
     if approval.get("config_sha256") != config_hash:
         return None, f"{NOT_REVIEWED}: config.yaml has changed since it was approved"
+    if approval.get("mapping_sha256") != mapping_hash:
+        return None, f"{NOT_REVIEWED}: the column mapping has changed since it was approved"
     return approval, None
 
 
@@ -110,20 +116,24 @@ def deck_status(approval):
     return f"approved by {approval['reviewer']} on {approval['approved_at']}"
 
 
-def build_manifest(company, workbook_path, config_path, deck_file, ai, ai_text, approval=None, run_at=None):
+def build_manifest(company, workbook_path, config_path, deck_file, ai, ai_text, approval=None, run_at=None,
+                   mapping=None):
     """Everything needed to trace one deck back to its inputs.
 
     `ai` holds the model, prompt version, attempts, tokens, seconds, cost and validation result
     (empty when there was no AI step). `approval` is carried over from the last manifest; whether it
-    still counts is decided by approval_status, never assumed.
+    still counts is decided by approval_status, never assumed. `mapping` is the confirmed column
+    mapping used (mapping.mapping_record: its file and hash), or None.
     """
     input_hash, config_hash = file_sha256(workbook_path), file_sha256(config_path)
-    still_valid, _ = approval_status({"approval": approval}, input_hash, config_hash)
+    mapping_hash = (mapping or {}).get("sha256")
+    still_valid, _ = approval_status({"approval": approval}, input_hash, config_hash, mapping_hash)
     return {
         "company": company,
         "run_at": run_at or timestamp(),
         "input": {"file": Path(workbook_path).name, "sha256": input_hash},
         "config": {"file": Path(config_path).name, "sha256": config_hash},
+        "mapping": mapping,
         "code": git_commit(),
         "ai": ai,
         "deck": {"file": deck_file, "ai_text": ai_text, "status": deck_status(still_valid)},

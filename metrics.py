@@ -16,9 +16,10 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-import yaml
 
+from cache import ResultCache
 from clean import clean_workbook
+from config_schema import check_config, read_config
 
 CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
@@ -274,7 +275,33 @@ def input_reason(actuals, metric, position):
     return None
 
 
+_METRICS = ResultCache()   # {table_key(actuals): metrics}
+_REASONS = ResultCache()   # {table_key(actuals, metrics): reasons}
+
+
+def table_key(*tables):
+    """A key that changes whenever any number, label, column or type in the tables changes (for the caches).
+
+    pandas hashes each row's values and its quarter label; the column names, index names and
+    types are added as they are, so two tables share a key only if they hold the same things.
+    """
+    return tuple((tuple(table.columns), table.index.name, tuple(table.index), tuple(map(str, table.dtypes)),
+                  pd.util.hash_pandas_object(table, index=True).to_numpy().tobytes())
+                 for table in tables)
+
+
+def clear_cache():
+    """Forget every cached metric and reason table (benchmark.py and the tests start from nothing)."""
+    _METRICS.clear()
+    _REASONS.clear()
+
+
 def compute_metrics(actuals):
+    """metrics_table(actuals), worked out once per set of numbers (cache.py, Task 17). Returns a copy."""
+    return _METRICS.get(table_key(actuals), lambda: metrics_table(actuals))
+
+
+def metrics_table(actuals):
     """Build one table: a row per quarter, a column per metric.
 
     Two safety rules on top of the formulas:
@@ -313,6 +340,11 @@ def compute_metrics(actuals):
 
 
 def metric_reasons(actuals, metrics):
+    """reasons_table(actuals, metrics), worked out once per pair of tables (cache.py, Task 17). Returns a copy."""
+    return _REASONS.get(table_key(actuals, metrics), lambda: reasons_table(actuals, metrics))
+
+
+def reasons_table(actuals, metrics):
     """A table shaped like `metrics`: for each value, why there is no number (a reason), or None."""
     reasons = {}
     for metric in metrics.columns:
@@ -367,24 +399,18 @@ COMBO_FLAG_NAME = "NRR falling while pipeline rising"
 
 
 def validate_config(config):
-    """Stop with a clear message if the combo settings can't work."""
-    lookback = config.get("combo_lookback_quarters")
-    if not isinstance(lookback, int) or isinstance(lookback, bool) or lookback < 2:
-        # With 1 quarter there are no steps to compare, and "every step fell" would be true of nothing.
-        raise ValueError(f"config.yaml: combo_lookback_quarters must be a whole number of at least 2 "
-                         f"(got {lookback!r}) - the combo rule needs at least one quarter-to-quarter step")
-    drop = config.get("combo_min_nrr_drop")
-    if not isinstance(drop, (int, float)) or isinstance(drop, bool) or drop < 0:
-        raise ValueError(f"config.yaml: combo_min_nrr_drop must be a number of 0 or more "
-                         f"(got {drop!r}), e.g. 0.01 for 1 point")
+    """Stop (ConfigError) if a setting the flags use is missing, the wrong type or out of range.
+
+    For a config built in code: only the settings the flags need (config_schema.py). The file
+    itself gets the full check, unknown keys included, in load_config.
+    E.g. a combo lookback of 1 has no steps to compare, and "every step fell" would be true of nothing.
+    """
+    check_config(config, whole_file=False)
 
 
-def load_config(path=CONFIG_PATH):
-    """Read the thresholds from config.yaml into a dictionary, and check the combo settings."""
-    with open(path) as file:
-        config = yaml.safe_load(file)
-    validate_config(config)
-    return config
+def load_config(path=None):
+    """Read config.yaml (or path) into a dictionary, checked against the schema in config_schema.py."""
+    return read_config(path or CONFIG_PATH)   # CONFIG_PATH read here, not at import, so tests can point elsewhere
 
 
 def check_threshold(value, threshold, kind):
@@ -460,9 +486,9 @@ def evaluate_flags(metrics, reasons, config, quarter=None):
 
 
 def flag_status_text(flag):
-    """'trip', 'pass', or 'cannot evaluate — missing input' (the reason is part of the status)."""
+    """'trip', 'pass', or 'cannot evaluate: missing input' (the reason is part of the status)."""
     if flag["status"] == CANNOT_EVALUATE:
-        return f"{CANNOT_EVALUATE} — {flag['reason']}"
+        return f"{CANNOT_EVALUATE}: {flag['reason']}"
     return flag["status"]
 
 

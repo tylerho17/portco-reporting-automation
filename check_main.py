@@ -196,7 +196,7 @@ def check_failure_does_not_stop_batch(folder, config):
         f"Batch order wrong: {[r['company'] for r in results]}"
     assert results[0]["error"] is None and results[3]["error"] is None, "A good company failed"
     assert "missing columns" in results[1]["error"], f"Broken workbook error unclear: {results[1]['error']}"
-    assert results[2]["error"].startswith("FileNotFoundError"), f"Missing file error: {results[2]['error']}"
+    assert results[2]["error"].lower().startswith("can't find"), f"Missing file error: {results[2]['error']}"
     assert stdout.count("✗ FAILED") == 2, "Each failure should print one FAILED line"
     assert stderr == "", f"Input errors shouldn't print a traceback:\n{stderr}"
     return results
@@ -219,7 +219,7 @@ def check_code_bug_does_not_stop_batch(config):
         results, _, stderr = run_quietly(main.run_batch, paths, config, True)
     finally:
         main.compute_metrics = real_compute  # always put the real function back
-    assert results[0]["error"] == "KeyError: 'simulated bug'", f"Bug not recorded: {results[0]['error']}"
+    assert "(KeyError: 'simulated bug')" in results[0]["error"], f"Bug not recorded: {results[0]['error']}"
     assert results[1]["error"] is None, "The company after the bug should still succeed"
     assert "Traceback" in stderr, "An unexpected error should print its traceback"
 
@@ -229,7 +229,7 @@ def check_exit_codes(broken_path):
     process = run_main(str(broken_path), "--skip-ai")
     assert process.returncode == 1, f"Failed company: exit code {process.returncode}, expected 1"
     assert "0 of 1 companies succeeded" in process.stdout, "Single-file failure summary missing"
-    assert summary_table(process.stdout)["Broken"][3].startswith("FAILED: ValueError"), "Result should say FAILED"
+    assert summary_table(process.stdout)["Broken"][3].startswith("FAILED: Sheet "), "Result should say FAILED, in plain words"
     for args in [(), ("data/northwind.xlsx", "--all")]:
         process = run_main(*args, "--skip-ai")
         assert process.returncode == 2, f"main.py {args}: exit code {process.returncode}, expected 2"

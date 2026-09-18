@@ -8,7 +8,8 @@ from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 from pptx.util import Emu
 
-from make_template import CONTENT_LAYOUT, NAVY, TITLE_LAYOUT, build_template
+from make_template import CONTENT_LAYOUT, TEMPLATE_PATH, TITLE_LAYOUT, build_template
+from theme import FONT, LINE, NAVY, SLATE, SURFACE
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 
@@ -89,3 +90,65 @@ def test_saved_template_opens_again(tmp_path):
     path = save_template(tmp_path / "base.pptx")
     reopened = Presentation(path)
     assert [layout.name for layout in reopened.slide_layouts] == [TITLE_LAYOUT, CONTENT_LAYOUT]
+
+
+# ---------------------------------------------------------------------------
+# Task 3: the palette and sizes from theme.py
+# ---------------------------------------------------------------------------
+
+def text_style(presentation, kind, level=1):
+    """(size in pt, color) of the master's title or body text at one level."""
+    styles = presentation.slide_master.element.find(f"{P}txStyles")
+    defaults = styles.find(f"{P}{kind}/{A}lvl{level}pPr/{A}defRPr")
+    return int(defaults.get("sz")) / 100, defaults.find(f"{A}solidFill/{A}srgbClr").get("val")
+
+
+P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+
+
+def test_master_text_is_navy_titles_at_28_and_slate_body_at_15():
+    presentation = build_template()
+    assert text_style(presentation, "titleStyle") == (28, "0B2545")
+    assert text_style(presentation, "bodyStyle") == (15, "334155")
+    assert text_style(presentation, "bodyStyle", level=2) == (13, "334155")
+
+
+def test_theme_carries_the_new_palette():
+    root = theme(build_template())
+    assert root.find(f".//{A}dk2/{A}srgbClr").get("val") == "0B2545"
+    assert root.find(f".//{A}lt2/{A}srgbClr").get("val") == SURFACE
+    assert root.find(f".//{A}accent2/{A}srgbClr").get("val") == "64748B"
+
+
+def master_shape(presentation, name):
+    return [shape for shape in presentation.slide_master.shapes if shape.name == name][0]
+
+
+def test_top_bar_is_navy_and_footer_rule_is_the_line_color():
+    presentation = build_template()
+    assert str(master_shape(presentation, "Top bar").fill.fore_color.rgb) == NAVY
+    assert str(master_shape(presentation, "Footer rule").fill.fore_color.rgb) == LINE
+
+
+def test_brand_name_is_example_capital_in_navy_arial_at_the_floor():
+    run = master_shape(build_template(), "Brand name").text_frame.paragraphs[0].runs[0]
+    assert run.text == "Example Capital"
+    assert (run.font.size.pt, str(run.font.color.rgb)) == (12, NAVY)
+
+
+def test_cover_layout_is_navy_with_a_28_pt_white_title():
+    layout = build_template().slide_layouts.get_by_name(TITLE_LAYOUT)
+    assert str(layout.background.fill.fore_color.rgb) == NAVY
+    title = [shape for shape in layout.placeholders if shape.placeholder_format.type == PP_PLACEHOLDER.CENTER_TITLE][0]
+    defaults = title.text_frame._txBody.find(f"{A}lstStyle/{A}lvl1pPr/{A}defRPr")
+    assert int(defaults.get("sz")) / 100 == 28
+    assert defaults.find(f"{A}solidFill/{A}srgbClr").get("val") == "FFFFFF"
+
+
+def test_the_saved_template_was_rebuilt_with_the_palette():
+    # templates/base.pptx is committed: this fails until python make_template.py has been run again.
+    from pptx import Presentation
+    saved = Presentation(TEMPLATE_PATH)
+    assert theme(saved).find(f".//{A}dk2/{A}srgbClr").get("val") == NAVY
+    assert text_style(saved, "bodyStyle") == (15, SLATE)
+    assert theme(saved).find(f".//{A}minorFont/{A}latin").get("typeface") == FONT

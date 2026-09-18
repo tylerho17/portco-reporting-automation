@@ -20,7 +20,9 @@ from functools import lru_cache
 from matplotlib import font_manager
 from PIL import ImageFont
 
-MIN_FONT_PT = 12          # never shrink below this: smaller is hard to read in a board room
+from theme import MIN_PT
+
+MIN_FONT_PT = MIN_PT      # 12: never shrink below this, smaller is hard to read in a board room (theme.py)
 LINE_SPACING = 1.2        # one line of text is 1.2 x the font size tall (PowerPoint single spacing ~1.15)
 MEASURE_SIZE = 100        # fonts are loaded once at this size and scaled (width grows in step with size)
 

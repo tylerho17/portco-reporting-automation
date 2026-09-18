@@ -8,3 +8,6 @@ pyyaml
 pydantic
 pytest
 streamlit
+python-docx
+reportlab
+pypdf

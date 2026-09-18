@@ -1,0 +1,67 @@
+== Slide 1 of 4 (layout: Title and Content) ==
+  [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
+    'Northwind: key metrics, Q2 2026 vs Q1 2026'  28 pt bold 0B2545
+  [KPI table] table at 0.50, 1.30 in, size 12.33 x 4.31 in
+    row 1: 'Metric' 14 pt bold FFFFFF fill 0B2545 | 'Q2 2026' 14 pt bold FFFFFF fill 0B2545 | 'Q1 2026' 14 pt bold FFFFFF fill 0B2545 | 'Budget or threshold' 14 pt bold FFFFFF fill 0B2545 | 'Status' 14 pt bold FFFFFF fill 0B2545
+    row 2: 'Ending ARR ($K)' 14 pt 334155 fill FFFFFF | '27,470' 14 pt 334155 fill FFFFFF | '25,810' 14 pt 334155 fill FFFFFF | 'vs budget: 2.5%' 14 pt 334155 fill FFFFFF | '-' 14 pt 334155 fill FFFFFF
+    row 3: 'ARR growth YoY' 14 pt 334155 fill F8FAFC | '42.8%' 14 pt 334155 fill F8FAFC | 'data missing' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC
+    row 4: 'Gross margin' 14 pt 334155 fill FFFFFF | '75.1%' 14 pt 334155 fill FFFFFF | '75.0%' 14 pt 334155 fill FFFFFF | '-' 14 pt 334155 fill FFFFFF | '-' 14 pt 334155 fill FFFFFF
+    row 5: 'NRR (annualized)' 14 pt 334155 fill F8FAFC | '97.1%' 14 pt 334155 fill F8FAFC | '102.0%' 14 pt 334155 fill F8FAFC | 'trips below 100.0%' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
+    row 6: 'GRR (annualized)' 14 pt 334155 fill FFFFFF | '88.1%' 14 pt 334155 fill FFFFFF | '90.1%' 14 pt 334155 fill FFFFFF | 'trips below 85.0%' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1A7742 fill EAF6EF
+    row 7: 'Burn multiple' 14 pt 334155 fill F8FAFC | '2.35x' 14 pt 334155 fill F8FAFC | '1.81x' 14 pt 334155 fill F8FAFC | 'trips above 2.00x' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
+    row 8: 'Net burn vs budget' 14 pt 334155 fill FFFFFF | '20.0%' 14 pt 334155 fill FFFFFF | '17.0%' 14 pt 334155 fill FFFFFF | 'trips above 15.0%' 14 pt 334155 fill FFFFFF | 'Tripped' 14 pt C0392B fill FDE8E6
+    row 9: 'Runway at current burn' 14 pt 334155 fill F8FAFC | '11.0 mo' 14 pt 334155 fill F8FAFC | '15.0 mo' 14 pt 334155 fill F8FAFC | 'trips below 12.0 mo' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
+    row 10: 'CAC payback' 14 pt 334155 fill FFFFFF | '20.7 mo' 14 pt 334155 fill FFFFFF | '19.8 mo' 14 pt 334155 fill FFFFFF | 'trips above 24.0 mo' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1A7742 fill EAF6EF
+    row 11: 'Net new ARR vs budget' 14 pt 334155 fill F8FAFC | '-19.0%' 14 pt 334155 fill F8FAFC | '-1.5%' 14 pt 334155 fill F8FAFC | 'trips below -20.0%' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1A7742 fill EAF6EF
+    row 12: 'Rule of 40' 14 pt 334155 fill FFFFFF | '-12.2%' 14 pt 334155 fill FFFFFF | 'data missing' 14 pt 334155 fill FFFFFF | 'trips below 40.0%' 14 pt 334155 fill FFFFFF | 'Tripped' 14 pt C0392B fill FDE8E6
+    row 13: 'NRR falling while pipeline rising' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | 'rule on Risks and flags slide' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
+  [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
+    'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+== Slide 2 of 4 (layout: Title and Content) ==
+  [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
+    'ARR and cash, Q3 2024 to Q2 2026'  28 pt bold 0B2545
+  [ARR chart] picture at 0.50, 1.30 in, size 5.99 x 5.45 in
+  [Cash chart] picture at 6.84, 1.30 in, size 5.99 x 5.45 in
+  [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
+    'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+== Slide 3 of 4 (layout: Title and Content) ==
+  [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
+    'Risks and flags, Q2 2026'  28 pt bold 0B2545
+  [Risks and flags] text at 0.50, 1.30 in, size 5.99 x 5.45 in
+    'Tripped flags (6 of 9 flags tripped)'  20 pt bold 0B2545
+    '• NRR (annualized): 97.1% (trips below 100.0%)'  15 pt 334155
+    '• Burn multiple: 2.35x (trips above 2.00x)'  15 pt 334155
+    '• Net burn vs budget: 20.0% (trips above 15.0%)'  15 pt 334155
+    '• Runway at current burn: 11.0 mo (trips below 12.0 mo)'  15 pt 334155
+    '• Rule of 40: -12.2% (trips below 40.0%)'  15 pt 334155
+    'Combo rule'  20 pt bold 0B2545
+    '• NRR falling while pipeline rising: Tripped (trips when NRR falls by at least 1.0 pts and pipeline rises at every step over the last 3 quarters)'  15 pt 334155
+  [Data gaps] text at 6.84, 1.30 in, size 5.99 x 5.45 in
+    'Data gaps (data missing)'  20 pt bold 0B2545
+    '• Q1 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  15 pt 334155
+    '• Q1 2025 + Q2 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  15 pt 334155
+    '• Q1 2025 + Q1 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  15 pt 334155
+  [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
+    'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+== Slide 4 of 4 (layout: Title and Content) ==
+  [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
+    'AI commentary, Q2 2026'  28 pt bold 0B2545
+  [AI-drafted line] text at 0.50, 1.30 in, size 12.33 x 0.40 in
+    'AI-drafted from computed metrics - review before use'  13 pt 64748B
+  [Headline] text at 0.50, 1.85 in, size 12.33 x 1.05 in
+    "Northwind's burn is outpacing budget and eroding runway to 11.0 mo, while NRR fell to 97.1% and Rule of 40 hit -12.2%."  20 pt bold 0B2545
+  [Risks] text at 0.50, 3.05 in, size 5.99 x 3.70 in
+    'Risks'  17 pt bold 0B2545
+    'Burn accelerating, runway breached'  12 pt bold 334155
+    'Burn multiple hit 2.35x (threshold 2.00x), net burn ran 20.0% over budget (threshold 15.0%), and runway fell to 11.0 mo (threshold 12.0 mo); runway if burn returns to plan is 13.0 mo.'  12 pt 334155
+    'Retention weakening despite pipeline growth'  12 pt bold 334155
+    'NRR fell each quarter from 108.0% (Q4 2025) to 97.1% (Q2 2026), tripping the 100.0% threshold, while pipeline rose from $10,100K to $12,500K over the same period - a warning sign on retention.'  12 pt 334155
+    'Growth decelerating, profitability target missed'  12 pt bold 334155
+    'Rule of 40 was -12.2% in Q2 2026, well below the 40.0% threshold. ARR growth QoQ fell from 12.8% (Q4 2024) to 6.4% (Q2 2026) while FCF margin stayed at -58.6%.'  12 pt 334155
+  [Questions] text at 6.84, 3.05 in, size 5.99 x 3.70 in
+    'Questions for management'  17 pt bold 0B2545
+    '1. What specific cost actions are planned to bring net burn back toward budget and extend runway beyond 11.0 mo?'  12 pt 334155
+    '2. What is driving the decline in NRR from 108.0% to 97.1% even as pipeline keeps growing - is it concentrated in particular segments or accounts?'  12 pt 334155
+    '3. What is causing ARR growth QoQ to decelerate from 12.8% to 6.4%, and what levers does management see to reverse that trend?'  12 pt 334155
+  [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
+    'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B

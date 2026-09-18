@@ -122,7 +122,7 @@ def test_missing_quarter_column_stops(tmp_path):
     # Without a 'Quarter' header no tab counts as the KPI tab, so the message lists the tabs it checked.
     rows = drop_column(good_table(), "Quarter")
     message = error_from(tmp_path, rows)
-    assert "has a 'Quarter' header in its first 10 rows (tabs: ['Notes', 'KPI Tracker'])" in message
+    assert "has a 'Quarter' header in its first 10 rows (tabs checked: 'Notes', 'KPI Tracker')" in message
 
 
 # ---------------------------------------------------------------------------
@@ -174,8 +174,11 @@ def test_unknown_header_stops(tmp_path, header):
 
 
 def test_unknown_header_message_says_how_to_fix(tmp_path):
+    # Task 5: confirm a mapping (mapping.py or the web page), or delete a column that isn't an input.
     message = error_from(tmp_path, add_column(good_table(), "EBITDA"))
-    assert "add it to HEADER_ALIASES in clean.py; otherwise delete the column" in message
+    assert "Nothing is guessed: confirm or change each column with 'python mapping.py" in message
+    assert "A column that isn't an input: delete it from the workbook." in message
+    assert "every input column already has a header" in message   # all 16 are there: EBITDA is extra
 
 
 def test_values_under_blank_header_stop(tmp_path):
@@ -273,7 +276,7 @@ def test_budget_row_message_says_which_columns_are_allowed(tmp_path):
     rows = good_table()
     set_cell(rows, BUDGET_LABEL, "revenue", 500)
     message = error_from(tmp_path, rows)
-    assert message.endswith("a budget-only row may fill only budget_new_arr, budget_arr, budget_net_burn")
+    assert "a budget-only row may fill only budget_new_arr, budget_arr, budget_net_burn:" in message
 
 
 def test_second_budget_row_stops(tmp_path):

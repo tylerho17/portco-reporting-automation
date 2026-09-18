@@ -8,17 +8,29 @@ Main entry point: clean_workbook(path) -> (actuals, next_budget)
 Nothing here guesses or fills in numbers. If something can't be read with
 certainty, the script stops with an error that says what and where.
 
+A header that is neither a standard column nor in HEADER_ALIASES is looked up in the company's
+confirmed mapping (mappings/<company>.yaml, written by mapping.py once a person confirmed it). If it
+isn't there either, the script stops with mapping.py's proposal for it (UnconfirmedMappingError).
+
+The result is cached (cache.py, Task 17) by the hash of the workbook and of its mapping file, so
+the deck, memo and Excel steps of one run don't read the same file again.
+
 Run directly to print the clean table:  python clean.py data/northwind.xlsx
 """
 
 import numbers
 import re
 import sys
+import zipfile
 from decimal import Decimal
+from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
+
+from cache import ResultCache
+from provenance import file_sha256
 
 # ---------------------------------------------------------------------------
 # Standard column names (from CLAUDE.md)
@@ -66,10 +78,30 @@ NUMBER_HINT = " (expected e.g. 1250, '$1.2M' or '850K'; leave the cell empty if 
 # The header that marks the quarter-label column.
 LABEL_HEADER = "quarter"
 
+EXCEL_WORKBOOK_PART = "xl/workbook.xml"   # inside every .xlsx (which is a zip file)
+
 
 # ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
+
+class UnknownHeadersError(ValueError):
+    """Headers that are neither a standard column, an alias nor a confirmed mapping.
+
+    Carries what mapping.py needs to propose a column for each: `unknown` (their positions) and
+    `known` ({position: name} for the headers that were recognised).
+    """
+    def __init__(self, message, unknown, known):
+        super().__init__(message)
+        self.unknown, self.known = unknown, known
+
+
+class UnconfirmedMappingError(ValueError):
+    """The stop for an unknown header: names each one and mapping.py's proposal. `proposals` is for the web page."""
+    def __init__(self, message, proposals):
+        super().__init__(message)
+        self.proposals = proposals
+
 
 def is_blank(value):
     """True for an empty cell: missing (None/NaN) or text that is only spaces."""
@@ -83,13 +115,19 @@ def normalize_header(text):
     return re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
 
 
-def standard_column(header):
-    """Map a messy header to its standard column name, or stop if it's unknown."""
+def standard_column(header, confirmed=None):
+    """Map a messy header to its standard column name, or stop if it's unknown.
+
+    confirmed = {normalized header: column} from the company's mapping file (mapping.confirmed_aliases).
+    A standard name or HEADER_ALIASES entry always wins, so a saved line can't redefine a known header.
+    """
     name = normalize_header(header)
     name = HEADER_ALIASES.get(name, name)  # use the alias if there is one, else keep as is
     if name not in STANDARD_COLUMNS:
-        raise ValueError(f"Unknown column header {header!r} - if it means one of the {len(STANDARD_COLUMNS)} "
-                         f"input columns, add it to HEADER_ALIASES in clean.py; otherwise delete the column")
+        name = (confirmed or {}).get(name, name)
+    if name not in STANDARD_COLUMNS:
+        raise ValueError(f"Unknown column header {header!r}: if it means one of the {len(STANDARD_COLUMNS)} "
+                         f"input columns, confirm a mapping with mapping.py; otherwise delete the column")
     return name
 
 
@@ -126,7 +164,8 @@ def parse_quarter(label):
     """'Q2 2026' -> (2026, 2). Stops if the label isn't in that format."""
     match = QUARTER_PATTERN.match(label)
     if not match:
-        raise ValueError(f"Can't read quarter label {label!r} (expected e.g. 'Q2 2026')")
+        raise ValueError(f"Can't read quarter label {label!r} (expected e.g. 'Q2 2026') - write the label like "
+                         f"that, or if the row is a note, move it to another tab")
     return int(match.group(2)), int(match.group(1))
 
 
@@ -194,6 +233,31 @@ def header_row_of(sheet):
     return None
 
 
+def is_excel_workbook(path):
+    """True if the file is a zip holding an Excel workbook part (every .xlsx has xl/workbook.xml).
+
+    Being a zip isn't enough: a .pptx or .docx renamed .xlsx is a zip too, and pandas' error on
+    one is cryptic.
+    """
+    if not zipfile.is_zipfile(path):
+        return False
+    with zipfile.ZipFile(path) as archive:
+        return EXCEL_WORKBOOK_PART in archive.namelist()
+
+
+def check_is_workbook(path):
+    """Stop, in plain words, on a file that isn't there or isn't an Excel workbook, before pandas reads it.
+
+    pandas' own errors ("Excel file format cannot be determined, you must specify an engine
+    manually", "[Errno 2] No such file or directory") don't say what to do.
+    """
+    if not Path(path).exists():
+        raise FileNotFoundError(f"Can't find {path}: check the file name and folder, then run again")
+    if not is_excel_workbook(path):
+        raise ValueError(f"{Path(path).name} isn't a readable Excel workbook: open it in Excel, save it as an "
+                         f"Excel Workbook (.xlsx), then run again")
+
+
 def find_kpi_sheet(path):
     """Return (sheet_name, sheet, header_row) for the one tab whose header row contains 'Quarter'.
 
@@ -206,10 +270,13 @@ def find_kpi_sheet(path):
     sheets = pd.read_excel(path, sheet_name=None, header=None, keep_default_na=False, na_values=[""])
     found = [(name, sheet, header_row_of(sheet)) for name, sheet in sheets.items() if header_row_of(sheet) is not None]
     if not found:
-        raise ValueError(f"No tab in {path} has a 'Quarter' header in its first 10 rows (tabs: {list(sheets)})")
+        raise ValueError(f"No tab in {Path(path).name} has a 'Quarter' header in its first 10 rows (tabs checked: "
+                         f"{', '.join(repr(name) for name in sheets)}): add a 'Quarter' header above the column of "
+                         f"quarter labels, like 'Q2 2026'")
     if len(found) > 1:
         names = [f"'{name}'" for name, _, _ in found]
-        raise ValueError(f"Tabs {', '.join(names[:-1])} and {names[-1]} both have a 'Quarter' header - keep one "
+        each = "both" if len(found) == 2 else "all"
+        raise ValueError(f"Tabs {', '.join(names[:-1])} and {names[-1]} {each} have a 'Quarter' header - keep one "
                          f"KPI tab and delete or rename the others")
     return found[0]
 
@@ -231,39 +298,47 @@ def check_no_error_cells(path, sheet_name):
         workbook.close()  # read-only mode keeps the file open until closed
 
 
-def header_name(header):
+def header_name(header, confirmed=None):
     """'Quarter' -> 'quarter' (the label column); any other header -> its standard column name."""
     if normalize_header(header) == LABEL_HEADER:
         return LABEL_HEADER
-    return standard_column(header)
+    return standard_column(header, confirmed)
 
 
-def name_headers(headers, header_row):
-    """Return {position: name} for every filled header. Stops on an unknown or repeated meaning."""
-    names = {}
+def name_headers(headers, header_row, confirmed=None):
+    """Return {position: name} for every filled header. Stops on a repeated meaning, then on unknown headers.
+
+    Every unknown header is gathered before stopping (UnknownHeadersError), so one message can list
+    them all, each with mapping.py's proposal.
+    """
+    names, unknown, first_error = {}, [], None
     for position, header in headers.items():
         if is_blank(header):
             continue
-        cell = f"{excel_column(position)}{excel_row(header_row)}"
         try:
-            name = header_name(header)
+            name = header_name(header, confirmed)
         except ValueError as error:
-            raise ValueError(f"cell {cell} (header): {error}") from None
+            unknown.append(position)
+            first_error = first_error or f"cell {excel_column(position)}{excel_row(header_row)} (header): {error}"
+            continue
         if name in names.values():  # e.g. "Beginning ARR" and "Starting ARR": which one is right?
             first = next(p for p, n in names.items() if n == name)
             raise ValueError(f"row {excel_row(header_row)} (header): columns {excel_column(first)} "
                              f"({headers[first]!r}) and {excel_column(position)} ({header!r}) both mean "
                              f"{name!r} - keep one and delete the other")
         names[position] = name
+    if unknown:
+        raise UnknownHeadersError(first_error, unknown, names)
     return names
 
 
-def map_columns(headers, header_row):
+def map_columns(headers, header_row, confirmed=None):
     """Return (label_position, {position: standard name}) from the header row. Stops if a column is missing."""
-    names = name_headers(headers, header_row)
+    names = name_headers(headers, header_row, confirmed)
     missing = [c for c in STANDARD_COLUMNS if c not in names.values()]
     if missing:
-        raise ValueError(f"row {excel_row(header_row)} (header) is missing columns: {', '.join(missing)}")
+        raise ValueError(f"row {excel_row(header_row)} (header) is missing columns: {', '.join(missing)} - add a "
+                         f"column headed with each name (its cells can stay empty if there's no data)")
     label_position = next(p for p, name in names.items() if name == LABEL_HEADER)
     column_map = {p: name for p, name in names.items() if name != LABEL_HEADER}
     return label_position, column_map
@@ -301,9 +376,14 @@ def parse_row(label, row_index, raw_row, column_map):
     return row
 
 
+def is_budget_label(label):
+    """True for a label naming the budget-only forecast row, e.g. 'Q3 2026 (Budget)' or 'Q3 2026 Plan'."""
+    return any(word in label.lower() for word in BUDGET_LABEL_WORDS)
+
+
 def is_budget_only_row(label, row_index, row, column_map):
     """True for the forecast row, e.g. 'Q3 2026 (Budget)'. Stops if that row also has actuals."""
-    if not any(word in label.lower() for word in BUDGET_LABEL_WORDS):
+    if not is_budget_label(label):
         return False
     filled_actuals = [f"{excel_column(position)}{excel_row(row_index)} ({name})"
                       for position, name in column_map.items()
@@ -311,7 +391,9 @@ def is_budget_only_row(label, row_index, row, column_map):
     if filled_actuals:
         raise ValueError(f"row {excel_row(row_index)} ({label!r}) is labelled as a budget-only row but also has "
                          f"actual values in {', '.join(filled_actuals)} - a budget-only row may fill only "
-                         f"{', '.join(BUDGET_COLUMNS)}")
+                         f"{', '.join(BUDGET_COLUMNS)}: move the actuals to their own quarter row, or if this is "
+                         f"an actual quarter, take {', '.join(repr(w) for w in BUDGET_LABEL_WORDS[:-1])} or "
+                         f"{BUDGET_LABEL_WORDS[-1]!r} out of its label")
     return True
 
 
@@ -332,9 +414,12 @@ def check_budget_row_is_next_quarter(label, budget_row_number, last_actual_label
                          f"label, or keep only next quarter's budget")
 
 
-def clean_sheet(sheet, header_row):
-    """Turn the raw KPI tab into (actuals, next_budget). Errors say which row, column or cell to fix."""
-    label_position, column_map = map_columns(sheet.iloc[header_row], header_row)
+def clean_sheet(sheet, header_row, confirmed=None):
+    """Turn the raw KPI tab into (actuals, next_budget). Errors say which row, column or cell to fix.
+
+    confirmed = the company's confirmed header mappings (see standard_column).
+    """
+    label_position, column_map = map_columns(sheet.iloc[header_row], header_row, confirmed)
     check_no_headerless_values(sheet, header_row, [label_position, *column_map])
 
     actual_rows, row_numbers = {}, {}  # quarter label -> parsed row, quarter label -> Excel row number
@@ -360,7 +445,8 @@ def clean_sheet(sheet, header_row):
             row_numbers[label] = excel_row(row_index)
 
     if not actual_rows:
-        raise ValueError(f"row {excel_row(header_row)} (header) has no quarter rows under it")
+        raise ValueError(f"row {excel_row(header_row)} (header) has no quarter rows under it: add one row per "
+                         f"quarter under the header, labelled like 'Q2 2026'")
     actuals = pd.DataFrame.from_dict(actual_rows, orient="index", columns=STANDARD_COLUMNS)
     actuals.index.name = "quarter"
     check_quarters_in_order(list(actual_rows), list(row_numbers.values()))
@@ -369,16 +455,43 @@ def clean_sheet(sheet, header_row):
     return actuals, next_budget
 
 
-def clean_workbook(path):
+_CLEANED = ResultCache()   # {(workbook hash, mapping file hash): (actuals, next_budget)}
+
+
+def clean_workbook(path, mappings_dir=None):
     """Read a messy KPI workbook and return (actuals, next_budget).
 
     Every problem in the KPI tab stops with a message that starts with the sheet name, e.g.
     "Sheet 'KPI Tracker', cell F7 (Q2 2025, revenue): Can't read 'n/a' as a number ..."
+    Headers are also matched against the company's confirmed mapping (mappings/<company>.yaml; a
+    test passes its own mappings_dir). An unknown header stops with mapping.py's proposal for it.
+    The same workbook with the same mapping is read once: later calls get a copy of the first answer.
     """
+    import mapping   # here, not at the top of the file: mapping.py imports this file
+
+    check_is_workbook(path)   # first, so a missing file stops in plain words, not in the hashing
+    key = (file_sha256(path), mapping.mapping_sha256(path, mappings_dir))
+    return _CLEANED.get(key, lambda: read_workbook(path, mappings_dir))
+
+
+def clear_cache():
+    """Forget every cleaned workbook (benchmark.py and the tests start from nothing)."""
+    _CLEANED.clear()
+
+
+def read_workbook(path, mappings_dir=None):
+    """clean_workbook's work, without the cache: open the workbook, find the KPI tab and clean it."""
+    import mapping
+
     sheet_name, sheet, header_row = find_kpi_sheet(path)
     try:
+        confirmed = mapping.confirmed_aliases(path, mappings_dir)
         check_no_error_cells(path, sheet_name)
-        return clean_sheet(sheet, header_row)
+        return clean_sheet(sheet, header_row, confirmed)
+    except UnknownHeadersError as error:
+        proposals = mapping.propose(sheet, header_row, error.unknown, error.known)
+        raise UnconfirmedMappingError(f"Sheet {sheet_name!r}, {mapping.stop_message(proposals, path)}",
+                                      proposals) from None
     except ValueError as error:
         raise ValueError(f"Sheet {sheet_name!r}, {error}") from None
 

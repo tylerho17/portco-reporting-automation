@@ -95,6 +95,17 @@ def test_a_manifest_records_every_input_and_output(tmp_path):
     assert saved["ai"]["model"] == "claude-sonnet-5" and saved["ai"]["prompt_version"] == "v4"
     assert saved["deck"] == {"file": "testco_board_pack.pptx", "ai_text": True, "status": NOT_REVIEWED}
     assert saved["approval"] is None
+    assert saved["mapping"] is None   # no confirmed column mapping was used
+
+
+def test_a_manifest_records_the_column_mapping_it_used(tmp_path):
+    # Task 5: a confirmed mapping decides which column is which, so it is an input like the workbook.
+    workbook, config = tmp_path / "testco.xlsx", tmp_path / "config.yaml"
+    workbook.write_bytes(b"quarter,arr")
+    config.write_bytes(b"nrr_min: 1.00")
+    record = {"file": "mappings/testco.yaml", "sha256": "mapping-hash"}
+    manifest = build_manifest("Testco", workbook, config, "testco_board_pack.pptx", {}, ai_text=True, mapping=record)
+    assert manifest["mapping"] == record
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +135,22 @@ def test_changed_thresholds_send_the_deck_back_to_draft():
     # A threshold edit changes which flags trip, so the reviewer approved something else.
     approval, why = approval_status({"approval": APPROVAL}, "input-hash", "a-new-config-hash")
     assert approval is None and "config.yaml has changed" in why
+
+
+def test_a_changed_column_mapping_sends_the_deck_back_to_draft():
+    # A different mapping can put different numbers in the same column: not what the reviewer saw.
+    approved = {**APPROVAL, "mapping_sha256": "mapping-hash"}
+    approval, why = approval_status({"approval": approved}, "input-hash", "config-hash", "a-new-mapping-hash")
+    assert approval is None and "column mapping has changed" in why
+    approval, why = approval_status({"approval": approved}, "input-hash", "config-hash")   # mapping deleted
+    assert approval is None and "column mapping has changed" in why
+
+
+def test_an_approval_from_before_mappings_holds_while_there_is_no_mapping():
+    # Approvals recorded before Task 5 have no mapping_sha256; with no mapping file nothing has changed.
+    assert approval_status({"approval": APPROVAL}, "input-hash", "config-hash", None) == (APPROVAL, None)
+    approval, why = approval_status({"approval": APPROVAL}, "input-hash", "config-hash", "mapping-hash")
+    assert approval is None and "column mapping has changed" in why
 
 
 def test_an_approved_manifest_says_who_approved_it(tmp_path):

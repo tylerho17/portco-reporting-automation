@@ -92,7 +92,7 @@ def test_payload_not_meaningful_flag_shows_the_k_figures(northwind):
     actuals.loc["Q2 2026", "budget_net_burn"] = 0
     payload = build_payload("Northwind", actuals, next_budget, load_config())
     flag = next(f for f in payload["flags_latest_quarter"] if f["flag"] == "Net burn vs budget")
-    assert flag["status"] == "cannot evaluate — not meaningful"
+    assert flag["status"] == "cannot evaluate: not meaningful"
     assert flag["value"] == "n/m: net burn 3,900 vs budget 0 ($K)"
     assert payload["flags_tripped"] == 5 and payload["flags_cannot_evaluate"] == 1
     # Not meaningful is not missing data. (Q1 2025 is still a gap: Northwind's blank quarter.)

@@ -26,6 +26,7 @@ from clean import clean_workbook
 from metrics import (CANNOT_EVALUATE, DOLLAR_COLUMNS, FLAG_RULES, METRIC_LABELS, MISSING_INPUT, MONTH_COLUMNS,
                      PASS, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config, metric_reasons,
                      reason_text, runway_at_next_budget, runway_context_label)
+from theme import EXCEL_STATUS_COLORS
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 SHEET_NAMES = ["Metrics", "Flags", "Data gaps"]
@@ -43,14 +44,11 @@ KIND_LABELS = {"min": "below threshold", "max": "above threshold"}  # when a fla
 FLAG_KINDS = {name: kind for name, _, _, kind in FLAG_RULES}      # flag name -> "min" or "max"
 
 # Status -> (fill color, text color) as hex RGB. Same light red/green Excel uses for "Bad"/"Good".
-STATUS_COLORS = {
-    TRIP: ("FFC7CE", "9C0006"),
-    PASS: ("C6EFCE", "006100"),
-    CANNOT_EVALUATE: ("D9D9D9", "404040"),
-}
+# Kept in theme.py with the rest of the palette; the workbook keeps Excel's own fills (Task 3).
+STATUS_COLORS = EXCEL_STATUS_COLORS
 
 RUNWAY_CONTEXT_LABEL = "Runway at next quarter's budgeted burn (context, not a flag)"
-NO_GAPS_LABEL = "None — every metric and flag has the data it needs"
+NO_GAPS_LABEL = "None: every metric and flag has the data it needs"
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +78,7 @@ def cell_value(actuals, metrics, reasons, column, quarter):
     value = metrics.loc[quarter, column]
     if math.isinf(value):
         return INFINITE_LABELS[column]  # compute_metrics only lets these three metrics be infinite
-    return float(value)  # plain Python float; openpyxl writes it exactly
+    return float(value)  # plain Python float; openpyxl saves 16 significant digits of it ("%.16g")
 
 
 def runway_context_value(runway, has_budget_row):
@@ -89,9 +87,9 @@ def runway_context_value(runway, has_budget_row):
 
 
 def status_label(flag):
-    """'Tripped', 'Passed', or 'Cannot evaluate — <reason>'."""
+    """'Tripped', 'Passed', or 'Cannot evaluate: <reason>'."""
     if flag["status"] == CANNOT_EVALUATE:
-        return f"Cannot evaluate — {flag['reason']}"
+        return f"Cannot evaluate: {flag['reason']}"
     return STATUS_LABELS[flag["status"]]
 
 
@@ -174,15 +172,22 @@ def write_metrics_sheet(sheet, actuals, metrics, reasons, config):
 FLAG_HEADERS = ["Flag", "Quarter", "Value", "Threshold", "Trips when", "Status"]
 
 
+def combo_window_text(config):
+    """The combo rule's window, from config.yaml: 'last 3 quarters'."""
+    return f"last {config['combo_lookback_quarters']} quarters"
+
+
+def combo_rule_words(config):
+    """What trips the combo rule, from config.yaml: 'NRR falls at least 1 pt and pipeline rises at every step'."""
+    return f"NRR falls at least {config['combo_min_nrr_drop'] * 100:g} pt and pipeline rises at every step"
+
+
 def flag_row(flag, actuals, metrics, reasons, config):
     """One flag as a list of cell values, in FLAG_HEADERS order."""
     status = status_label(flag)
     if flag["metric"] is None:  # the combo rule is a trend test with no single value
-        size = config["combo_lookback_quarters"]
-        drop = config["combo_min_nrr_drop"]
         return [flag["flag"], flag["quarter"], "see NRR and Pipeline on Metrics sheet",
-                f"last {size} quarters", f"NRR falls at least {drop * 100:g} pt and pipeline rises at every step",
-                status]
+                combo_window_text(config), combo_rule_words(config), status]
     value = cell_value(actuals, metrics, reasons, flag["metric"], flag["quarter"])
     return [flag["flag"], flag["quarter"], value, flag["threshold"],
             KIND_LABELS[FLAG_KINDS[flag["flag"]]], status]

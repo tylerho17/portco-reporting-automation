@@ -142,7 +142,7 @@ it was built:
 ### What I built
 
 - **The deck has 4 slides now** (it had 5):
-  1. **Key metrics:** the table, unchanged, titled "Northwind: key metrics — Q2 2026 vs Q1 2026".
+  1. **Key metrics:** the table, unchanged, titled "Northwind: key metrics, Q2 2026 vs Q1 2026".
   2. **ARR and cash:** the two charts, unchanged.
   3. **Risks and flags:** unchanged. Its heading still reads "Tripped flags (6 of 9 flags tripped)".
   4. **AI commentary:** "AI-drafted from computed metrics - review before use" in gray under the
@@ -229,11 +229,11 @@ Northwind's slide 4 as built:
    - This differs from Task 1's footer, which says "AI-drafted" on every deck (Task 1, decision 3).
 4. **The company name moved into slide 1's title.** The Summary slide was the only place with
    the company name (apart from the file name in the footer).
-5. **Slide 4's title is "AI commentary — Q2 2026"**, in the same pattern as the other titles.
+5. **Slide 4's title is "AI commentary, Q2 2026"**, in the same pattern as the other titles.
 6. **The flag count has no box of its own now.** It stays in slide 3's heading, "Tripped flags
    (6 of 9 flags tripped)", and check_deck.py checks it there against each company's story.
 7. **The AI line uses your exact wording, with a hyphen**: "... metrics - review before use".
-   The titles use em dashes ("—"). I kept your text as you wrote it.
+   The titles used em dashes then (Final Task 4 swapped them for commas). I kept your text as you wrote it.
 8. **The placeholder note no longer mentions wins**: "The headline, risks and questions are
    written by Claude ...".
 9. **main.py works out "slide 4" from the slide list** instead of typing the number, so moving

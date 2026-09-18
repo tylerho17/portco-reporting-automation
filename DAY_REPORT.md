@@ -32,7 +32,7 @@ Now: **344 tests pass**, and `check_northwind.py`, `check_companies.py`, `check_
 - `burn_vs_budget` is NaN when `budget_net_burn` ≤ 0.
 - `net_new_arr_vs_budget` is NaN when budgeted net new ARR (this quarter's `budget_arr` minus last quarter's) ≤ 0.
 - Since every input is present, the reason is **not meaningful**:
-  - the flag shows "cannot evaluate — not meaningful" and never trips
+  - the flag shows "cannot evaluate: not meaningful" and never trips
   - it isn't a data gap
 - `not_meaningful_text` shows the $K figures instead, e.g. "n/m: net burn 900 vs budget 0 ($K)". The printout, the Excel file and Claude's payload all use this same function.
 
@@ -83,7 +83,7 @@ The hardening changed how missing values are labelled, not the math.
 1. **The exact words for each reason**: "data missing", "n/a (no prior period)", "n/m (not meaningful)". For the budget cases in C: "n/m: net burn X vs budget Y ($K)" and "n/m: net new ARR X vs budget Y ($K)".
 2. **Which reason wins when more than one applies**: missing input, then no prior period, then not meaningful. Missing input first comes from CLAUDE.md. Putting no prior period before not meaningful was my choice, so a first-year quarter reads "n/a" rather than "n/m". Today I made the combo rule follow the same order.
 3. **"Not meaningful" is the leftover reason**: any value with every input present but no number. That includes an infinity outside the three allowed edge cases (e.g. growth from a zero base). It isn't a hand-written list, so a new 0 ÷ 0 case can't slip through as a gap.
-4. **A flag's status and its reason are separate fields**: the status stays trip / pass / cannot evaluate, and `reason` is filled only for cannot evaluate. Text outputs join them as "cannot evaluate — missing input".
+4. **A flag's status and its reason are separate fields**: the status stays trip / pass / cannot evaluate, and `reason` is filled only for cannot evaluate. Text outputs join them as "cannot evaluate: missing input".
 5. **Excel colors**: on the Metrics sheet, only missing-input cells are gray, and "n/a" and "n/m" cells have no fill. On the Flags sheet, every "cannot evaluate" row is gray, whatever the reason.
 6. **For the flag renames, the metric labels won**: e.g. "Net burn vs budget", not "Burn vs budget". The flag names changed, not the Metrics sheet headers.
 7. **A raw input shown in Claude's payload** (net burn, ending cash) reads "data missing" when blank. A raw input has no "no prior period" or "n/m" case.
@@ -245,8 +245,8 @@ Now: **397 tests pass** (344 before, 53 new), and all 5 check scripts print "All
    - then all 9 flags in FLAG_RULES order, including the combo, so the statuses add up to slide 1's "of 9"
    - **Budget column:** Ending ARR shows "vs budget: 2.5%" rather than the $K budget figure, because a $K budget isn't in the metrics table and would break "every number on slide 2 appears in the metrics table". The other vs-budget comparisons are flag rows with thresholds.
    - **Threshold wording:** "trips below 100.0%" / "trips above 2.00x"
-   - **Combo row:** "—" for values and "rule on Risks and flags slide" as its threshold (its settings, 1 pt and 3 quarters, aren't in the metrics table)
-   - **Non-flag rows:** status "—", no color
+   - **Combo row:** "-" for values and "rule on Risks and flags slide" as its threshold (its settings, 1 pt and 3 quarters, aren't in the metrics table)
+   - **Non-flag rows:** status "-", no color
    - **Missing values:** a value with no number shows the same words as Excel: "data missing", "n/a (no prior period)", "∞ (ARR shrank)"
 8. **Charts:**
    - only the latest value is labelled, as the chart guidance recommends
@@ -807,10 +807,10 @@ watermark cleared by `approve.py`. No API calls were made in this task.
 
 ### What I built
 
-1. **`provenance.py`** — hashing, the git commit, reading and writing the manifest, and one function
+1. **`provenance.py`**: hashing, the git commit, reading and writing the manifest, and one function
    (`approval_status`) that decides whether an approval still counts. Everything else asks it, so
    main.py, build_deck.py and approve.py can never disagree about whether a deck is approved.
-2. **`output/<company>_manifest.json`, written by every run** — company, run time, the workbook and
+2. **`output/<company>_manifest.json`, written by every run**: company, run time, the workbook and
    `config.yaml` by SHA-256, the git commit (with `*` for uncommitted edits), model, prompt version,
    attempts, tokens, seconds, cost, validation result, whether the deck carries AI text, and the
    approval block.
@@ -818,9 +818,9 @@ watermark cleared by `approve.py`. No API calls were made in this task.
    a checksum of `SYSTEM_PROMPT` to it. Editing the prompt without bumping the version now fails the
    suite, which is the only way a version constant stays true.
 4. **Footer: commit and model** on every slide, so a printed page is traceable without the manifest.
-5. **The watermark** — `DRAFT - NOT REVIEWED` diagonally across all 5 slides, drawn on top of the
+5. **The watermark**: `DRAFT - NOT REVIEWED` diagonally across all 5 slides, drawn on top of the
    content at 25% opacity, until a manifest says a person approved this deck for these exact inputs.
-6. **`approve.py`** — records a reviewer and a time, and refuses when there is nothing to approve or
+6. **`approve.py`**: records a reviewer and a time, and refuses when there is nothing to approve or
    when the workbook or thresholds have changed since the deck was built. It never builds a deck.
 7. **37 new tests** (480 total, from 442), including two new test files.
 
@@ -841,7 +841,7 @@ Walked in a temporary folder, with a copy of Northwind:
 
 1. **Approval is void if `config.yaml` changes too, not only the workbook** (you chose this when I
    asked). A threshold edit changes which flags trip, so it changes what the reviewer approved.
-2. **The uncommitted-code marker in the footer is `*`, not " + local changes"** — see What failed.
+2. **The uncommitted-code marker in the footer is `*`, not " + local changes"**: see What failed.
    The manifest records `"uncommitted_changes": true` in full, because it has the room.
 3. **The watermark is drawn on top, not behind** (you chose this). Slides 2 and 3 are covered by an
    opaque table and two chart images; underneath them a watermark is invisible.
@@ -858,7 +858,7 @@ Walked in a temporary folder, with a copy of Northwind:
 Both are in LEARNINGS.md.
 
 1. **The footer broke the build:** `Slide 1, Footer: text doesn't fit even at the 12 pt minimum`. I
-   had measured the new footer at 620 pt against 670 pt of room — on a clean checkout. With
+   had measured the new footer at 620 pt against 670 pt of room, on a clean checkout. With
    uncommitted edits the commit read `678d5e7 + local changes`, taking the line to 715 pt, and the
    footer box holds 21.6 pt after margins, less than two 12 pt lines. Shortened the marker to `*`
    (626 pt with the longest company name). The fit rule caught in a second what would otherwise have
@@ -873,6 +873,6 @@ Both are in LEARNINGS.md.
 1. **Nothing re-runs a stale deck for you.** The manifest can prove a deck is out of date; acting on
    that is still a person's job.
 2. **The manifest lives in `output/`, which is git-ignored.** For a real audit trail it would belong
-   somewhere kept — a database row, or a committed folder.
+   somewhere kept: a database row, or a committed folder.
 3. **`check_main.py` still overwrites `output/`**, and now the manifests too. The `--output-dir`
    option is still the fix.

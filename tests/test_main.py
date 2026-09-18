@@ -13,12 +13,16 @@ from types import SimpleNamespace
 
 import anthropic
 import pytest
+from docx import Document
 from pptx import Presentation
 
 import analyze
 import main
+import make_data
 from analyze import BoardSummary
 from build_deck import PLACEHOLDER_TEXT
+from check_diff import last_quarter_workbook
+from diff_runs import HEADING, NO_EARLIER_RUN
 from main import quarter_mismatch_warning, write_summary_csv
 from provenance import NOT_REVIEWED, file_sha256, git_commit, manifest_path, read_manifest, save_manifest
 from text_fit import TextDoesNotFitError
@@ -55,11 +59,12 @@ def test_summary_csv_has_one_row_per_company(tmp_path):
         rows = list(csv.reader(file))
     assert rows == [
         ["Company", "Latest quarter", "Flags tripped", "Flags total", "Cannot evaluate", "Data gaps",
-         "Blank quarters", "Result"],
-        ["Northwind", "Q2 2026", "6", "9", "0", "19", "Q1 2025", "OK"],
-        ["Fernhollow", "Q2 2026", "7", "9", "1", "20", "Q2 2025", "OK (AI failed)"],
-        ["Alderpeak", "Q2 2026", "0", "9", "0", "0", "", "OK (AI skipped)"],
-        ["Broken", "", "", "", "", "", "", "FAILED: ValueError: row 3 (header) is missing columns: pipeline"],
+         "Blank quarters", "Result", "AI cost (USD)", "Notes"],
+        ["Northwind", "Q2 2026", "6", "9", "0", "19", "Q1 2025", "OK", "", ""],
+        ["Fernhollow", "Q2 2026", "7", "9", "1", "20", "Q2 2025", "OK (AI failed)", "", ""],
+        ["Alderpeak", "Q2 2026", "0", "9", "0", "0", "", "OK (AI skipped)", "", ""],
+        ["Broken", "", "", "", "", "", "", "FAILED: ValueError: row 3 (header) is missing columns: pipeline", "",
+         ""],
     ]
 
 
@@ -148,6 +153,52 @@ def saved_analysis(tmp_path):
     return json.loads((tmp_path / "northwind_analysis.json").read_text())
 
 
+# ---------------------------------------------------------------------------
+# Reusing a saved analysis (the web page's Generate button, Task 2 of the final run)
+# ---------------------------------------------------------------------------
+
+def run_northwind_reusing(tmp_path, skip_ai=True, client=None):
+    """run_company on Northwind with reuse_saved=True, saving into tmp_path."""
+    return main.run_company(NORTHWIND, main.load_config(), skip_ai, client=client, output_dir=tmp_path,
+                            reuse_saved=True)
+
+
+def test_a_saved_analysis_of_the_same_numbers_is_reused_with_no_api_call(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary("First headline.")))
+    client = FakeClient(summary("Second headline."))
+    result = run_northwind_reusing(tmp_path, skip_ai=False, client=client)
+    assert client.calls == 0
+    assert headline_on_deck(tmp_path) == "First headline."
+    assert main.RESULT_TEXTS[result["ai"]] == "OK"
+    ai = read_manifest(manifest_path(NORTHWIND, tmp_path))["ai"]
+    assert ai["validation"] == main.AI_REUSED
+    assert ai["cost_usd"] is None and ai["input_tokens"] is None   # nothing was spent in this run
+
+
+def test_reuse_with_ai_skipped_still_puts_the_saved_text_on_the_deck(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary("First headline.")))
+    result = run_northwind_reusing(tmp_path, skip_ai=True)
+    assert headline_on_deck(tmp_path) == "First headline."
+    assert main.RESULT_TEXTS[result["ai"]] == "OK"
+
+
+def test_reuse_with_no_saved_analysis_and_ai_skipped_gives_the_placeholder(tmp_path):
+    result = run_northwind_reusing(tmp_path, skip_ai=True)
+    assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
+    assert main.RESULT_TEXTS[result["ai"]] == "OK (AI skipped)"
+
+
+def test_a_saved_analysis_of_other_numbers_is_not_reused(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary("Old headline.")))
+    path = tmp_path / "northwind_analysis.json"
+    saved = json.loads(path.read_text())
+    saved["payload"]["flags"] = []                     # same company and quarter, different facts
+    path.write_text(json.dumps(saved))
+    client = FakeClient(summary("New headline."))
+    run_northwind_reusing(tmp_path, skip_ai=False, client=client)
+    assert client.calls == 1 and headline_on_deck(tmp_path) == "New headline."
+
+
 def test_ai_that_passes_goes_on_the_deck_and_is_saved(tmp_path):
     client = FakeClient(summary())
     result = run_northwind(tmp_path, client=client)
@@ -181,15 +232,18 @@ def test_api_error_is_ai_failed_not_a_failed_company(tmp_path):
     assert result["error"] is None and main.result_text(result) == "OK (AI failed)"
     assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
     saved = saved_analysis(tmp_path)
-    assert saved["summary"] is None and saved["error"] == "AnthropicError: simulated outage"
+    assert saved["summary"] is None and saved["error"] == analyze.api_error_text(anthropic.AnthropicError("simulated outage"))
 
 
 def test_unexpected_error_in_the_ai_step_fails_the_company(tmp_path):
     # A bug (not a validation failure or an API error) must not hide behind "AI failed".
     run_northwind(tmp_path, client=FakeClient(summary()))  # an old, good analysis from an earlier run
+    old_analysis = (tmp_path / "northwind_analysis.json").read_bytes()
     result = run_northwind(tmp_path, client=FakeClient(error=KeyError("simulated bug")))
-    assert result["error"] == "KeyError: 'simulated bug'"
-    assert not (tmp_path / "northwind_analysis.json").exists()  # the old analysis can't pass for this run's
+    assert result["error"] == main.error_text(KeyError("simulated bug"))   # "unexpected problem ... (KeyError: ...)"
+    # Task 7: a failed company's files never reach output/, so the old analysis stays beside the old
+    # deck it belongs to (before, it was deleted and the old deck stayed without it).
+    assert (tmp_path / "northwind_analysis.json").read_bytes() == old_analysis
 
 
 def test_ai_text_too_long_for_the_slides_is_ai_failed_not_a_failed_company(tmp_path):
@@ -232,6 +286,55 @@ def test_skip_ai_builds_the_placeholder_deck_and_never_calls_claude(tmp_path, mo
 
 
 # ---------------------------------------------------------------------------
+# The memo (final Task 1): built beside the deck, from the same analysis
+# ---------------------------------------------------------------------------
+
+def memo_text(tmp_path):
+    """Every paragraph of the saved Word memo."""
+    return "\n".join(item.text for item in Document(tmp_path / "northwind_board_memo.docx").paragraphs)
+
+
+def test_a_run_writes_the_memo_beside_the_deck_with_the_ai_text(tmp_path, capsys):
+    result = run_northwind(tmp_path, client=FakeClient(summary()))
+    assert result["error"] is None and main.result_text(result) == "OK"
+    assert (tmp_path / "northwind_board_memo.docx").exists() and (tmp_path / "northwind_board_memo.pdf").exists()
+    assert "Retention is the main question for the board." in memo_text(tmp_path)
+    assert "✓ Memo: " in capsys.readouterr().out
+
+
+def test_skip_ai_builds_the_memo_with_ai_commentary_unavailable(tmp_path):
+    run_northwind(tmp_path, skip_ai=True)
+    text = memo_text(tmp_path)
+    assert "AI commentary unavailable" in text and "Key metrics" in text
+
+
+def test_ai_failed_builds_the_memo_with_ai_commentary_unavailable(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(error=anthropic.AnthropicError("simulated outage")))
+    assert "AI commentary unavailable" in memo_text(tmp_path)
+
+
+def test_ai_text_quoting_a_number_the_metrics_workbook_lacks_stays_off_the_memo_only(tmp_path, capsys):
+    # 14,300 is Northwind's latest ending cash: in Claude's payload (so analyze.py and the deck accept it),
+    # but not in the metrics workbook, and every number in the memo must be.
+    answer = summary()
+    answer.questions[0] = "How long will the ending cash of $14,300K last at the current burn?"
+    result = run_northwind(tmp_path, client=FakeClient(answer))
+    assert main.result_text(result) == "OK"   # the deck has the AI text
+    assert headline_on_deck(tmp_path) == "Retention is the main question for the board."
+    assert "AI commentary unavailable" in memo_text(tmp_path)
+    printed = capsys.readouterr().out
+    assert "AI commentary unavailable" in printed and "14,300" in printed
+
+
+def test_the_manifest_records_the_memo(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary()))
+    assert northwind_manifest(tmp_path)["memo"] == {
+        "files": ["northwind_board_memo.docx", "northwind_board_memo.pdf"], "ai_text": True}
+    run_northwind(tmp_path, skip_ai=True)
+    assert northwind_manifest(tmp_path)["memo"]["ai_text"] is False
+
+
+# ---------------------------------------------------------------------------
 # The manifest: where each deck came from (provenance)
 # ---------------------------------------------------------------------------
 
@@ -256,7 +359,8 @@ def test_a_run_writes_a_manifest_for_the_company(tmp_path):
     assert saved["ai"]["validation"] == "passed" and saved["ai"]["attempts"] == 1
     assert saved["ai"]["input_tokens"] == 100 and saved["ai"]["output_tokens"] == 50
     assert saved["ai"]["cost_usd"] > 0
-    assert saved["deck"] == {"file": "northwind_board_pack.pptx", "ai_text": True, "status": NOT_REVIEWED}
+    assert saved["deck"] == {"file": "northwind_board_pack.pptx", "ai_text": True, "status": NOT_REVIEWED,
+                             "draft": False, "appendix": False}
     assert saved["approval"] is None  # nobody has reviewed it yet
     assert saved["run_at"]
 
@@ -313,6 +417,56 @@ def test_a_run_after_the_workbook_changed_drops_back_to_draft(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# What changed since the last run (Task 10)
+# ---------------------------------------------------------------------------
+
+def run_last_quarter_then_today(tmp_path):
+    """Northwind as it stood at Q1 2026, then today's workbook, into the same output folder (tmp_path/out)."""
+    earlier = last_quarter_workbook(make_data, tmp_path)
+    main.run_batch([earlier], main.load_config(), True, output_dir=tmp_path / "out")
+    run_northwind(tmp_path / "out", skip_ai=True)
+    return northwind_manifest(tmp_path / "out")
+
+
+def test_a_first_run_records_its_results_and_has_nothing_to_compare_with(tmp_path, capsys):
+    run_northwind(tmp_path, skip_ai=True)
+    saved = northwind_manifest(tmp_path)
+    assert saved["results"]["quarter"] == "Q2 2026"
+    assert saved["results"]["flags"]["Runway at current burn"] == "Tripped"
+    assert saved["previous_run"] is None
+    assert HEADING not in memo_text(tmp_path)
+    assert f"✓ {HEADING}: {NO_EARLIER_RUN}" in capsys.readouterr().out
+
+
+def test_a_run_a_quarter_later_is_compared_with_the_last_one(tmp_path, capsys):
+    saved = run_last_quarter_then_today(tmp_path)
+    assert saved["previous_run"]["results"]["quarter"] == "Q1 2026"
+    memo = memo_text(tmp_path / "out")
+    assert HEADING in memo and "Runway at current burn: Tripped (was Passed)" in memo
+    assert "whose latest quarter was Q1 2026 (now Q2 2026)" in memo
+    assert f"✓ {HEADING}: 5 flags flipped" in capsys.readouterr().out
+
+
+def test_a_rebuild_from_the_same_numbers_keeps_last_quarter_s_comparison(tmp_path):
+    # approve.py, then a rebuild: the memo must still say what changed since last quarter.
+    first = run_last_quarter_then_today(tmp_path)
+    run_northwind(tmp_path / "out", skip_ai=True)
+    again = northwind_manifest(tmp_path / "out")
+    assert again["previous_run"] == first["previous_run"]
+    assert again["run_at"] >= first["run_at"]
+    assert "Runway at current burn: Tripped (was Passed)" in memo_text(tmp_path / "out")
+
+
+def test_run_company_straight_into_output_compares_too(tmp_path):
+    # The batch above builds in a private folder; the web page's Generate calls run_company on output/ itself.
+    earlier = last_quarter_workbook(make_data, tmp_path)
+    main.run_company(earlier, main.load_config(), True, output_dir=tmp_path / "out", reuse_saved=True)
+    main.run_company(NORTHWIND, main.load_config(), True, output_dir=tmp_path / "out", reuse_saved=True)
+    assert northwind_manifest(tmp_path / "out")["previous_run"]["results"]["quarter"] == "Q1 2026"
+    assert "Runway at current burn: Tripped (was Passed)" in memo_text(tmp_path / "out")
+
+
+# ---------------------------------------------------------------------------
 # The DRAFT watermark is opt-in (--draft); the footer always says whether the deck was reviewed
 # ---------------------------------------------------------------------------
 
@@ -361,10 +515,32 @@ def test_draft_is_passed_from_the_command_line_to_the_batch(monkeypatch):
     seen = {}
     monkeypatch.setattr(main, "run_batch", lambda *args, **kwargs: seen.update(kwargs) or [])
     monkeypatch.setattr(main, "write_summary_csv", lambda results: PROJECT_DIR / "output" / "batch_summary.csv")
+    monkeypatch.setattr(main, "save_batch_manifest", lambda *args: PROJECT_DIR / "output" / "batch_manifest.json")
     main.main(["--all", "--skip-ai", "--draft"])
     assert seen["draft"] is True
     main.main(["--all", "--skip-ai"])
     assert seen["draft"] is False
+
+
+def test_appendix_is_passed_from_the_command_line_to_the_batch(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(main, "run_batch", lambda *args, **kwargs: seen.update(kwargs) or [])
+    monkeypatch.setattr(main, "write_summary_csv", lambda results: PROJECT_DIR / "output" / "batch_summary.csv")
+    monkeypatch.setattr(main, "save_batch_manifest", lambda *args: PROJECT_DIR / "output" / "batch_manifest.json")
+    main.main(["--all", "--skip-ai", "--appendix"])
+    assert seen["appendix"] is True
+    main.main(["--all", "--skip-ai"])
+    assert seen["appendix"] is False
+
+
+def test_appendix_adds_the_metric_table_slide_and_the_manifest_says_so(tmp_path):
+    main.run_batch([NORTHWIND], main.load_config(), True, output_dir=tmp_path, appendix=True)
+    slides = Presentation(tmp_path / "northwind_board_pack.pptx").slides
+    assert len(slides) == 5 and slides[-1].shapes.title.text.startswith("Appendix: every metric")
+    assert read_manifest(manifest_path(NORTHWIND, tmp_path))["deck"]["appendix"] is True
+    run_northwind(tmp_path, skip_ai=True)   # off by default
+    assert len(Presentation(tmp_path / "northwind_board_pack.pptx").slides) == 4
+    assert read_manifest(manifest_path(NORTHWIND, tmp_path))["deck"]["appendix"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -393,4 +569,5 @@ def test_skip_ai_never_needs_a_key(monkeypatch):
     monkeypatch.setattr(main, "api_key_problem", lambda: pytest.fail("--skip-ai looked for an API key"))
     monkeypatch.setattr(main, "run_batch", lambda *args, **kwargs: [])
     monkeypatch.setattr(main, "write_summary_csv", lambda results: PROJECT_DIR / "output" / "batch_summary.csv")
+    monkeypatch.setattr(main, "save_batch_manifest", lambda *args: PROJECT_DIR / "output" / "batch_manifest.json")
     assert main.main(["--all", "--skip-ai"]) == 0

@@ -1,6 +1,7 @@
 """Build templates/base.pptx: the brand template every board deck is built on.
 
-The brand is fictional and neutral ("Example Capital"): navy and gray, Arial, 16:9.
+The brand is fictional and neutral ("Example Capital"): navy and gray, Arial, 16:9. Every color,
+the font and the type sizes come from theme.py.
 It has exactly two layouts:
 - "Title Slide":        navy background, white title (for a cover page if one is ever wanted)
 - "Title and Content":  navy title at the top, a content area, a footer strip at the bottom
@@ -27,19 +28,12 @@ from pptx.oxml.shapes.autoshape import CT_Shape
 from pptx.shapes.autoshape import Shape
 from pptx.util import Emu, Inches, Pt
 
+from theme import (BODY_PT, BRAND_NAME, CAPTION_PT, FONT, LINE, MID_GRAY, MIN_PT, NAVY, SECTION_PT, SLATE,
+                   SURFACE, TITLE_PT, WHITE)
+
 TEMPLATE_PATH = Path(__file__).parent / "templates" / "base.pptx"
 
-# ---------------------------------------------------------------------------
-# Brand: one place for colors, font and name. build_deck.py imports these.
-# ---------------------------------------------------------------------------
-
-BRAND_NAME = "Example Capital"   # fictional
-NAVY = "1F2A44"                  # titles, accents, chart bars
-DARK_GRAY = "333333"             # body text
-MID_GRAY = "7F7F7F"              # footer text, rules
-LIGHT_GRAY = "F2F2F2"            # table stripes, panels
-WHITE = "FFFFFF"
-FONT = "Arial"
+# Brand colors, font and sizes come from theme.py, the only file that types a color.
 
 TITLE_LAYOUT = "Title Slide"
 CONTENT_LAYOUT = "Title and Content"
@@ -80,7 +74,7 @@ def set_theme(presentation):
     """Rewrite the theme's colors (navy/gray) and fonts (Arial) in its XML."""
     theme_part = presentation.slide_master.part.part_related_by(RT.THEME)
     root = etree.fromstring(theme_part.blob)
-    colors = {"dk2": NAVY, "lt2": LIGHT_GRAY, "accent1": NAVY, "accent2": MID_GRAY}
+    colors = {"dk2": NAVY, "lt2": SURFACE, "accent1": NAVY, "accent2": MID_GRAY}
     for slot, hex_color in colors.items():
         root.find(f".//{qn('a:' + slot)}/{qn('a:srgbClr')}").set("val", hex_color)
     for font_kind in ("a:majorFont", "a:minorFont"):  # major = headings, minor = body
@@ -101,12 +95,12 @@ def set_text_style(level_element, size_pt, hex_color, bold=False, align=None):
 
 
 def set_master_text_styles(master):
-    """Titles: navy, bold, 28 pt, left-aligned. Body: dark gray, 20 pt then 18 pt."""
+    """Titles: navy, bold, 28 pt, left-aligned. Body: slate, 15 pt, then 13 pt (caption) one level down."""
     styles = master.element.find(qn("p:txStyles"))
-    set_text_style(styles.find(f"{qn('p:titleStyle')}/{qn('a:lvl1pPr')}"), 28, NAVY, bold=True, align="l")
+    set_text_style(styles.find(f"{qn('p:titleStyle')}/{qn('a:lvl1pPr')}"), TITLE_PT, NAVY, bold=True, align="l")
     body = styles.find(qn("p:bodyStyle"))
-    set_text_style(body.find(qn("a:lvl1pPr")), 20, DARK_GRAY)
-    set_text_style(body.find(qn("a:lvl2pPr")), 18, DARK_GRAY)
+    set_text_style(body.find(qn("a:lvl1pPr")), BODY_PT, SLATE)
+    set_text_style(body.find(qn("a:lvl2pPr")), CAPTION_PT, SLATE)
 
 
 # ---------------------------------------------------------------------------
@@ -163,16 +157,19 @@ def set_placeholder_style(placeholder, size_pt, hex_color, bold=False):
 
 
 def style_cover_layout(layout):
-    """Title Slide: navy background, white title, light gray subtitle, no master decorations."""
+    """Title Slide: navy background, white 28 pt title, 20 pt subtitle and 12 pt footer in the surface color,
+    no master decorations. The footer needs its own color: the master's is a dark gray, unreadable on navy."""
     layout.element.set("showMasterSp", "0")  # hide the top bar and footer rule from the master
     layout.background.fill.solid()
     layout.background.fill.fore_color.rgb = RGBColor.from_string(NAVY)
     for placeholder in layout.placeholders:
         kind = placeholder.placeholder_format.type
         if kind == PP_PLACEHOLDER.CENTER_TITLE:
-            set_placeholder_style(placeholder, 40, WHITE, bold=True)
+            set_placeholder_style(placeholder, TITLE_PT, WHITE, bold=True)
         elif kind == PP_PLACEHOLDER.SUBTITLE:
-            set_placeholder_style(placeholder, 20, LIGHT_GRAY)
+            set_placeholder_style(placeholder, SECTION_PT, SURFACE)
+        elif kind == PP_PLACEHOLDER.FOOTER:
+            set_placeholder_style(placeholder, MIN_PT, SURFACE)
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +200,7 @@ def fill_solid(shape, hex_color):
 
 
 def add_brand_name(master):
-    """Brand name at the bottom right of every content slide: navy, bold, 12 pt."""
+    """Brand name at the bottom right of every content slide: navy, bold, at the 12 pt floor like the footer beside it."""
     shape = add_master_shape(master, "Brand name", BRAND_BOX, textbox=True)
     frame = shape.text_frame
     frame.vertical_anchor = MSO_ANCHOR.MIDDLE
@@ -212,14 +209,14 @@ def add_brand_name(master):
     paragraph.alignment = PP_ALIGN.RIGHT
     run = paragraph.add_run()
     run.text = BRAND_NAME
-    run.font.size, run.font.bold = Pt(12), True
+    run.font.size, run.font.bold = Pt(MIN_PT), True
     run.font.color.rgb = RGBColor.from_string(NAVY)
 
 
 def decorate_master(master):
-    """Thin navy bar across the top, gray hairline above the footer, brand name."""
+    """Thin navy bar across the top, a hairline in the line color above the footer, brand name."""
     fill_solid(add_master_shape(master, "Top bar", TOP_BAR), NAVY)
-    fill_solid(add_master_shape(master, "Footer rule", FOOTER_RULE), MID_GRAY)
+    fill_solid(add_master_shape(master, "Footer rule", FOOTER_RULE), LINE)
     add_brand_name(master)
 
 
