@@ -9,6 +9,11 @@ Two pages:
    evaluate), both charts, the AI commentary when a saved one matches these numbers, and the
    buttons Generate, the downloads and Approve.
 
+Review mapping (Task 5): a workbook with headers clean.py doesn't know shows, on its company page
+and in "Add a company", each header with mapping.py's proposed column, how sure it is, why, and the
+first values under it. Each pair has Change (pick another column) and Confirm; nothing is saved
+until every pair is confirmed, and then only if the workbook reads with it.
+
 Look (theme.py, final Task 3): one column about 1100 px wide, white cards on the surface color,
 tables with a navy header and 40 px rows, Arial. One primary (navy) button per page: Generate all
 on the portfolio, Generate on a company's page. Every other button is white with a navy border;
@@ -38,10 +43,12 @@ from build_deck import AI_DRAFTED_LINE, QUESTIONS_HEADING, flag_count_text, gaps
 from charts import arr_chart, cash_chart
 from excel_output import status_label, tripped_cells
 from main import DATA_DIR, OUTPUT_DIR, company_name
+from mapping import confidence_text
 from metrics import CANNOT_EVALUATE, METRIC_LABELS, MISSING_INPUT, TRIP, load_config
-from portfolio import (NO_WORKBOOK_FOUND, add_company, approve_company, download, error_message, find_workbook,
-                       generate_all, generate_company, load_company, plain, portfolio_rows, run_state,
-                       saved_commentary, search_message, search_rows, suggested_name)
+from portfolio import (NO_WORKBOOK_FOUND, add_company, approve_company, confirm_mapping, download, error_message,
+                       find_workbook, generate_all, generate_company, load_company, mapping_proposals, plain,
+                       portfolio_rows, run_state, saved_commentary, search_message, search_rows, suggested_name,
+                       upload_proposals)
 from theme import STATUS_COLORS, streamlit_css
 
 PAGE_TITLE = "Board Pack Generator"
@@ -63,6 +70,11 @@ NO_COMMENTARY = ("No AI commentary: no saved analysis matches these numbers. Tic
                  "to ask Claude.")
 ADD_INTRO = ("Drop in a company's KPI workbook (.xlsx). It is added to data/ only if it can be read; "
              "otherwise you'll see what to fix.")
+REVIEW_INTRO = ("These headers aren't known input columns. Each shows the column it most likely means, how sure "
+                "that is and why, and the first values under it. Confirm each pair, or Change the column and "
+                "then confirm. Nothing is used until every pair is confirmed; the mapping is then saved, so next "
+                "quarter's workbook with the same headers runs without asking.")
+CONFIRM_ALL_FIRST = "Confirm every pair first"
 APPROVE_INTRO = ("Approving records your name against today's workbook, as approve.py does. It builds nothing: "
                  "click Generate afterwards so the deck and memo footers say reviewed.")
 
@@ -250,6 +262,49 @@ def open_company(stem):
     st.rerun()
 
 
+def pair_summary(proposal):
+    """The header, where it is, the proposal and its confidence, and the values under it (markdown lines)."""
+    proposed = (f"Proposed {proposal.column}, confidence {confidence_text(proposal.confidence)}"
+                if proposal.column else "No proposal")
+    values = ", ".join(proposal.samples) or "none"
+    return md(f"**{proposal.header}** (cell {proposal.cell})  \n{proposed}  \nValues: {values}")
+
+
+def pair_reason(proposal, column):
+    """Why the column was proposed, and whether the person changed it."""
+    reason = f"Why: {proposal.reason}"
+    return reason if column == proposal.column else f"Changed from the proposal. {reason}"
+
+
+def mapping_pair(proposal, key):
+    """One header and its column: the summary, Change (a list of columns) and Confirm. Returns (column, confirmed).
+
+    Confirm's key includes the chosen column, so changing the column clears its tick: a changed
+    pair has to be confirmed again.
+    """
+    with st.container(key=f"mapping-{key}"):
+        about, change, confirm = st.columns([2.4, 1.6, 0.8], vertical_alignment="center")
+        about.markdown(pair_summary(proposal))
+        index = proposal.choices.index(proposal.column) if proposal.column else None
+        column = change.selectbox("Change", proposal.choices, index=index, placeholder="Choose a column",
+                                  key=f"map_{key}")
+        confirmed = confirm.checkbox("Confirm", key=f"confirm_{key}_{column}", disabled=column is None)
+        st.caption(md(pair_reason(proposal, column)))
+    return column, confirmed
+
+
+def review_mapping(proposals, key):
+    """The Review mapping step: every pair. Returns ({header: chosen column}, every pair confirmed)."""
+    st.subheader("Review mapping")
+    st.caption(REVIEW_INTRO)
+    columns, confirmed = {}, []
+    for number, proposal in enumerate(proposals):
+        column, ticked = mapping_pair(proposal, f"{key}_{number}")
+        columns[proposal.header] = column
+        confirmed.append(ticked)
+    return columns, all(confirmed)
+
+
 def portfolio_row(row, ask_claude, config, output_dir):
     """One company: its name (click to open), five text cells, Generate, and Download (deck, memo, Excel)."""
     with st.container(key=f"portfolio-row-{row['stem']}"):   # theme.py: 40 px tall, a line under it
@@ -305,8 +360,10 @@ def add_company_panel(config, data_dir, expanded):
         name = st.text_input("Company name", value=suggested_name(upload.name), key=f"new_name_{upload.file_id}")
         replace = st.checkbox("Replace its workbook", key="replace",
                               help="Only if a company of this name is already in the table")
-        if st.button("Add company", key="add_company"):
-            outcome = add_company(upload.name, upload.getvalue(), name, config, data_dir, replace)
+        proposals = upload_proposals(upload.getvalue(), name)
+        columns, ready = review_mapping(proposals, f"new_{upload.file_id}") if proposals else (None, True)
+        if st.button("Add company", key="add_company", disabled=not ready, help=None if ready else CONFIRM_ALL_FIRST):
+            outcome = add_company(upload.name, upload.getvalue(), name, config, data_dir, replace, columns)
             say(outcome["ok"], outcome["message"])
             st.rerun()
 
@@ -350,6 +407,19 @@ def company_buttons(workbook, state, ask_claude, config, output_dir):
     for cell, (kind, label, mime) in zip(cells[1:], PAGE_DOWNLOADS):
         with cell:
             download_button(workbook, output_dir, state["current"], kind, label, mime, key=f"{kind}_page")
+
+
+def mapping_panel(workbook, config):
+    """Review mapping for a company in data/ whose headers need confirming; Save mapping once every pair is confirmed."""
+    proposals = mapping_proposals(workbook)
+    if not proposals:
+        return
+    with st.container(key="card-mapping"):
+        columns, ready = review_mapping(proposals, workbook.stem)
+        if st.button("Save mapping", key="save_mapping", disabled=not ready, help=None if ready else CONFIRM_ALL_FIRST):
+            outcome = confirm_mapping(workbook, columns, config)
+            say(outcome["ok"], outcome["message"])
+            st.rerun()
 
 
 def approve_panel(workbook, state, data_dir, output_dir):
@@ -430,6 +500,7 @@ def company_page(stem, data_dir, output_dir):
         company_buttons(workbook, state, ask_claude, config, output_dir)
     if problem:
         st.error(problem)
+        mapping_panel(workbook, config)   # shown only when the problem is headers to confirm
         return
     sections = [("flags", show_flags, (data,)), ("gaps", show_gaps, (data,)), ("metrics", show_metrics, (data,)),
                 ("charts", show_charts, (data,)), ("commentary", show_commentary, (workbook, config, output_dir)),

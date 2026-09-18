@@ -43,6 +43,7 @@ from build_deck import analysis_path, save_deck
 from check_companies import COMPANIES
 from check_deck import allowed_numbers, excel_display, expected_flag_count, number_tokens, read_metrics_workbook
 from excel_output import save_metrics_workbook
+from mapping import mapping_sha256
 from memo import save_memo
 from metrics import COMBO_FLAG_NAME, CONFIG_PATH, TRIP, load_config
 from provenance import approval_status, file_sha256, git_commit, manifest_path, read_manifest
@@ -193,7 +194,7 @@ def expected_memo_review(workbook, output_dir):
     An approval from before memos existed covers the deck only (approve.py's "documents").
     """
     manifest = read_manifest(manifest_path(workbook, output_dir))
-    approval, _ = approval_status(manifest, file_sha256(workbook), file_sha256(CONFIG_PATH))
+    approval, _ = approval_status(manifest, file_sha256(workbook), file_sha256(CONFIG_PATH), mapping_sha256(workbook))
     if approval is None or "memo" not in approval.get("documents", []):
         return "AI-drafted | not reviewed"
     return f"AI-drafted | reviewed by {approval['reviewer']} on {approval['approved_at'][:10]}"

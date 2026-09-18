@@ -54,6 +54,7 @@ from build_deck import (AI_DRAFTED, FICTIONAL_NOTE, NO_AI_MODEL, OUTPUT_DIR, QUE
                         load_analysis, review_text, threshold_text, value_text)
 from clean import clean_workbook
 from excel_output import flag_row, runway_context_value, status_label
+from mapping import mapping_sha256
 from metrics import CANNOT_EVALUATE, CONFIG_PATH, METRIC_LABELS, TRIP, format_value, load_config
 from provenance import approval_status, file_sha256, git_commit, manifest_path, read_manifest, save_manifest
 from theme import FONT, MID_GRAY, NAVY, SLATE, STATUS_COLORS, SURFACE, WHITE, css_color, font_file
@@ -517,7 +518,7 @@ def save_memo(workbook_path, config, analysis_file=None, run_date=None, output_d
     summary, why_unavailable = memo_analysis(analysis_file, build_payload(company, actuals, next_budget, config), data)
 
     approval, _ = approval_status(read_manifest(manifest_path(workbook_path, output_dir)),
-                                  file_sha256(workbook_path), file_sha256(CONFIG_PATH))
+                                  file_sha256(workbook_path), file_sha256(CONFIG_PATH), mapping_sha256(workbook_path))
     details = analysis_details(analysis_file) if summary else None
     footer = memo_footer(data, run_date or datetime.date.today(), details["model"] if details else None,
                          memo_approval(approval), git_commit())

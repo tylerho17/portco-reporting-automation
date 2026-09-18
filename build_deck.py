@@ -51,6 +51,7 @@ from charts import arr_chart, cash_chart, save_chart
 from clean import clean_workbook
 from excel_output import INFINITE_LABELS, NO_GAPS_LABEL, gap_label, status_label
 from make_template import CONTENT_LAYOUT, TEMPLATE_PATH
+from mapping import mapping_sha256
 from metrics import (CANNOT_EVALUATE, CONFIG_PATH, FLAG_RULES, METRIC_LABELS, NO_PRIOR_PERIOD, REASON_DISPLAY,
                      TRIP, compute_metrics, data_gaps, evaluate_flags, format_value, load_config, metric_reasons,
                      reason_text, runway_at_next_budget, runway_context_label)
@@ -794,7 +795,7 @@ def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_d
 
     # Reviewed only if a person approved this deck, for these exact inputs (provenance.py).
     approval, _ = approval_status(read_manifest(manifest_path(workbook_path, output_dir)),
-                                  file_sha256(workbook_path), file_sha256(CONFIG_PATH))
+                                  file_sha256(workbook_path), file_sha256(CONFIG_PATH), mapping_sha256(workbook_path))
     details = analysis_details(analysis_file) if summary else None
 
     chart_dir = output_dir / CHART_FOLDER

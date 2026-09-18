@@ -3,9 +3,10 @@
 Every deck's footer says "AI-drafted | not reviewed" until someone approves it here (and a deck built
 with --draft is also stamped "DRAFT - NOT REVIEWED"). Approval is a name and a time written into
 output/<company>_manifest.json, next to the hashes of the workbook and the thresholds the deck was
-built from. Rebuilding the deck then makes the footer say "reviewed by NAME on DATE"; if the workbook
-or config.yaml changes afterwards, it goes back to "not reviewed" on its own, because what the
-reviewer read is no longer what the deck says (provenance.approval_status).
+built from. Rebuilding the deck then makes the footer say "reviewed by NAME on DATE"; if the workbook,
+config.yaml or the company's confirmed column mapping changes afterwards, it goes back to "not
+reviewed" on its own, because what the reviewer read is no longer what the deck says
+(provenance.approval_status).
 
 This never builds or edits a deck. Approving and producing are two separate acts: the last word on
 whether numbers reach a board belongs to a person, and this file is only the record of it.
@@ -18,6 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from mapping import mapping_sha256
 from metrics import CONFIG_PATH
 from provenance import (approval_status, deck_status, file_sha256, git_output, manifest_path, read_manifest,
                         save_manifest, timestamp)
@@ -50,8 +52,8 @@ def reviewed_documents(manifest):
 def approve(company, reviewer=None, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, config_path=CONFIG_PATH, now=None):
     """Write the approval into the company's manifest and return the saved manifest.
 
-    Stops (ValueError) if there is no manifest to approve, or if the workbook or thresholds have
-    changed since that run: the deck on disk was built from the old ones, so approving it would put
+    Stops (ValueError) if there is no manifest to approve, or if the workbook, thresholds or column
+    mapping have changed since that run: the deck on disk was built from the old ones, so approving it would put
     a reviewer's name against numbers they never saw.
     """
     name = reviewer_name(reviewer)
@@ -67,11 +69,15 @@ def approve(company, reviewer=None, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, co
                          f"before approving")
     if manifest["config"]["sha256"] != config_hash:
         raise ValueError("config.yaml has changed since this deck was built - run main.py again before approving")
+    mapping_hash = mapping_sha256(workbook)
+    if (manifest.get("mapping") or {}).get("sha256") != mapping_hash:
+        raise ValueError("the column mapping has changed since this deck was built - run main.py again before "
+                         "approving")
 
     manifest["approval"] = {"reviewer": name, "approved_at": now or timestamp(),
-                            "input_sha256": input_hash, "config_sha256": config_hash,
+                            "input_sha256": input_hash, "config_sha256": config_hash, "mapping_sha256": mapping_hash,
                             "documents": reviewed_documents(manifest)}
-    manifest["deck"]["status"] = deck_status(approval_status(manifest, input_hash, config_hash)[0])
+    manifest["deck"]["status"] = deck_status(approval_status(manifest, input_hash, config_hash, mapping_hash)[0])
     save_manifest(path, manifest)
     return manifest
 

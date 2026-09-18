@@ -47,6 +47,7 @@ from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, comme
 from clean import clean_workbook
 from compare_models import run_cost
 from excel_output import save_metrics_workbook
+from mapping import mapping_record
 from memo import MEMO_UNAVAILABLE, save_memo
 from metrics import (CANNOT_EVALUATE, CONFIG_PATH, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config,
                      metric_reasons)
@@ -226,8 +227,8 @@ def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable,
     """Write output/<company>_manifest.json: where this deck came from, and who has approved it.
 
     Any approval already recorded is carried over. Whether it still counts is decided by
-    provenance.approval_status, which checks it against today's workbook and thresholds - so a deck
-    goes back to DRAFT on its own once either changes. memo = memo_step's result: the memo's files,
+    provenance.approval_status, which checks it against today's workbook, thresholds and column
+    mapping - so a deck goes back to DRAFT on its own once any of them changes. memo = memo_step's result: the memo's files,
     and whether it carries the AI text (it can differ from the deck).
     """
     path = manifest_path(workbook_path, output_dir)
@@ -235,7 +236,8 @@ def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable,
     manifest = build_manifest(
         company_name(workbook_path), workbook_path, CONFIG_PATH,
         deck_path(workbook_path, output_dir).name, ai_record(ai, analysis_file),
-        ai_text=why_unavailable is None, approval=(previous or {}).get("approval"))
+        ai_text=why_unavailable is None, approval=(previous or {}).get("approval"),
+        mapping=mapping_record(workbook_path))
     if memo is not None:
         manifest["memo"] = {"files": [memo["docx"].name, memo["pdf"].name], "ai_text": memo["why_unavailable"] is None}
     save_manifest(path, manifest)

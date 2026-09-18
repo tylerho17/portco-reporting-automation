@@ -5,6 +5,8 @@ There is no Streamlit here, so every function runs (and is tested) without a bro
   workbook now, by metrics.py), last run and deck status (read from output/<company>_manifest.json).
 - Generate: main.run_company into output/, the same files `python main.py` writes for one company.
 - Add a company: an uploaded workbook goes into data/ only if clean.py can read it.
+- Review mapping (Task 5): headers clean.py doesn't know get mapping.py's proposals; a person's
+  confirmed choices are saved to mappings/<company>.yaml, only once the workbook reads with them.
 - Approve: approve.approve, exactly what `python approve.py` records.
 
 Rules:
@@ -28,11 +30,12 @@ from openpyxl.utils.exceptions import InvalidFileException
 from analyze import BoardSummary
 from approve import approve
 from build_deck import PLACEHOLDER_TEXT, collect_deck_data, deck_path, flag_count_text
-from clean import clean_workbook
+from clean import UnconfirmedMappingError, clean_workbook
 from excel_output import output_path as excel_path
 from main import (AI_FAILED, AI_REUSED, AI_SKIPPED, DATA_DIR, INPUT_ERRORS, OUTPUT_DIR, SUMMARY_CSV_PATH,
                   api_key_problem, blank_quarters, company_name, find_workbooks, gaps_text, reusable_analysis,
                   run_company, write_summary_csv)
+from mapping import mapping_sha256, review_workbook, save_mapping, saved_columns
 from memo import memo_paths, no_em_dash
 from metrics import CONFIG_PATH
 from provenance import approval_status, deck_status, file_sha256, manifest_path, read_manifest
@@ -56,6 +59,13 @@ NAME_RULE = ("A company name starts with a letter and may have letters, digits, 
              "(at most 40 characters).")
 ALREADY_THERE = 'A workbook for {company} is already in data/. Tick "Replace its workbook" to swap it for this one.'
 ADDED = "Added {company} (latest quarter {quarter}). Click Generate on its row to build its files."
+
+# Review mapping.
+MAPPING_NEEDED = ("{count} column header{s} aren't known input columns: {headers}. Nothing is guessed: open "
+                  "the company's page and confirm or change what each one means under Review mapping.")
+MAPPING_INCOMPLETE = "Choose a column for every header first: {headers}."
+MAPPING_SAVED = ("Saved the column mapping for {company} ({count} headers). Next quarter's workbook with the "
+                 "same headers uses it without asking.")
 
 # Approve.
 REVIEWER_NEEDED = "Type the reviewer's name first: an approval needs a person's name on it."
@@ -98,22 +108,43 @@ def is_excel_workbook(path):
         return EXCEL_WORKBOOK_PART in archive.namelist()
 
 
+def quoted(headers):
+    """['GP', 'FTEs'] -> '"GP", "FTEs"' (header names as a person reads them in a sentence)."""
+    return ", ".join(f'"{header}"' for header in headers)
+
+
+def mapping_needed(proposals):
+    """The page's words for an unconfirmed mapping: which headers, and where to confirm them.
+
+    Not clean.py's own message: that one says how to confirm on the command line, and for an
+    upload it would name a temporary file.
+    """
+    count = len(proposals)
+    return MAPPING_NEEDED.format(count=count, s="s" if count != 1 else "", headers=quoted(p.header for p in proposals))
+
+
 def error_message(error):
     """Plain words for an error. A bug also prints its traceback in the Terminal window, never on the page."""
     if isinstance(error, NOT_A_WORKBOOK_ERRORS):
         return NOT_A_WORKBOOK
+    if isinstance(error, UnconfirmedMappingError):
+        return plain(mapping_needed(error.proposals))
     if isinstance(error, INPUT_ERRORS):     # clean.py's message says what's wrong and where
         return plain(error)
     traceback.print_exception(error)
     return plain(f"{UNEXPECTED_ERROR_START} ({type(error).__name__}: {error})")
 
 
-def load_company(workbook_path, config):
-    """(everything the deck shows, None), or (None, why the workbook can't be read). Never raises."""
+def load_company(workbook_path, config, mappings_dir=None):
+    """(everything the deck shows, None), or (None, why the workbook can't be read). Never raises.
+
+    mappings_dir: where the confirmed column mappings are (None: mappings/). Review mapping passes a
+    temporary one, to try a mapping before saving it.
+    """
     try:
         if not is_excel_workbook(workbook_path):  # else pandas' message is cryptic
             raise ValueError(NOT_A_WORKBOOK)
-        actuals, next_budget = clean_workbook(workbook_path)
+        actuals, next_budget = clean_workbook(workbook_path, mappings_dir)
         return collect_deck_data(company_name(workbook_path), Path(workbook_path).name, actuals, next_budget,
                                  config), None
     except Exception as error:  # noqa: BLE001 - the page shows plain words instead
@@ -134,8 +165,8 @@ def output_files(workbook_path, output_dir=OUTPUT_DIR):
 def run_state(workbook_path, output_dir=OUTPUT_DIR, config_path=CONFIG_PATH):
     """{"last_run", "status", "current"} from the company's manifest.
 
-    current = the files were built from today's workbook and config.yaml (their hashes match), so
-    they may be downloaded and approved. The status is provenance.py's, so the page, main.py and
+    current = the files were built from today's workbook, config.yaml and column mapping (their
+    hashes match), so they may be downloaded and approved. The status is provenance.py's, so the page, main.py and
     approve.py can't disagree about whether a deck is reviewed.
     """
     manifest = read_manifest(manifest_path(workbook_path, output_dir))
@@ -147,7 +178,10 @@ def run_state(workbook_path, output_dir=OUTPUT_DIR, config_path=CONFIG_PATH):
         return {"last_run": last_run, "status": OUT_OF_DATE.format(what="the workbook"), "current": False}
     if (manifest.get("config") or {}).get("sha256") != config_hash:
         return {"last_run": last_run, "status": OUT_OF_DATE.format(what="config.yaml"), "current": False}
-    approval, _ = approval_status(manifest, input_hash, config_hash)
+    mapping_hash = mapping_sha256(workbook_path)
+    if (manifest.get("mapping") or {}).get("sha256") != mapping_hash:
+        return {"last_run": last_run, "status": OUT_OF_DATE.format(what="the column mapping"), "current": False}
+    approval, _ = approval_status(manifest, input_hash, config_hash, mapping_hash)
     return {"last_run": last_run, "status": deck_status(approval), "current": True}
 
 
@@ -284,11 +318,13 @@ def suggested_name(file_name):
     return " ".join(words.split())[:40]
 
 
-def add_company(file_name, file_bytes, name, config, data_dir=DATA_DIR, replace=False):
+def add_company(file_name, file_bytes, name, config, data_dir=DATA_DIR, replace=False, columns=None):
     """Save an uploaded workbook as data/<name>.xlsx, only if clean.py can read it. Never raises.
 
     Returns {"ok", "message"}: clean.py's own message for a workbook it can't read. An existing
     company's workbook is replaced only when asked (its old files then show as out of date).
+    columns = the confirmed {header: column} from Review mapping, or None: they are saved to
+    mappings/<name>.yaml together with the workbook, and neither is saved unless the workbook reads.
     """
     try:
         stem = company_stem(name)
@@ -300,12 +336,74 @@ def add_company(file_name, file_bytes, name, config, data_dir=DATA_DIR, replace=
     with tempfile.TemporaryDirectory() as folder:   # check it before it goes anywhere near data/
         upload = Path(folder) / target.name
         upload.write_bytes(file_bytes)
-        data, problem = load_company(upload, config)
+        data, problem = try_mapping(upload, columns, config) if columns else load_company(upload, config)
     if problem:
         return {"ok": False, "message": problem}
+    message = ADDED.format(company=company_name(target), quarter=data["latest"])
+    if columns:
+        save_mapping(target, columns)
+        message += " " + MAPPING_SAVED.format(company=company_name(target), count=len(columns))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(file_bytes)
-    return {"ok": True, "message": ADDED.format(company=company_name(target), quarter=data["latest"])}
+    return {"ok": True, "message": message}
+
+
+# ---------------------------------------------------------------------------
+# Review mapping: headers clean.py doesn't know
+# ---------------------------------------------------------------------------
+
+def mapping_proposals(workbook_path):
+    """mapping.py's proposals for the workbook's unknown headers; [] if there are none or it can't be read.
+
+    A workbook that can't be read for another reason shows that reason instead (load_company).
+    """
+    try:
+        return review_workbook(workbook_path) if is_excel_workbook(workbook_path) else []
+    except (*INPUT_ERRORS, *NOT_A_WORKBOOK_ERRORS):
+        return []
+
+
+def upload_proposals(file_bytes, name):
+    """The proposals for an uploaded workbook, as it would be saved under this company name.
+
+    A mapping already confirmed for that name counts, so a new quarter's upload asks only about new
+    headers. A bad name gives [] (add_company then says what's wrong with it).
+    """
+    try:
+        stem = company_stem(name)
+    except ValueError:
+        return []
+    with tempfile.TemporaryDirectory() as folder:
+        upload = Path(folder) / f"{stem}.xlsx"
+        upload.write_bytes(file_bytes)
+        return mapping_proposals(upload)
+
+
+def try_mapping(workbook_path, columns, config):
+    """(data, None) if the workbook reads with these confirmed columns, else (None, why). Saves nothing.
+
+    columns = {header: chosen column}. Every unknown header needs a column. The try runs on a
+    temporary mappings folder holding the company's saved mapping plus these choices.
+    """
+    missing = [p.header for p in mapping_proposals(workbook_path) if not columns.get(p.header)]
+    if missing:
+        return None, MAPPING_INCOMPLETE.format(headers=quoted(missing))
+    try:
+        saved = saved_columns(workbook_path)
+    except ValueError as error:   # a hand-edited mappings file that doesn't read
+        return None, plain(error)
+    with tempfile.TemporaryDirectory() as folder:
+        save_mapping(workbook_path, {**saved, **columns}, mappings_dir=folder)
+        return load_company(workbook_path, config, mappings_dir=folder)
+
+
+def confirm_mapping(workbook_path, columns, config):
+    """Save a person's confirmed columns for a company already in data/, if the workbook then reads. Never raises."""
+    data, problem = try_mapping(workbook_path, columns, config)
+    if problem:
+        return {"ok": False, "message": problem}
+    save_mapping(workbook_path, columns)
+    return {"ok": True, "message": MAPPING_SAVED.format(company=company_name(workbook_path), count=len(columns))}
 
 
 # ---------------------------------------------------------------------------

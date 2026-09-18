@@ -7,7 +7,16 @@ Run from the project folder:  pytest
 import pytest
 
 import approve
+import mapping
 from provenance import build_manifest, file_sha256, manifest_path, read_manifest, save_manifest
+
+
+@pytest.fixture(autouse=True)
+def mappings_dir(tmp_path, monkeypatch):
+    """A temporary mappings/ folder: the project's own is never read or written."""
+    folder = tmp_path / "mappings"
+    monkeypatch.setattr(mapping, "MAPPINGS_DIR", folder)
+    return folder
 
 
 @pytest.fixture
@@ -37,6 +46,7 @@ def test_approving_records_the_reviewer_and_when(company):
     assert saved["approval"] == {
         "reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00",
         "input_sha256": file_sha256(company["workbook"]), "config_sha256": file_sha256(company["config"]),
+        "mapping_sha256": None,  # no confirmed column mapping (Task 5)
         "documents": ["deck"]}   # this run built no memo, so the reviewer approved the deck only
     assert saved["deck"]["status"] == "approved by Tyler Ho on 2026-09-17T15:00:00"
 
@@ -81,6 +91,21 @@ def test_thresholds_changed_since_the_run_stop(company):
     company["config"].write_bytes(b"nrr_min: 0.90")
     with pytest.raises(ValueError, match="config.yaml has changed"):
         approve_testco(company)
+
+
+def test_a_column_mapping_changed_since_the_run_stops(company, mappings_dir):
+    # Confirming a mapping after the run can change which numbers the deck would show.
+    mapping.save_mapping(company["workbook"], {"Opening ARR": "starting_arr"}, now="2026-09-17T15:00:00")
+    with pytest.raises(ValueError, match="column mapping has changed"):
+        approve_testco(company)
+
+
+def test_approving_records_the_column_mapping_s_hash(company, mappings_dir):
+    path = mapping.save_mapping(company["workbook"], {"Opening ARR": "starting_arr"}, now="2026-09-17T15:00:00")
+    manifest = read_manifest(company["manifest"])
+    manifest["mapping"] = mapping.mapping_record(company["workbook"])
+    save_manifest(company["manifest"], manifest)
+    assert approve_testco(company)["approval"]["mapping_sha256"] == file_sha256(path)
 
 
 def test_a_reviewer_name_is_required(company):

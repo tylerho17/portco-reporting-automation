@@ -17,6 +17,7 @@ from openpyxl import Workbook
 from pptx import Presentation
 
 import analyze
+import mapping
 import portfolio
 from analyze import BoardSummary, build_payload, save_analysis
 from build_deck import PLACEHOLDER_TEXT
@@ -24,6 +25,7 @@ from clean import clean_workbook
 from main import AI_REUSED
 from metrics import load_config
 from provenance import NOT_REVIEWED, manifest_path, read_manifest
+from test_mapping import RENAMES, renamed_copy
 
 PROJECT_DIR = Path(__file__).parent.parent
 COMPANIES = ["alderpeak", "fernhollow", "northwind"]
@@ -59,6 +61,14 @@ def no_real_client(monkeypatch):
     def refuse(*args, **kwargs):
         raise AssertionError("a test tried to create a real Anthropic client")
     monkeypatch.setattr(analyze.anthropic, "Anthropic", refuse)
+
+
+@pytest.fixture(autouse=True)
+def mappings_dir(tmp_path, monkeypatch):
+    """A temporary mappings/ folder: the project's own is never read or written."""
+    folder = tmp_path / "mappings"
+    monkeypatch.setattr(mapping, "MAPPINGS_DIR", folder)
+    return folder
 
 
 @pytest.fixture
@@ -406,3 +416,124 @@ def test_saved_commentary_only_for_exactly_these_numbers(folders):
     saved["payload"]["flags"] = []
     path.write_text(json.dumps(saved))
     assert portfolio.saved_commentary(workbook, load_config(), folders[1]) is None
+
+
+# ---------------------------------------------------------------------------
+# Review mapping (Task 5): headers clean.py doesn't know
+# ---------------------------------------------------------------------------
+
+def renamed_northwind(folders, tmp_path):
+    """Swap data/northwind.xlsx for a copy with every header renamed. Returns its path."""
+    renamed = renamed_copy("northwind", tmp_path)
+    shutil.copy(renamed, folders[0] / "northwind.xlsx")
+    return folders[0] / "northwind.xlsx"
+
+
+def proposed(proposals):
+    """What a reviewer who confirms every proposal sends: {header: column}."""
+    return {p.header: p.column for p in proposals}
+
+
+def test_an_unconfirmed_mapping_shows_on_the_row_in_page_words(folders, tmp_path):
+    renamed_northwind(folders, tmp_path)
+    row = rows_by_company(folders)["Northwind"]
+    assert row["problem"].startswith("16 column headers aren't known input columns: \"Opening ARR\", ")
+    assert "Review mapping" in row["problem"] and "python mapping.py" not in row["problem"]
+    assert row["flags"] == portfolio.NO_VALUE                     # no numbers until confirmed
+
+
+def test_mapping_proposals_for_a_workbook_in_data(folders, tmp_path):
+    workbook = renamed_northwind(folders, tmp_path)
+    assert proposed(portfolio.mapping_proposals(workbook)) == {new: old for old, new in RENAMES["northwind"].items()}
+    assert portfolio.mapping_proposals(folders[0] / "alderpeak.xlsx") == []   # every header known
+
+
+def test_mapping_proposals_for_a_file_that_is_not_a_workbook_are_empty(folders):
+    (folders[0] / "notes.xlsx").write_text("just some text")
+    assert portfolio.mapping_proposals(folders[0] / "notes.xlsx") == []
+
+
+def test_confirming_a_mapping_saves_it_and_the_company_reads_as_before(folders, tmp_path, mappings_dir):
+    workbook = renamed_northwind(folders, tmp_path)
+    outcome = portfolio.confirm_mapping(workbook, proposed(portfolio.mapping_proposals(workbook)), load_config())
+    assert outcome == {"ok": True, "message": portfolio.MAPPING_SAVED.format(company="Northwind", count=16)}
+    assert (mappings_dir / "northwind.yaml").exists()
+    assert rows_by_company(folders)["Northwind"]["flags"] == "6 of 9 flags tripped"   # the original's story
+
+
+def test_a_mapping_with_a_header_left_unchosen_is_refused(folders, tmp_path, mappings_dir):
+    workbook = renamed_northwind(folders, tmp_path)
+    choices = proposed(portfolio.mapping_proposals(workbook))
+    choices["GP"] = None
+    outcome = portfolio.confirm_mapping(workbook, choices, load_config())
+    assert outcome == {"ok": False, "message": portfolio.MAPPING_INCOMPLETE.format(headers='"GP"')}
+    assert not mappings_dir.exists()
+
+
+def test_a_mapping_the_workbook_can_t_be_read_with_is_not_saved(folders, tmp_path, mappings_dir):
+    # Burn and its budget swapped: the budget-only row then has an actual value, and clean.py stops.
+    workbook = renamed_northwind(folders, tmp_path)
+    choices = proposed(portfolio.mapping_proposals(workbook))
+    choices["Cash Burn"], choices["Plan Burn"] = "budget_net_burn", "net_burn"
+    outcome = portfolio.confirm_mapping(workbook, choices, load_config())
+    assert outcome["ok"] is False and "budget-only row" in outcome["message"]
+    assert not mappings_dir.exists()
+
+
+def test_generate_records_the_mapping_in_the_manifest(folders, tmp_path):
+    workbook = renamed_northwind(folders, tmp_path)
+    portfolio.confirm_mapping(workbook, proposed(portfolio.mapping_proposals(workbook)), load_config())
+    assert generate(folders)["ok"] is True
+    manifest = read_manifest(manifest_path(workbook, folders[1]))
+    assert manifest["mapping"]["sha256"] == mapping.mapping_sha256(workbook)
+    assert manifest["mapping"]["file"].endswith("northwind.yaml")
+
+
+def test_the_row_goes_out_of_date_when_the_mapping_changes(folders, tmp_path):
+    workbook = renamed_northwind(folders, tmp_path)
+    choices = proposed(portfolio.mapping_proposals(workbook))
+    portfolio.confirm_mapping(workbook, choices, load_config())
+    generate(folders)
+    assert rows_by_company(folders)["Northwind"]["current"] is True
+    mapping.save_mapping(workbook, {"Opening ARR": "starting_arr"}, now="2026-09-18T09:00:00")   # re-confirmed later
+    row = rows_by_company(folders)["Northwind"]
+    assert row["current"] is False
+    assert row["status"] == "Out of date: the column mapping has changed since the last run. Generate again."
+
+
+def test_an_upload_with_unknown_headers_is_not_added_until_confirmed(folders, tmp_path, mappings_dir):
+    data = renamed_copy("northwind", tmp_path).read_bytes()
+    outcome = add(folders, data, "Blue River")
+    assert outcome["ok"] is False and "Review mapping" in outcome["message"]
+    assert "python mapping.py" not in outcome["message"] and "tmp" not in outcome["message"]   # no temp path
+    assert not (folders[0] / "blue river.xlsx").exists() and not mappings_dir.exists()
+
+
+def test_upload_proposals_list_each_unknown_header(tmp_path):
+    data = renamed_copy("alderpeak", tmp_path).read_bytes()
+    assert proposed(portfolio.upload_proposals(data, "Blue River")) == \
+        {new: old for old, new in RENAMES["alderpeak"].items()}
+    assert portfolio.upload_proposals(data, "../bad name") == []   # add_company says what's wrong with the name
+    assert portfolio.upload_proposals((PROJECT_DIR / "data" / "alderpeak.xlsx").read_bytes(), "Blue River") == []
+
+
+def test_adding_with_a_confirmed_mapping_saves_both_and_reads_as_the_original(folders, tmp_path, mappings_dir):
+    data = renamed_copy("northwind", tmp_path).read_bytes()
+    choices = proposed(portfolio.upload_proposals(data, "Blue River"))
+    outcome = portfolio.add_company("upload.xlsx", data, "Blue River", load_config(), folders[0], columns=choices)
+    assert outcome["ok"] is True
+    assert outcome["message"] == (portfolio.ADDED.format(company="Blue River", quarter="Q2 2026") + " "
+                                  + portfolio.MAPPING_SAVED.format(company="Blue River", count=16))
+    assert (folders[0] / "blue river.xlsx").read_bytes() == data
+    assert (mappings_dir / "blue river.yaml").exists()
+    rows = rows_by_company(folders)
+    assert rows["Blue River"]["flags"] == rows["Northwind"]["flags"] == "6 of 9 flags tripped"
+
+
+def test_adding_with_a_mapping_the_workbook_can_t_be_read_with_saves_neither(folders, tmp_path, mappings_dir):
+    data = renamed_copy("northwind", tmp_path).read_bytes()
+    choices = proposed(portfolio.upload_proposals(data, "Blue River"))
+    choices["Cash Burn"], choices["Plan Burn"] = "budget_net_burn", "net_burn"
+    outcome = portfolio.add_company("upload.xlsx", data, "Blue River", load_config(), folders[0], columns=choices)
+    assert outcome["ok"] is False and "budget-only row" in outcome["message"]
+    assert not (folders[0] / "blue river.xlsx").exists() and not mappings_dir.exists()

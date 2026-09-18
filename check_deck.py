@@ -44,6 +44,7 @@ from check_companies import COMPANIES
 from clean import clean_workbook
 from excel_output import save_metrics_workbook
 from make_template import FOOTER_RULE
+from mapping import mapping_sha256
 from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, CONFIG_PATH, PASS, TRIP, compute_metrics, load_config
 from provenance import NOT_REVIEWED, approval_status, file_sha256, manifest_path, read_manifest
 from text_fit import MIN_FONT_PT, paragraph, text_height_pt, text_width_pt
@@ -253,7 +254,7 @@ def check_risks_slide(slide, company, table_flags, gap_labels):
 def expected_review(workbook, output_dir):
     """What the footer must end with, worked out here from the manifest (not from build_deck's code)."""
     manifest = read_manifest(manifest_path(workbook, output_dir))
-    approval, _ = approval_status(manifest, file_sha256(workbook), file_sha256(CONFIG_PATH))
+    approval, _ = approval_status(manifest, file_sha256(workbook), file_sha256(CONFIG_PATH), mapping_sha256(workbook))
     if approval is None:
         return "AI-drafted | not reviewed"
     return f"AI-drafted | reviewed by {approval['reviewer']} on {approval['approved_at'][:10]}"

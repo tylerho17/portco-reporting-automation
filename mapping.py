@@ -445,6 +445,12 @@ def mapping_sha256(workbook_path, mappings_dir=None):
     return file_sha256(path) if path.exists() else None
 
 
+def mapping_record(workbook_path, mappings_dir=None):
+    """What the manifest says about the mapping: its file and hash, or None if the company has none."""
+    path = mapping_path(workbook_path, mappings_dir)
+    return {"file": str(shown(path)), "sha256": file_sha256(path)} if path.exists() else None
+
+
 # ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------

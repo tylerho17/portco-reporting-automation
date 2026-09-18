@@ -17,12 +17,14 @@ from streamlit.testing.v1 import AppTest
 
 import analyze
 import app
+import mapping
 import portfolio
 from analyze import BoardSummary, build_payload, save_analysis
 from clean import clean_workbook
 import theme
 from metrics import CANNOT_EVALUATE, PASS, TRIP, load_config
 from provenance import NOT_REVIEWED, manifest_path, read_manifest
+from test_mapping import RENAMES, renamed_copy
 from theme import STATUS_COLORS
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -37,6 +39,14 @@ def no_real_client(monkeypatch):
     def refuse(*args, **kwargs):
         raise AssertionError("a test tried to create a real Anthropic client")
     monkeypatch.setattr(analyze.anthropic, "Anthropic", refuse)
+
+
+@pytest.fixture(autouse=True)
+def mappings_dir(tmp_path, monkeypatch):
+    """A temporary mappings/ folder: the project's own is never read or written."""
+    folder = tmp_path / "mappings"
+    monkeypatch.setattr(mapping, "MAPPINGS_DIR", folder)
+    return folder
 
 
 @pytest.fixture
@@ -236,7 +246,7 @@ def test_generate_all_builds_every_company(folders):
 
 def test_an_unreadable_workbook_shows_clean_py_s_message_and_the_others_still_work(folders):
     book = Workbook()
-    book.active.append(["Quarter", "ARR"])
+    book.active.append(["Quarter", "Starting ARR"])   # a known header: an unknown one stops at the mapping step
     book.active.append(["Q1 2025", 100])
     book.save(folders[0] / "broken.xlsx")
     _, message = portfolio.load_company(folders[0] / "broken.xlsx", load_config())
@@ -304,6 +314,78 @@ def test_no_em_dash_anywhere_on_either_page(folders):
         shown = [element.value for kind in ("title", "subheader", "caption", "markdown", "text", "info", "error")
                  for element in getattr(test, kind)] + html_bodies(test)   # the tables are HTML
         assert shown and not any(EM_DASH in str(text) for text in shown)
+
+
+# ---------------------------------------------------------------------------
+# Review mapping (Task 5)
+# ---------------------------------------------------------------------------
+
+def renamed_alderpeak_page(folders, tmp_path):
+    """Alderpeak's page after its workbook is swapped for a copy with six headers renamed."""
+    renamed = renamed_copy("alderpeak", tmp_path)
+    (folders[0] / "alderpeak.xlsx").write_bytes(renamed.read_bytes())
+    return page(folders, company="alderpeak")
+
+
+def test_review_mapping_shows_each_pair_its_confidence_and_sample_values(folders, tmp_path):
+    test = renamed_alderpeak_page(folders, tmp_path)
+    assert not test.exception
+    assert "Review mapping" in [subheader.value for subheader in test.subheader]
+    changes = [box for box in test.selectbox if box.key.startswith("map_")]
+    assert {box.value for box in changes} == set(RENAMES["alderpeak"])            # each proposal preselected
+    assert all(box.label == "Change" for box in changes)
+    shown = " ".join(markdown.value for markdown in test.markdown)
+    for header in RENAMES["alderpeak"].values():
+        assert f"**{header}**" in shown
+    assert "99% (high)" in shown and "8000, 9000, 10090, 11250" in shown   # BoP ARR's confidence and values
+
+
+def test_review_mapping_needs_every_pair_confirmed_before_saving(folders, tmp_path, mappings_dir):
+    test = renamed_alderpeak_page(folders, tmp_path)
+    confirms = [box for box in test.checkbox if box.key.startswith("confirm_")]
+    assert len(confirms) == len(RENAMES["alderpeak"]) and all(box.label == "Confirm" for box in confirms)
+    assert test.button(key="save_mapping").disabled
+    for box in confirms[:-1]:
+        box.check()
+    test.run()
+    assert test.button(key="save_mapping").disabled                            # one still unconfirmed
+    assert not mappings_dir.exists()
+
+
+def test_confirming_every_pair_saves_the_mapping_and_the_page_shows_the_numbers(folders, tmp_path, mappings_dir):
+    test = renamed_alderpeak_page(folders, tmp_path)
+    for box in [box for box in test.checkbox if box.key.startswith("confirm_")]:
+        box.check()
+    test.run()
+    test.button(key="save_mapping").click().run()
+    assert not test.exception
+    assert test.success[0].value == portfolio.MAPPING_SAVED.format(company="Alderpeak", count=6)
+    assert (mappings_dir / "alderpeak.yaml").exists()
+    assert test.subheader[0].value == "0 of 9 flags tripped"                   # Alderpeak's own story
+
+
+def test_change_resets_that_pair_s_confirmation_and_saves_the_new_column(folders, tmp_path, mappings_dir):
+    test = renamed_alderpeak_page(folders, tmp_path)
+    for box in [box for box in test.checkbox if box.key.startswith("confirm_")]:
+        box.check()
+    test.run()
+    churn = next(box for box in test.selectbox if box.key.startswith("map_") and box.value == "churned_arr")
+    churn.set_value("headcount").run()
+    assert test.button(key="save_mapping").disabled                            # the changed pair needs a new tick
+    employees = next(box for box in test.selectbox if box.key.startswith("map_") and box.value == "headcount"
+                     and box.key != churn.key)
+    employees.set_value("churned_arr").run()
+    for box in [box for box in test.checkbox if box.key.startswith("confirm_") and not box.value]:
+        box.check()
+    test.run()
+    test.button(key="save_mapping").click().run()
+    saved = mapping.confirmed_aliases(folders[0] / "alderpeak.xlsx")
+    assert saved["churn"] == "headcount" and saved["employees"] == "churned_arr"
+
+
+def test_a_company_with_known_headers_has_no_review_step(folders):
+    test = page(folders, company="northwind")
+    assert "Review mapping" not in [subheader.value for subheader in test.subheader]
 
 
 # ---------------------------------------------------------------------------
