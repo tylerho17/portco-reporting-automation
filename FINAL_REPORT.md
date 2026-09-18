@@ -1604,3 +1604,100 @@ TASK13_TABLE
 - **CLAUDE.md doesn't list `config_schema.py`.** Suggested Architecture line: "config_schema.py:
   every config.yaml setting's kind, range and example; loading stops with each problem (missing key,
   wrong type, out of range, unknown key) naming the key, the problem and a line to copy".
+
+## Task 14: CLI ergonomics (main.py --version, --list-companies, --help, exit codes)
+
+### What I built
+
+- **`python main.py --version`**: three lines: the code ("Board Pack Generator, code 1887d37", with a
+  `*` if there are uncommitted changes, the same words as every deck footer via
+  `build_deck.commit_text`), the model and prompt ("claude-sonnet-5, prompt v4"), and the Python
+  version. It reads no config and no data, so it works even when they are broken.
+- **`python main.py --list-companies`**: the web page's portfolio table on the terminal: company,
+  workbook, latest quarter, flags ("7 of 9 flags tripped, 1 cannot evaluate"), last run, deck status.
+  It is `portfolio.portfolio_rows` printed, so the words are the page's. A workbook that can't be
+  read is still listed, with clean.py's message under the table. It writes nothing, and exits 1 only
+  when `data/` has no workbooks.
+- **A clearer `--help`**: a usage line showing the two ways to call it (build, or ask a question),
+  a plain description, options in four groups (what to build, AI and review, long batches,
+  information), then **Examples** (7, each with what it does) and **Exit codes**.
+- **Exit codes, one source**: `main.EXIT_CODES` holds 0, 1, 2 and 130 with when each happens. `--help`
+  prints it, and README has an **Exit codes** table with the same words (a test compares them).
+- **Ctrl+C** now ends with exit code 130 and "Stopped (Ctrl+C). Companies that finished are in
+  output/; any still being built keep their earlier files. No batch summary was saved." instead of
+  a traceback.
+- **Usage errors (exit 2)** also cover `--version` or `--list-companies` with anything else:
+  "--version runs on its own: leave out --all".
+- **main() split into three small functions**: `main` (Ctrl+C), `run_command` (version, config,
+  list) and `run_workbooks` (the batch, unchanged). `aligned_lines` is shared by the summary table
+  and the listing.
+- **Tests:** `tests/test_cli.py` (49, written before the code), including two that run
+  `python main.py` as a separate process. **1209 tests pass.**
+- **Docs:** README (the commands, what `--list-companies` shows, the Exit codes table, Next steps),
+  STUDY_GUIDE (every new function, the tests table, the command list), INTERVIEW_PREP Q34k,
+  LOOM_SCRIPT (test count), LEARNINGS (7 rows).
+
+### How it's proved
+
+28 bugs planted one at a time in a temporary copy of the project (`output/task14_plant_bugs.py`,
+logs `output/task14_plant_bugs.log` and `_rerun.log`), each run against tests/test_cli.py:
+
+| Result | Bugs |
+|---|---|
+| Caught from the start (25) | --version: drops the prompt, reads config.yaml, exits 1. The list: writes a file, leaves out unreadable workbooks, never says why, exits 0 with no workbooks, uses its own status words, reads data/ fixed at import, drops the last-run column. Help: leaves out exit code 130, has no examples, shows an invalid example, wraps inside "--max-cost". Usage: --version with --all allowed, --list-companies with --skip-ai allowed, a usage error exits 1. Ctrl+C: shows a traceback, exits 1, message reworded, is code 1 too. An exit code reworded in main.py only; README drops the 130 row; README shows a command that doesn't exist |
+| Passed at first, caught after new tests (3) | --version prints "code unknown" (the copy has no .git, so the real commit was "unknown" too: the test now uses a made-up commit); "1 companies" (a test now lists one company); --version's help line hidden (the usage line and examples name it too: every option must now have its own indented line) |
+| Control (nothing changed) | 49 passed |
+
+### Decisions you didn't specify
+
+1. **No version number.** There is no release to number, and a hand-bumped "1.0.0" would drift. The
+   commit is what every deck's footer and manifest carry, so `--version` shows that: a deck can be
+   matched to the code that built it.
+2. **Exit codes kept as they were (0, 1, 2), plus 130 for Ctrl+C.** I considered a separate code for
+   each problem (config, no key, a company failed) but kept one "something needs fixing" code: the
+   printout says which, scripts and tests already rely on 1, and a scheduler mostly needs "worked or
+   not". 130 is the usual shell code for Ctrl+C, and catching it replaces a traceback with plain words.
+3. **`--list-companies` shows the web page's table, not a new one**, so the terminal and the page
+   can't disagree. It needs config.yaml (the flag counts use the thresholds), so a broken config stops
+   it with the same message as a batch. The deck status is the page's wording, including "Out of date:
+   ... Generate again", which names the page's button.
+4. **An unreadable workbook doesn't make the listing exit 1.** The listing worked; the row says what's
+   wrong. Only an empty `data/` is exit 1, matching `--all`.
+5. **`--version` and `--list-companies` refuse other options** (exit 2) rather than ignore them:
+   `--list-companies --skip-ai` would otherwise look like it did something.
+6. **`portfolio` is imported inside `list_companies`**, because `portfolio.py` imports `main.py`;
+   at the top of the file it would be a circular import. The comment says why.
+7. **README describes the listing in words, not a pasted sample**: a sample's "DRAFT - NOT REVIEWED"
+   column trips the docs test's watermark rule (LEARNINGS).
+8. **A test checks every `python main.py ...` command in README is valid**, so a renamed option can't
+   leave the README wrong. argparse accepts shortened options (`--list` for `--list-companies`); I
+   left that on, as it's argparse's normal behaviour.
+9. **Found on the way:** Task 13's docs were never committed, and its report and Task 12's had
+   placeholders. I re-ran Task 12's six escaped bugs (all caught now), filled both in, and committed
+   them first.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. The README sample of `--list-companies` failed the docs test's watermark rule: replaced with a
+   description.
+2. My README-command test read `--help`'s normal exit as an error, then used pytest's `.value` on a
+   plain SystemExit: fixed.
+3. Three planted bugs passed at first (above); each got a test, and 28 of 28 are caught.
+4. The planted Ctrl+C-traceback bug is caught only because the interrupt stops pytest itself; the run
+   still fails, so it counts, but the log line looks odd.
+5. A command joining two steps with `;` and `echo $?` needed approval; exit codes are checked by the
+   tests instead.
+
+### Unresolved
+
+- **A Ctrl+C at the exact moment a company's files are being moved into `output/`** could leave that
+  company half moved. The move takes milliseconds and every other moment is safe (a company is built
+  in its own folder). Even then the manifest is moved last (Task 7), so the old manifest still
+  describes the old files and `--resume` rebuilds that company. The message's "keep their earlier
+  files" is true at every other moment.
+- **The other scripts** (`build_deck.py`, `approve.py`, `rollup.py`, `export.py`, `demo_reset.py`, ...)
+  have no `--version`, examples or exit-code table. main.py is the one a person runs; say if you want
+  the same for the others.
+- **CLAUDE.md's main.py line** doesn't mention the new options. Suggested: "main.py CLI: `python main.py
+  data/northwind.xlsx` or `--all` [--skip-ai] [--draft]; `--list-companies`, `--version`, `--help`
+  (examples and exit codes 0/1/2/130, documented in README); ...".

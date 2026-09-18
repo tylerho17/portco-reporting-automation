@@ -100,7 +100,7 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 | NRR 97.1%, below 100% | Slide 1, NRR row; threshold from `config.yaml` (`nrr_min`) | `metrics.nrr` |
 | Runway 11 months vs 12-month floor | Slide 1, Runway row; `config.yaml` (`runway_min_months`) | `metrics.runway_months` |
 | Q1 2025 blank | Northwind's blank quarter | `make_data.py` (`BLANK_QUARTER`) |
-| Over 500 tests | `python -m pytest -q` (1160 today) | pytest counts them |
+| Over 500 tests | `python -m pytest -q` (1209 today) | pytest counts them |
 | 12 of 12 edge cases | `python eval/run_eval.py` | each eval company's answer key in `eval/make_eval_data.py` |
 | Portfolio rollup: Fernhollow 7, Northwind 6, Alderpeak 0; worst flag runway | `python rollup.py` or the web page's Download rollup (`output/portfolio_rollup.pptx`) | `rollup.py` from `metrics.evaluate_flags`; proved by `python check_rollup.py` |
 | Northwind Q1 to Q2: 5 flags flipped, 8 metrics moved, 1 data gap closed | The memo's "What changed since the last run", the company page's card, or `python diff_runs.py data/northwind.xlsx` (needs a run a quarter earlier: `python demo_reset.py` makes one) | `diff_runs.py` from the saved results in the manifest; proved by `python check_diff.py` |

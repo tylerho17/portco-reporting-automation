@@ -413,6 +413,7 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
 - [x] **Exports:** metrics and flags as CSV and JSON for other tools, and an email summary that pastes cleanly into Outlook (`export.py`, the company page's Export).
 - [x] **Demo script and reset:** a 5 minute walkthrough for a non-technical viewer (DEMO.md), and `demo_reset.py` to put `output/` back to a known good state before each demo, keeping the saved AI analyses.
 - [x] **Config validation:** `config.yaml` is checked against a schema every time it is read; each problem names the key, what is wrong and an example line, all problems at once (`config_schema.py`).
+- [x] **Command-line help:** `python main.py --version`, `--list-companies`, and a `--help` with option groups, examples and every exit code; the exit codes are documented above (`main.EXIT_CODES`).
 
 **Still to do:**
 

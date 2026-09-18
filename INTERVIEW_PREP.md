@@ -490,6 +490,18 @@ once, and `main.py` prints them and exits 1; the web page shows them instead of 
 proved the tests catch what they claim by breaking the checker 30 ways in a temporary copy.
 *Point to:* `config_schema.SETTINGS`, `config_schema.config_problems`; `tests/test_config_schema.py::test_a_percent_typed_as_a_whole_number_gets_the_decimal_it_meant`.
 
+**Q34k. How would an ops person run this on a schedule, and know if it worked?** (new, Task 14)
+By the exit code. `python main.py --all` ends with 0 when every company was built, 1 when something
+needs fixing (a bad config.yaml, no API key, a company that failed or timed out), 2 when the command
+itself is wrong, and 130 when someone pressed Ctrl+C. A scheduler only reads that number, so it's
+documented in one place in the code, `EXIT_CODES`; `--help` prints it and README has the same table,
+and a test fails if the two ever differ. Before a run, `--list-companies` shows every company with its
+flags and whether its deck is reviewed, in the web page's own words, and writes nothing. `--version`
+names the commit, which is the same one every deck footer carries, so a deck can be matched to the
+code that built it. I proved the tests catch what they claim by planting 28 bugs in a copy; three got
+through at first, and each now has a test.
+*Point to:* `main.EXIT_CODES`, `main.list_companies`, `main.check_combination`; `tests/test_cli.py::test_readme_documents_every_exit_code_in_mains_words`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs
