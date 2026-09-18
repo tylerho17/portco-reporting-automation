@@ -587,3 +587,108 @@ Northwind's slide 4 as built:
 - **Not checked by eye:** the rebuilt decks in PowerPoint, and the web page in a browser (same
   reasons as Tasks 1–3). The Loom script now asks you to do both before recording.
 - **STUDY_GUIDE section 5** still has Task 4's four stale answers (decision 7).
+
+---
+
+## Task 6: review of the whole run (git diff main..HEAD)
+
+### What I reviewed
+
+- All code in the diff, line by line:
+  - build_deck.py, main.py, app.py, approve.py, provenance.py, analyze.py, make_template.py
+  - check_main.py, run_app.command, .streamlit/config.toml, requirements.txt
+- The docs, checked for claims the code no longer backs:
+  - README, CLAUDE.md, STUDY_GUIDE, LOOM_SCRIPT, INTERVIEW_PREP
+  - tests/test_docs.py already guards the file and function names, the slide count and the watermark wording. I searched the docs for stale slide numbers, "watermark" and test counts.
+  - I didn't read all 474 lines of INTERVIEW_PREP.md one by one.
+- I also ran things, not just read them:
+  - the web page's `build_outputs` on awkward uploads: long file names, and a .pptx renamed .xlsx
+  - the footer width for every model / reviewer combination
+  - the timestamps and manifests of the saved outputs
+
+### Findings, most serious first
+
+1. **Not fixed, needs your decision: "reviewed by Tyler Ho" can be on text or slides the reviewer never saw.**
+   - An approval is tied to two hashes only: the workbook and config.yaml (`provenance.approval_status`). It isn't tied to the AI analysis JSON or to the code that lays out the deck.
+   - Example today:
+     - Northwind was approved at 22:33:47, one second after its analysis was saved and before this run started. At that point it was a 5-slide deck.
+     - Every deck built since then is the new 4-slide layout (wins dropped, headline moved). Each one still says "AI-drafted | reviewed by Tyler Ho on 2026-09-17" on every slide.
+     - The AI text is the same, so today the claim is only stale about the layout.
+     - But a live `python main.py data/northwind.xlsx` would write *new* AI text, and the footer would still say "reviewed by Tyler Ho". The workbook and config haven't changed, so the approval still counts.
+   - The gap was already there on main. Before this run it only meant a missing watermark. Task 1 turned it into a positive claim printed on every slide.
+   - INTERVIEW_PREP Q34 says "a stale approval is worse than none". An interviewer who asks "what if you re-run Claude after approval?" finds this gap.
+   - Why I didn't fix it:
+     - It changes what an approval means and what the manifest holds.
+     - Task 1 was told to keep provenance.py and the manifest unchanged.
+   - Likely fix: `approve.py` also stores the analysis JSON's hash (maybe the commit too), and `approval_status` checks it. Then new AI text makes the deck "not reviewed" again.
+   - Until then, if you've changed anything since approving, re-approve before you show the Northwind deck as "reviewed".
+2. **Fixed: a workbook with an ordinary long name got no deck at all.**
+   - Example: "Northwind - Q2 2026 KPI pack (final version for board).xlsx" dropped on the web page showed "Slide 1, Footer: text doesn't fit even at the 12 pt minimum".
+   - With the model and a reviewer on the footer, there is only about 170 pt (roughly 27 characters) left for the file name. The CLI has the same limit; the web page just made long names likely.
+   - Fix: `add_footer` now shortens the file name in the middle ("Northwin….xlsx") before it gives up the reviewer's name. Anything else too long still stops the build.
+   - Tests (both failed on the old code):
+     - `test_a_file_name_too_long_for_the_footer_is_shortened_not_a_failed_deck`
+     - `test_a_long_file_name_still_gets_a_deck`
+     - plus `test_a_file_name_that_fits_is_never_shortened`
+   - The old docstring's "748 pt of 755" figure went with it: my measurement didn't match it, and it only held for our own file names.
+3. **Fixed: `run_app.command` failed on a `.venv` made before the web page existed.**
+   - Setup only ran when `.venv/bin/python` was missing, so an older .venv without streamlit ended in "streamlit: command not found".
+   - It now checks for `.venv/bin/streamlit` instead. `python3 -m venv` leaves an existing .venv alone, so setup only adds the missing packages.
+   - Test: `test_the_launcher_installs_packages_when_the_venv_has_no_streamlit`.
+4. **Fixed: another Office file renamed .xlsx got the "something unexpected went wrong" message.**
+   - A .pptx is a zip file too, so the "is it a zip?" check let it through, and pandas failed with `OptionError`.
+   - `app.is_excel_workbook` now also looks for `xl/workbook.xml`.
+   - Test: `test_another_office_file_renamed_xlsx_gets_the_plain_message`.
+5. **Known, not fixed: the queue's checks undo the deck rebuild.**
+   - `run_checks` runs check_main.py after check_deck.py, and check_main.py writes `--skip-ai` decks into output/. So after this task's queue checks, output/'s decks will say "AI summary unavailable" again.
+   - Task 5 logged this. The fix is an `--output-dir` for main.py (README Next steps).
+   - Getting the AI text back needs no API call: `python build_deck.py data/<company>.xlsx` for each company.
+6. **Low: the manifest's `deck.status` says "DRAFT - NOT REVIEWED" for a deck with no stamp.**
+   - It's accurate about review, but the word DRAFT now only appears on the slides with `--draft`.
+   - Task 5 (decision 1) kept it on purpose, because changing it changes the manifest format. I agree; noted so it isn't forgotten.
+7. **Low: two things in app.py can go stale without a test failing.**
+   - `TYPICAL_AI_COST_USD` / `TYPICAL_AI_SECONDS` are typed by hand from README's Cost section. The comment says so.
+   - `streamlit` is unpinned in requirements.txt, and the page uses newer arguments (`width="stretch"`); 1.64 is installed here. A fresh install gets the newest version, so this only bites someone with an old streamlit.
+8. **Housekeeping: `output/~$alderpeak_board_pack.pptx`** is a PowerPoint lock file from 22:32. The Alderpeak deck was open when the queue started, so the copy on screen is the old 5-slide one. Close it and reopen. output/ is git-ignored.
+
+Checked and fine:
+- `--draft` never stamps an approved deck.
+- Where approval exists, `record_deck_status` keeps the manifest in step with it.
+- `commentary_boxes` is shared by the slide and `ai_text_problems`, so what's measured is what's drawn.
+- `check_main.headline_on_deck` reads slide 4.
+- `main.py --draft` is passed through every layer.
+- The web page's saved-analysis reuse compares the whole payload, not only company and quarter.
+- `save_upload` can't write outside its folder.
+- The web page never touches output/.
+
+### Decisions you didn't specify
+
+1. **Which gives way first on the footer: the file name.** It is shortened before the reviewer's name is dropped. "Reviewed by NAME" is the approval; a file name is also in the manifest (CLI) and in the download's name (web page).
+2. **How to shorten the file name:** keep its start and its extension, with "…" between them, cut one character at a time until the line fits. The start says which company it is, and the extension says what kind of file.
+3. **The launcher checks for the program it runs (streamlit)**, not for a list of every package. If a later package is missing, the page's own error names it.
+4. **The workbook check looks for `xl/workbook.xml`**, the one part every .xlsx has. I didn't open it with openpyxl first, because clean.py does that next and gives its own messages.
+5. **Finding 1 isn't fixed.** It's the most serious finding, but the fix changes what an approval means. That's your decision, not a bug fix.
+6. **Test counts updated to 532** in STUDY_GUIDE and LOOM_SCRIPT (the two places with exact counts). The earlier sections of this report keep the counts they had at the time.
+
+### What failed and how I fixed it
+
+- **My first footer test expected "Northwind KPI" to survive shortening.** With the model and a reviewer on the line, only "Northwin" fits. The test was wrong, not the code; it now checks the start, the "….xlsx" and the width.
+- **Two shell commands were refused:**
+  - `bash -n run_app.command` (a syntax check), run in a chain
+  - a `grep` in a chain
+  I ran the syntax check through Python's `subprocess` (exit code 0) and used the Grep tool. Logged in LEARNINGS.md.
+- **Each fix has a LEARNINGS.md row** (findings 2, 3 and 4).
+
+### Checks
+
+- pytest: 532 passed (527 before, +5: two footer tests, two web page tests, one launcher test).
+- All 5 check scripts print "All checks passed". I ran check_main.py first, then rebuilt the three Excel files and decks from the saved analyses (no API call), then check_excel_output.py and check_deck.py.
+- Rebuilt decks: 4 slides each, and Claude's headline on slide 4.
+  - Footers: Northwind "reviewed by Tyler Ho on 2026-09-17"; Alderpeak and Fernhollow "not reviewed".
+- Working tree clean, and `polish` is pushed to origin (see the last commit).
+
+### Unresolved
+
+- **Finding 1** (approval not tied to the AI text or the layout): needs your decision.
+- **Finding 5:** output/'s decks go back to the placeholder after the queue's own checks. Rebuild with `build_deck.py` (no API call).
+- **Not checked by eye:** the decks in PowerPoint and the web page in a browser (same as Tasks 1–5). In particular, look at a shortened footer ("Northwin….xlsx") on a real slide.

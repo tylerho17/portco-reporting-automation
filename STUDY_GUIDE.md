@@ -808,7 +808,7 @@ Every run uses `--skip-ai`. The `main.py` process also gets no API key and an AP
 
 ### `tests/`: unit tests (pytest)
 
-Run with `python -m pytest -q` (527 tests, about 30 seconds). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
+Run with `python -m pytest -q` (532 tests, about 30 seconds). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
