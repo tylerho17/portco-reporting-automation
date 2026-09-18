@@ -19,7 +19,9 @@ whether it would survive real use, then how you work.
 4. [What broke](#what-broke): Q26–Q31
 5. [Scale and risk](#scale-and-risk): Q32–Q36
 6. [Working method](#working-method): Q37–Q39
-7. [When you can't recall a detail](#when-you-cant-recall-a-detail)
+7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q47, the follow-ups an
+   interviewer asks after the first answer (column mapping, the eval set)
+8. [When you can't recall a detail](#when-you-cant-recall-a-detail)
 
 ---
 
@@ -646,6 +648,104 @@ against the old behavior, which meant it proved nothing, and it was rewritten. T
 broken on purpose to see whether the tests notice: 35 of 36 deliberate breaks were caught in one
 round, 18 of 18 in another, and 22 of 22 for the column mapping.
 *Point to:* LEARNINGS.md rows on the font-size test and the "old analysis" test; OVERNIGHT_REPORT.md.
+
+---
+
+## Deep dives on the final run
+
+The Scale and risk answers (Q34b to Q35) are the first answer on each topic. A good interviewer
+then pushes: "why not just...?", "what if...?", "what can't it do?". These are those second
+questions. Each names the file to open if they want to see it.
+
+### Column mapping
+
+**Q40. The tool proposes "Plan Burn" at high confidence. Why make a person click Confirm at all?**
+Because the cost of being wrong is lopsided. Confirming takes a few seconds, once per company, and
+every later quarter then runs unattended. A wrong mapping would put a wrong number on a board slide
+with nothing to show it: if "Plan Burn" landed in net burn instead of budgeted burn, burn vs budget,
+burn multiple and runway would all be worked out from the plan, and all would look plausible. The
+confidence isn't a probability either. It's my heuristic's points, capped at 99%
+(`mapping.MAX_CONFIDENCE`) because a heuristic is never certain. So confidence decides how a
+proposal is shown, never whether it's used, and a test pins that a 99% proposal still stops the run.
+*Point to:* `clean.clean_workbook`; `tests/test_mapping.py::test_a_high_confidence_proposal_still_needs_confirming`.
+
+**Q41. Walk me through how it scores a header.**
+Four steps, all in `mapping.propose`. One, candidates: only the standard columns no known header
+already covers, so a column is never proposed twice. Two, the name: drop filler like "Total" and
+"$K", swap the usual finance synonyms ("Opening" means starting, "Plan" means budget, "GP" means gross
+profit), and compare with each column's words and known spellings, allowing for typos: "Revenu"
+scores 92%. Three, the values: a number in the budget-only row rules out all 13 actual columns, ARR
+and cash must still roll forward with the column in place, and gross profit can't be above revenue.
+Evidence that fits adds points; evidence that breaks takes them off. Four, the strongest pair is
+assigned first, and below 40% there's no proposal: the person picks. The proof: 29 headers renamed
+across the three companies, and every one was proposed as the column it came from.
+*Point to:* `mapping.propose`, `mapping.budget_row_evidence`, `mapping.SYNONYMS`; `tests/test_mapping.py::test_every_renamed_header_is_proposed_as_the_column_it_came_from`.
+
+**Q42. Why word lists and arithmetic? Why not just ask Claude what the column means?**
+I would add Claude, as a proposer, never a decider. The heuristics have real limits. "Cash Burn" is
+about as close to ending cash as to net burn by name, and it only lands right because another header
+took ending cash first. A word not in my synonym list, like "Bookings" or "Logos Lost", gets nothing
+useful. A model reads "burn" as a flow and knows the vocabulary. The design: send the unknown headers,
+their sample values and the 16 column definitions, ask for JSON, then run the same value checks in
+Python, so a proposal that breaks the budget-row rule or a roll-forward is marked down whatever the
+model says. A person still confirms. It's the same pattern as the commentary: the model suggests,
+Python checks what's checkable, a person owns the rest. I built the heuristics first because they're
+free, give the same answer every time, and can be tested.
+*Point to:* README.md "Known limitations"; FINAL_REPORT.md Task 5, "Where a model call would improve it".
+
+**Q43. Once a mapping is saved, what stops it quietly going wrong later?**
+Three things. It's saved only if the workbook actually reads with it, tried first in a temporary
+folder. A known header always wins over a saved line, so a hand-edited mapping file can't redefine
+"Revenue". And the mapping file is an input, like the workbook: its SHA-256 hash goes in the
+manifest, so changing it marks the company out of date and sends an approved deck back to "not
+reviewed". One weakness I'd admit: the file is named after the workbook, so if a company renames its
+file, the mapping is lost. Nothing wrong gets used; the review simply asks again.
+*Point to:* `mapping.mapping_sha256`, `provenance.approval_status`; `tests/test_mapping.py::test_a_known_header_wins_over_a_saved_mapping`.
+
+### The eval set
+
+**Q44. You have over 1,300 unit tests. Why an eval set as well?**
+They answer different questions. A unit test asks "does this function do what I think?", one function
+at a time. The eval asks "does a whole company come out right?": a messy workbook goes through the
+real clean, metrics, flags and gaps, and the result is compared with an answer key typed by hand. It's
+built around the cases that break things, not the ones that demo well: exactly at every threshold, a
+blank quarter first, second to last and last, zero revenue, negative budgeted burn, two quarters of
+history, and two workbooks that must stop. And it's a scorecard, not just pass or fail: it collects
+every mismatch by name across all 12, so after a change I see how many cases broke, not only the
+first. It runs inside pytest, so nobody can forget to run it.
+*Point to:* `eval/run_eval.py`; `tests/test_eval.py::test_every_company_matches_its_answer_key`.
+
+**Q45. How do you know the answer keys are right, and not copied from the code?**
+Values, flag statuses and every "not meaningful" cell are typed by hand from the definitions in
+CLAUDE.md. Where a rule is applied, like which quarters a blank one spreads to, the prediction uses
+hand-typed lists in check_northwind.py, not the inputs table in metrics.py, so the check shares no
+code with what it checks. I learned that the hard way: an early bug passed because the answer key had
+been written with the same wrong formula as the code (Q27). Every answer key must also tie out (ARR
+and cash roll forward), and the threshold company's formulas must give each config.yaml threshold
+exactly. Then I attacked the eval itself: 24 bugs planted one at a time, and each failed on the
+company built for it.
+*Point to:* `eval/make_eval_data.py`; `tests/test_eval.py::test_every_answer_key_ties_out`, `tests/test_eval.py::test_the_threshold_company_sits_exactly_on_every_threshold`.
+
+**Q46. Did the eval ever miss something?**
+Yes, and that was the most useful thing it did. In the first round of planted bugs, revenue growth
+YoY computed three quarters back instead of four passed 11 of 12 companies. Only the eight flag
+metrics were being checked for values, and revenue growth isn't one of them. So the healthy company
+now checks all 19 metrics by hand formula, a test pins it, and the same bug then failed 4 companies.
+The lesson: an eval only covers what it compares, and you find out what that is by attacking it. What
+it still doesn't cover: a partly blank quarter, a workbook with no budget row, unknown headers. Those
+have unit tests instead, and each could become one more eval company.
+*Point to:* `tests/test_eval.py::test_the_healthy_answer_key_covers_every_metric_not_just_the_flags`; FINAL_REPORT.md Task 6.
+
+**Q47. The eval scores the numbers. How would you score the AI commentary?**
+It's designed, not built. Replay saved analyses through the checks, so no API call. Each eval company
+gets a saved analysis plus copies with a planted error: an invented number, a dropped minus sign,
+"fell" on a series that rose, a tripped flag left out of the risks. The existing checks run offline
+(the number, fit and direction checks, the deck's and the memo's), plus new rules from the answer
+keys: every flag that trips is named among the risks, and no number is quoted for a metric that has
+none. Each planted copy must fail its rule and the clean one must pass. What stays human is whether
+the commentary is actually insightful: that's the blind 1 to 5 score. Recording the analyses needs
+one live run, about a dollar for ten companies.
+*Point to:* FINAL_REPORT.md Task 6, "How the same harness would score AI commentary offline"; README.md "Next steps".
 
 ---
 
