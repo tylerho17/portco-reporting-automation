@@ -19,9 +19,10 @@ whether it would survive real use, then how you work.
 4. [What broke](#what-broke): Q26–Q31
 5. [Scale and risk](#scale-and-risk): Q32–Q36
 6. [Working method](#working-method): Q37–Q39
-7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q68, the follow-ups an
+7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q72, the follow-ups an
    interviewer asks after the first answer (column mapping, the eval set, batch resilience, cost
-   ceilings, golden files, the approval gate, the run diff, the rollup, exports)
+   ceilings, golden files, the approval gate, the run diff, the rollup, exports, what breaks at 275
+   companies)
 8. [When you can't recall a detail](#when-you-cant-recall-a-detail)
 
 ---
@@ -600,6 +601,7 @@ Not the math: Python is instant. Five things would:
 5. **Cost** isn't the problem: about $25 a quarter, roughly double for any company that needs the retry.
 
 *Point to:* README.md "Next steps" and "Cost"; `main.quarter_mismatch_warning`; POLISH_REPORT.md Task 1 Unresolved.
+The follow-ups ("which of your own choices would hurt?", "how would you know it worked?") are Q69 to Q72.
 
 **Q36. What would you build next?** (guide Q25, replaced: the slide-fit and trend checks it listed are now built)
 In order:
@@ -982,6 +984,57 @@ never writes into output/. Because the JSON carries its input hashes, a tool can
 inputs a file reflects, whenever it was made. Wiring exports into main.py is a small change if a data
 team wants them after every run: that's a choice about their workflow, not a technical limit.
 *Point to:* `export.save_exports`; FINAL_REPORT.md Task 11, "Decisions you didn't specify".
+
+### What breaks at 275 companies
+
+**Q69. Which of your own design choices would hurt first at 275?**
+Q35 covers time, formats, review and cost. These are the ones in my own code, and I'd rather name them
+than be asked:
+1. **The mapping file is named after the workbook.** A company that sends a file called "Acme Q3 KPIs"
+   one quarter and "Acme Q4 KPIs" the next gets asked to confirm its columns every quarter. Fix: key
+   the mapping by company, not by file name.
+2. **The rollup ranks 7 companies per slide.** For 275 that's about 40 ranking slides, and a partner
+   reads the first one. It would need a "worst 20" slide, with the full list in the workbook.
+3. **The diff remembers one run back**, so trends across quarters need a history file per company.
+4. **The different-quarters warning becomes noise.** At 275, some companies are always a quarter late;
+   that should be a "late reporters" list, not one warning line.
+5. **The rollup and exports aren't part of the batch**: two more commands after every run.
+6. **The web page has only been seen with a handful of companies.** It has search, but a table of 275
+   rows hasn't been tried.
+
+*Point to:* FINAL_REPORT.md "Unresolved" in Tasks 5, 9 and 10; `rollup.ROWS_PER_SLIDE`; `main.quarter_mismatch_warning`.
+
+**Q70. The 275-company batch ran overnight. How do you know the next morning that it went right?**
+Four places, from quickest to most detailed. The exit code: 0 means every company was built, 1 means
+something needs a look, and a scheduler reads just that. The summary table and `batch_summary.csv`:
+one row per company with its outcome (built, "OK (AI failed)", failed, timed out, stopped at the cost
+ceiling, or skipped as up to date), its flags, the AI cost and a note saying why. The batch manifest:
+the options, the commit, the total spend and every outcome. And the run log: one line per step per
+company, with seconds and the exact error, so "Fernhollow failed at the memo step after 3 seconds" is
+one search. Then the rollup is the morning's review queue: worst company first. What I'd add at 275 is
+a one-paragraph morning summary sent to the team, counts by outcome, built from the batch manifest.
+*Point to:* `main.EXIT_CODES`, `main.save_batch_manifest`, `run_log.CompanyLog.step`; `rollup.py`.
+
+**Q71. On day one, 20 of the 275 workbooks fail. What do you do?**
+Triage by the message, because each FAILED line says what's wrong, where, and what to do next. They
+fall into three kinds. Unknown headers: that's the mapping review, a few minutes once per company, and
+next quarter runs unattended. A layout clean.py can't read, like quarters across the top instead of
+down: that stops, and the choice is to ask the company to use the standard layout or to add a reader
+for it, and any new reader gets an eval company first, so it's proven before it's trusted. A real data
+problem, like "TBD" typed in revenue: that goes back to the company. What I would never do is loosen
+clean.py so it "just reads" the file. Every loosening is a guess, and a guess can reach a board.
+*Point to:* `main.describe_error`, `mapping.propose`, `eval/run_eval.py`; CLAUDE.md "Stop, don't guess".
+
+**Q72. What scales worse, the cost or the review?**
+The review, by a long way. The AI is about $25 a quarter for 275 companies. The review is 275 decks: if
+a careful read took 10 minutes, that's about 45 hours a quarter, and that 10 minutes is my assumption,
+not a measurement. Three things shrink it without removing the person. The checks remove whole classes
+of error: no number has to be re-added by hand, because Python did the math and code checked every
+number Claude quoted, so the reviewer reads for judgment, not arithmetic. The rollup puts the worst
+companies first, and a company with no flags gets a lighter read. And scoring the commentary offline
+(Q47) would catch more before a person sees it. What I wouldn't do is approve automatically: the footer
+saying "reviewed by" has to mean a person did.
+*Point to:* README.md "Cost"; `rollup.WORST_FIRST`; `provenance.approval_status`.
 
 ---
 
