@@ -247,7 +247,7 @@ def hash_problem(workbook_path, config_path, manifest):
     return None
 
 
-def deck_problem(manifest, want_ai, draft):
+def deck_problem(manifest, want_ai, draft, appendix=False):
     """Why the saved deck isn't the one this run would build from the same inputs, or None."""
     deck, approval = manifest.get("deck"), manifest.get("approval")
     if not deck:
@@ -256,16 +256,18 @@ def deck_problem(manifest, want_ai, draft):
         return "the deck has no AI text"
     if bool(deck.get("draft")) != draft:
         return "the deck was built with a different --draft setting"
+    if bool(deck.get("appendix")) != appendix:   # a manifest from before Task 20 has no appendix: it had none
+        return "the deck was built with a different --appendix setting"
     if approval and approval.get("approved_at", "") > manifest.get("run_at", ""):   # ISO times sort as text
         return "approved after the deck was built, so its footer still says not reviewed"
     return None
 
 
-def resume_problem(workbook_path, output_dir, config_path, want_ai, draft):
+def resume_problem(workbook_path, output_dir, config_path, want_ai, draft, appendix=False):
     """None if the saved outputs are what this run would build, else why the company has to be rebuilt.
 
     Up to date means: built from today's workbook, config.yaml and column mapping (by hash), every
-    output file still there, AI text on the deck if this run asks for it, the same --draft setting,
+    output file still there, AI text on the deck if this run asks for it, the same --draft and --appendix settings,
     and no approval recorded since the deck was built.
     """
     manifest = read_manifest(manifest_path(workbook_path, output_dir))
@@ -275,4 +277,4 @@ def resume_problem(workbook_path, output_dir, config_path, want_ai, draft):
     missing = [path.name for path in expected_files(workbook_path, output_dir, manifest) if not path.exists()]
     if problem is None and missing:
         problem = f"{missing[0]} is missing"
-    return problem or deck_problem(manifest, want_ai, draft)
+    return problem or deck_problem(manifest, want_ai, draft, appendix)

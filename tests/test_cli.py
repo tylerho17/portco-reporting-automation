@@ -202,7 +202,7 @@ def test_help_explains_every_option_on_its_own_line(capsys):
     # On its own indented line in the option groups, not just named somewhere: the usage line and the
     # examples name --version too, so a hidden help line would otherwise pass (found by a planted bug).
     options_part = help_text(capsys).split("Examples:")[0]
-    for option in ("workbook", "--all", "--skip-ai", "--draft", "--resume", "--max-cost", "--timeout", "--workers",
+    for option in ("workbook", "--all", "--skip-ai", "--draft", "--appendix", "--resume", "--max-cost", "--timeout", "--workers",
                    "--list-companies", "--version", "-h, --help"):
         assert re.search(rf"^  {re.escape(option)}\b", options_part, flags=re.MULTILINE), option
     assert "python main.py --list-companies | --version | --help" in options_part   # the usage line's second way

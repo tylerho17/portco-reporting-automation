@@ -19,7 +19,8 @@ Without --skip-ai, the API key is checked before any company runs.
 
 Every deck's footer says whether a person has approved it ("AI-drafted | not reviewed", or
 "reviewed by NAME on DATE" after approve.py). --draft also stamps "DRAFT - NOT REVIEWED" across
-every slide of a deck nobody has approved; it's off by default.
+every slide of a deck nobody has approved; it's off by default. --appendix adds one slide after the
+four with every metric for every quarter; also off by default.
 
 One company failing never stops the batch. The run ends with a summary table
 (company, flags tripped, data gaps, result, notes), also saved as output/batch_summary.csv, a warning
@@ -47,6 +48,7 @@ Information (Task 14; each runs on its own, and neither builds anything):
 Run: python main.py data/northwind.xlsx
      python main.py --all --skip-ai
      python main.py --all --draft
+     python main.py --all --appendix
      python main.py --all --resume --max-cost 5 --timeout 300 --workers 4
      python main.py --list-companies
 """
@@ -251,9 +253,13 @@ def ai_part(workbook_path, actuals, next_budget, config, output_dir, skip_ai, cl
     return ai, ai["analysis_file"]
 
 
-def deck_step(workbook_path, config, analysis_file, output_dir, draft=False):
-    """Build and save the deck (draft=True: watermarked unless approved). Returns why the AI summary isn't on it, or None."""
-    path, why_unavailable = save_deck(workbook_path, config, analysis_file, output_dir=output_dir, draft=draft)
+def deck_step(workbook_path, config, analysis_file, output_dir, draft=False, appendix=False):
+    """Build and save the deck (draft=True: watermarked unless approved; appendix=True: the metric table slide too).
+
+    Returns why the AI summary isn't on it, or None.
+    """
+    path, why_unavailable = save_deck(workbook_path, config, analysis_file, output_dir=output_dir, draft=draft,
+                                      appendix=appendix)
     where = f"on slide {slide_number(commentary_slide)}"   # the AI commentary slide
     if why_unavailable is None:
         print(f"  ✓ Deck: {shown_path(path)} (AI text {where})")
@@ -317,14 +323,15 @@ def changes_step(workbook_path, actuals, next_budget, config, output_dir):
 
 
 def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo=None, draft=False,
-                  changes=None):
+                  changes=None, appendix=False):
     """Write output/<company>_manifest.json: where this deck came from, and who has approved it.
 
     Any approval already recorded is carried over. Whether it still counts is decided by
     provenance.approval_status, which checks it against today's workbook, thresholds and column
     mapping - so a deck goes back to DRAFT on its own once any of them changes. memo = memo_step's result: the memo's files,
     and whether it carries the AI text (it can differ from the deck). The batch events (skips,
-    timeouts, stops, failures) are carried over too, and whether --draft was asked for (--resume checks it).
+    timeouts, stops, failures) are carried over too, and whether --draft and --appendix were asked for
+    (--resume checks both).
     changes = changes_step's answer: this run's results and the earlier run they were compared with (Task 10).
     """
     path = manifest_path(workbook_path, output_dir)
@@ -335,6 +342,7 @@ def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable,
         ai_text=why_unavailable is None, approval=previous.get("approval"),
         mapping=mapping_record(workbook_path))
     manifest["deck"]["draft"] = draft
+    manifest["deck"]["appendix"] = appendix
     if previous.get("batch_events"):
         manifest["batch_events"] = previous["batch_events"]
     if memo is not None:
@@ -398,13 +406,14 @@ def ai_log_result(ai):
 
 
 def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_DIR, draft=False, reuse_saved=False,
-                control=None, log=None):
+                control=None, log=None, appendix=False):
     """Run every step for one workbook and print a line per step.
 
     Returns a result dict for the summary table. Raises if any step fails.
     reuse_saved=True (the web page, --resume) uses a saved analysis of exactly these numbers instead of asking Claude.
     control (resilience.CompanyControl) is how a batch gives up on a company: it stops before its next step.
     log (run_log.CompanyLog) writes a line per step to the run log; None logs nothing.
+    appendix=True adds the metric table slide to the deck (--appendix).
     """
     control = control or CompanyControl()
     log = log or CompanyLog(None, company_name(workbook_path))
@@ -430,13 +439,14 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
         step.result, step.error = ai_log_result(ai)
     control.checkpoint()
     with log.step(run_log.DECK):
-        why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir, draft)
+        why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir, draft, appendix)
     control.checkpoint()
     with log.step(run_log.MEMO):
         memo = memo_step(workbook_path, config, analysis_file, output_dir)
     control.checkpoint()
     with log.step(run_log.MANIFEST):
-        manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo, draft, changes)
+        manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo, draft, changes,
+                                 appendix)
     result["ai"] = ai_status(ai is None, why_unavailable)   # a reused analysis isn't "skipped"
     result["deck_status"] = manifest["deck"]["status"]
     result["cost_usd"] = manifest["ai"]["cost_usd"]
@@ -457,18 +467,20 @@ def describe_error(error):
 # ---------------------------------------------------------------------------
 
 def run_batch(workbook_paths, config, skip_ai, client=None, output_dir=OUTPUT_DIR, draft=False, resume=False,
-              max_cost=None, timeout=None, workers=1, spend=None, log=None):
+              max_cost=None, timeout=None, workers=1, spend=None, log=None, appendix=False):
     """Run every workbook, up to `workers` at a time. A failure, timeout or stop is recorded and the batch moves on.
 
     Returns one result per workbook, in the order given (whatever order they finished in).
     client and output_dir are for tests: a fake Claude client, and a temporary folder.
     draft=True puts the DRAFT watermark on every deck nobody has approved (--draft).
+    appendix=True adds the metric table slide to every deck (--appendix).
     resume, max_cost (dollars), timeout (seconds per company), workers: see the module docstring.
     spend (resilience.SpendMeter) adds up the AI cost; main() passes one in to print the total.
     log (run_log.RunLog) gets a line per step per company, then one for the whole company; None
     starts a new one in <output_dir>/logs. main() passes one in to print where it is.
     """
     batch = SimpleNamespace(config=config, skip_ai=skip_ai, client=client, output_dir=Path(output_dir), draft=draft,
+                            appendix=appendix,
                             resume=resume, max_cost=max_cost, timeout=timeout, spend=spend or SpendMeter(),
                             log=log or RunLog(output_dir, COMMAND_LINE),
                             finished=queue.Queue())   # each company's thread puts itself here when it's done
@@ -513,7 +525,8 @@ def log_whole_company(result, started, batch):
 
 def resume_check(path, batch):
     """(a SKIPPED result, None) when the saved outputs are up to date, else (None, why the company is rebuilt)."""
-    problem = resume_problem(path, batch.output_dir, CONFIG_PATH, want_ai=not batch.skip_ai, draft=batch.draft)
+    problem = resume_problem(path, batch.output_dir, CONFIG_PATH, want_ai=not batch.skip_ai, draft=batch.draft,
+                             appendix=batch.appendix)
     if problem:
         return None, problem
     try:
@@ -547,7 +560,7 @@ def company_worker(job, batch):
         _private.stage, _private.output_dir = job.stage, batch.output_dir
         job.result = run_company(job.path, batch.config, batch.skip_ai, batch.client, job.stage, batch.draft,
                                  reuse_saved=batch.resume, control=job.control,
-                                 log=batch.log.company(company_name(job.path)))
+                                 log=batch.log.company(company_name(job.path)), appendix=batch.appendix)
         job.result["error"] = None
     except Cancelled:  # the batch gave up on it (--timeout): nothing to report, it's already recorded
         pass
@@ -811,6 +824,7 @@ EXAMPLES = [
     ("python main.py --all", "every workbook in data/"),
     ("python main.py --all --skip-ai", "no API call and no key needed: decks say AI summary unavailable"),
     ("python main.py --all --draft", "also stamp DRAFT - NOT REVIEWED on every deck nobody has approved"),
+    ("python main.py --all --appendix", "add a slide with every metric for every quarter to each deck"),
     ("python main.py --all --resume --max-cost 5", "a long batch: skip what's up to date, stop spending at $5"),
     ("python main.py --list-companies", "which companies are in data/, and each deck's status"),
     ("python main.py --version", "which code, model and prompt this is"),
@@ -819,7 +833,7 @@ EXAMPLES = [
 ON_ITS_OWN = ("version", "list_companies")   # options that answer a question and never build anything
 
 # The two ways to call it, instead of argparse's one long line of every option.
-USAGE = ("python main.py (WORKBOOK | --all) [--skip-ai] [--draft] [--resume] [--max-cost DOLLARS]\n"
+USAGE = ("python main.py (WORKBOOK | --all) [--skip-ai] [--draft] [--appendix] [--resume] [--max-cost DOLLARS]\n"
          "                      [--timeout SECONDS] [--workers WORKERS]\n"
          "       python main.py --list-companies | --version | --help")
 
@@ -846,6 +860,7 @@ def build_parser():
     review = parser.add_argument_group("AI and review")
     review.add_argument("--skip-ai", action="store_true", help="don't call Claude; decks show the AI placeholder")
     review.add_argument("--draft", action="store_true", help="stamp DRAFT - NOT REVIEWED on decks nobody has approved")
+    review.add_argument("--appendix", action="store_true", help="add a slide with every metric for every quarter")
     batch = parser.add_argument_group("long batches")
     batch.add_argument("--resume", action="store_true",
                        help="skip companies whose outputs were built from today's workbook and config.yaml")
@@ -958,10 +973,11 @@ def run_workbooks(args, config):
         print(problem)
         return EXIT_PROBLEM
     options = {"resume": args.resume, "max_cost": args.max_cost, "timeout": args.timeout, "workers": args.workers,
-               "skip_ai": args.skip_ai, "draft": args.draft}
+               "skip_ai": args.skip_ai, "draft": args.draft, "appendix": args.appendix}
     spend, log = SpendMeter(), RunLog(OUTPUT_DIR, COMMAND_LINE)
     results = run_batch(paths, config, args.skip_ai, output_dir=OUTPUT_DIR, draft=args.draft, resume=args.resume,
-                        max_cost=args.max_cost, timeout=args.timeout, workers=args.workers, spend=spend, log=log)
+                        max_cost=args.max_cost, timeout=args.timeout, workers=args.workers, spend=spend, log=log,
+                        appendix=args.appendix)
     print_summary(results)
     if not args.skip_ai or args.max_cost is not None:
         print(spend_text(spend.total, args.max_cost))

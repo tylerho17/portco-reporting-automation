@@ -360,7 +360,7 @@ def test_a_run_writes_a_manifest_for_the_company(tmp_path):
     assert saved["ai"]["input_tokens"] == 100 and saved["ai"]["output_tokens"] == 50
     assert saved["ai"]["cost_usd"] > 0
     assert saved["deck"] == {"file": "northwind_board_pack.pptx", "ai_text": True, "status": NOT_REVIEWED,
-                             "draft": False}
+                             "draft": False, "appendix": False}
     assert saved["approval"] is None  # nobody has reviewed it yet
     assert saved["run_at"]
 
@@ -520,6 +520,27 @@ def test_draft_is_passed_from_the_command_line_to_the_batch(monkeypatch):
     assert seen["draft"] is True
     main.main(["--all", "--skip-ai"])
     assert seen["draft"] is False
+
+
+def test_appendix_is_passed_from_the_command_line_to_the_batch(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(main, "run_batch", lambda *args, **kwargs: seen.update(kwargs) or [])
+    monkeypatch.setattr(main, "write_summary_csv", lambda results: PROJECT_DIR / "output" / "batch_summary.csv")
+    monkeypatch.setattr(main, "save_batch_manifest", lambda *args: PROJECT_DIR / "output" / "batch_manifest.json")
+    main.main(["--all", "--skip-ai", "--appendix"])
+    assert seen["appendix"] is True
+    main.main(["--all", "--skip-ai"])
+    assert seen["appendix"] is False
+
+
+def test_appendix_adds_the_metric_table_slide_and_the_manifest_says_so(tmp_path):
+    main.run_batch([NORTHWIND], main.load_config(), True, output_dir=tmp_path, appendix=True)
+    slides = Presentation(tmp_path / "northwind_board_pack.pptx").slides
+    assert len(slides) == 5 and slides[-1].shapes.title.text.startswith("Appendix: every metric")
+    assert read_manifest(manifest_path(NORTHWIND, tmp_path))["deck"]["appendix"] is True
+    run_northwind(tmp_path, skip_ai=True)   # off by default
+    assert len(Presentation(tmp_path / "northwind_board_pack.pptx").slides) == 4
+    assert read_manifest(manifest_path(NORTHWIND, tmp_path))["deck"]["appendix"] is False
 
 
 # ---------------------------------------------------------------------------

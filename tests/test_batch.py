@@ -277,6 +277,7 @@ def test_resume_rebuilds_when_the_workbook_changed(tmp_path):
     (lambda m: m.update(mapping={"file": "mappings/northwind.yaml", "sha256": "0" * 64}),
      "the column mapping has changed"),
     (lambda m: m["deck"].update(draft=True), "the deck was built with a different --draft setting"),
+    (lambda m: m["deck"].update(appendix=True), "the deck was built with a different --appendix setting"),
     (lambda m: m.update(approval={"reviewer": "Tyler Ho", "approved_at": "2999-01-01T00:00:00"}),
      "approved after the deck was built, so its footer still says not reviewed"),
     (lambda m: m.pop("deck"), "the manifest has no deck"),
