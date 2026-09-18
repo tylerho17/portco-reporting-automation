@@ -243,6 +243,12 @@ def test_the_mac_launcher_is_double_clickable_and_starts_this_app():
     assert "streamlit" in (PROJECT_DIR / "requirements.txt").read_text().split()
 
 
+def test_the_launcher_installs_packages_when_the_venv_has_no_streamlit():
+    # A .venv made before the web page existed has Python but no streamlit. Checking only for
+    # .venv/bin/python skipped the install, and the double-click ended in "streamlit: command not found".
+    assert "[ ! -x .venv/bin/streamlit ]" in (PROJECT_DIR / "run_app.command").read_text()
+
+
 def render_northwind():
     """Draws Northwind's results the way the page does after an upload (AppTest can't upload files)."""
     import app

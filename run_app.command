@@ -5,7 +5,9 @@
 cd "$(dirname "$0")" || exit 1   # the project folder, wherever it has been copied to
 
 # First run only: create the Python environment and install the packages (needs internet).
-if [ ! -x .venv/bin/python ]; then
+# Checks for streamlit, not just Python: a .venv made before the web page existed has no streamlit.
+# (python3 -m venv leaves an existing .venv as it is.)
+if [ ! -x .venv/bin/streamlit ]; then
     echo "First run: setting up (this takes a few minutes)..."
     if ! command -v python3 >/dev/null; then
         echo "Python 3 isn't installed. Install it from https://www.python.org/downloads/ and try again."
