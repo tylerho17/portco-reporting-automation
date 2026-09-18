@@ -1701,3 +1701,96 @@ logs `output/task14_plant_bugs.log` and `_rerun.log`), each run against tests/te
 - **CLAUDE.md's main.py line** doesn't mention the new options. Suggested: "main.py CLI: `python main.py
   data/northwind.xlsx` or `--all` [--skip-ai] [--draft]; `--list-companies`, `--version`, `--help`
   (examples and exit codes 0/1/2/130, documented in README); ...".
+
+## Task 15: structured run log (run_log.py, the Recent runs card)
+
+### What I built
+
+- **`output/logs/run_<timestamp>.jsonl`**, one file per run: a `python main.py ...`, a Generate click
+  or a Generate all click. One JSON line per step per company: run, source (command line or web
+  page), company, step, `started_at`, `seconds`, `result` and `error` (null when none). The steps are
+  clean, metrics and flags, what changed, metrics workbook, AI commentary, deck, memo, manifest; then
+  a "whole company" line with the outcome (built, failed, skipped, stopped, timed out), its total
+  seconds and why if it wasn't built. The printout ends with `Run log saved: output/logs/run_...jsonl`.
+- **`run_log.py`** (new): `RunLog` writes the lines, `CompanyLog.step` is a `with` block that times
+  a step and writes "ok", or "failed" with the error (then raises it again, so the company stops
+  exactly as before). Reading: `recent_runs`, `run_label`, `step_rows`.
+- **`main.py`**: each step of `run_company` is wrapped in `log.step(...)`; `log_whole_company` writes
+  the last line wherever a company's result is settled (built, failed, skipped, stopped, timed out).
+- **`portfolio.py`**: Generate and Generate all write the same log (source "web page").
+- **`app.py`**: a **Recent runs** card at the bottom of the portfolio page: the newest five runs, each
+  an expander headed "2026-09-18 14:15 · command line · 3 companies: 2 built, 1 failed · 6.0 s",
+  holding anything that went wrong in red and a table of every step.
+- **`demo_reset.py`**: deletes `output/logs` with the other built files and doesn't log its own
+  rebuild, so a demo starts with "No runs yet".
+- **Tests:** `tests/test_run_log.py` (37, written before the code), 4 page tests in test_app.py, 1 in
+  test_demo_reset.py. **1252 tests pass.** No test writes to the real `output/`, and none can reach the API.
+- **A real run, no API call:** `python main.py --all --resume --skip-ai` (3 skipped, logged), and all
+  three companies built from the saved analyses into a temporary folder with `--workers 3`
+  (`output/task15_real_run.py`): 27 lines, Northwind and Alderpeak "reused", Fernhollow "skipped"
+  (its saved analysis is stale, as known), 3 built in 3.5 s.
+- **Docs:** README (the run log, the file table, the Recent runs card, decision 24, decision 22's
+  reset, Next steps), STUDY_GUIDE (a `run_log.py` section, every changed function, the tests table,
+  the count), INTERVIEW_PREP Q34l, DEMO.md (a question they may ask), LOOM_SCRIPT (count), LEARNINGS
+  (5 rows).
+
+### How it's proved
+
+43 bugs planted one at a time in a temporary copy of the project (`output/task15_plant_bugs.py`,
+logs `output/task15_plant_bugs.log` and `_rerun.log`), each run against the run-log tests (and
+test_demo_reset.py for the reset's two):
+
+| Result | Bugs |
+|---|---|
+| Caught from the start (40) | Writing: no line written, seconds always 0, error dropped, no lock between threads, two runs in a second share a file, a failing step logged ok, a failing step swallowing its error, a given-up step "failed" instead of "stopped", a log that can't be written stopping the run, the warning on every line, a line starting when it was written (the real bug). main.py: the AI step always ok, a failed AI step ok, a reused analysis ok, the deck step not logged, clean not its own step, a resume skip / spend stop / timeout not logged, a failed company's line without its error, each company in its own file, no "Run log saved". The page's work: Generate logs no steps, Generate all a file per company, page runs saying "command line", an unreadable workbook with no whole-company line. Reading: a broken line stops the reading, oldest first, no limit, unfinished counted as built, problems repeated, run length as the sum of steps, an em dash on the panel, "1 companies", companies not grouped. The page: no card, no "No runs yet". The reset keeping the logs, and logging its own rebuild |
+| Passed at first, caught after new tests (2) | Log files sorted as text, so "_10" before "_2" (a test now writes ten runs in one second); the card hiding what went wrong (its page test now in the run) |
+| Not a real test at first (1) | "no_log writes a file": my planted text was a syntax error, so "1 error" at import counted as caught. Fixed the plant; the test really catches it |
+| Control (nothing changed) | 41 passed |
+
+### Decisions you didn't specify
+
+1. **JSON Lines, a line written as each step ends.** A crash still leaves every line up to the crash;
+   a single JSON document cut off halfway can't be read at all.
+2. **A file per run, never appended to or overwritten**, named after its first line's time, `_2`,
+   `_3` for a second run in the same second (created with "x", so two runs can't share a name).
+   Companies built side by side share the run's file, under a lock.
+3. **A "whole company" line after the steps.** Not a step, but without it a company stopped by
+   `--max-cost` or skipped by `--resume` wouldn't be in the log at all, and the panel couldn't tell a
+   finished company from one cut off by Ctrl+C ("unfinished").
+4. **Step results beyond ok/failed for the AI step:** skipped, reused, and "failed" with Claude's
+   validation problems while the company is still built (its whole-company line says "built").
+   "Stopped" for a step the batch gave up on (`--timeout`).
+5. **The web page logs too** (source "web page"): a Generate click is a run, and the panel shows
+   both kinds, so a scheduled command-line run is visible to someone who never opens a terminal.
+6. **A log that can't be written warns once and the run carries on**: the board pack matters more
+   than its log.
+7. **The panel shows five runs**, grouped by company inside each (side-by-side companies write
+   interleaved lines), with problems in red above the table. A line it can't read is counted in the
+   heading, never a traceback.
+8. **demo_reset.py clears the logs and doesn't log its rebuild**, like it clears approvals and batch
+   history: the demo's own Generate click is the run the card shows.
+9. **Every log is kept.** No retention setting: that would be a new key in config.yaml, which the
+   task said not to touch (and adding a key sends every approved deck back to "not reviewed").
+10. **Step names are plain words** ("metrics workbook", not `excel_step`), because the page shows them.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **The first real run** showed each "whole company" line starting when it finished; every test had
+   passed, because they used a fixed clock. A line written without a start time now starts its
+   seconds before now, with two tests.
+2. **Two demo_reset tests** failed once Generate wrote logs: decision 8 above.
+3. **My page test** read expanders the wrong way (`get("expandable")`); `test.expander` works.
+4. **Planted bugs:** two escaped and one plant was broken (table above); all 43 caught now.
+5. **Refused commands** (`source`, a heredoc, `tee`, `/tmp`): used `.venv/bin/python` and scripts in `output/`.
+
+### Unresolved
+
+- **Ctrl+C mid-step** leaves that step without a line (the company shows "unfinished"). Catching it
+  in every step would mean catching KeyboardInterrupt in threads; the missing line already says enough.
+- **After a timeout**, the company's thread finishes the step it was in and writes that line after
+  the "whole company: timed out" line. It's true (the step did finish), but reads out of order.
+- **Logs are never deleted.** About 2 KB per company per run (9 lines), so 275 companies weekly is
+  under 30 MB a year. Deleting old files by hand is safe; say if you want a retention setting.
+- **CLAUDE.md's Architecture list** doesn't name run_log.py. Suggested line: "run_log.py  output/logs/
+  run_<timestamp>.jsonl, a line per step per company (seconds, result, error); read back by the web
+  page's Recent runs card".

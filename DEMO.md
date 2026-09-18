@@ -17,7 +17,7 @@ All three companies are made up. Never show the tool with real company data.
    ```
 
    It takes about 10 seconds and must end with **Ready for the demo.** It deletes every file the
-   tool built during practice (decks, memos, approvals, exports), keeps the saved AI commentary, and
+   tool built during practice (decks, memos, approvals, exports, run logs), keeps the saved AI commentary, and
    builds everything again from the three workbooks, with no call to Claude and no cost. It also builds
    last quarter's numbers first, so the page has "what changed since last quarter" to show.
 
@@ -146,6 +146,10 @@ Stop there and take questions.
 - **"What if the spreadsheet is laid out differently?"** It learns the new column names once: a person
   confirms what each unknown header means, and next quarter's spreadsheet runs without asking.
 - **"Is the data real?"** No. All three companies and every number are made up.
+- **"How would I know if last night's run went wrong?"** Scroll to **Recent runs** at the bottom of the
+  portfolio page. Every run is listed, from the page or a scheduled command-line run; open one to see
+  each company's steps, how long each took, and the exact error of anything that failed, in red. The
+  Generate click from this demo is the one at the top.
 
 ## After the demo
 

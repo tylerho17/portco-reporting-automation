@@ -502,6 +502,20 @@ code that built it. I proved the tests catch what they claim by planting 28 bugs
 through at first, and each now has a test.
 *Point to:* `main.EXIT_CODES`, `main.list_companies`, `main.check_combination`; `tests/test_cli.py::test_readme_documents_every_exit_code_in_mains_words`.
 
+**Q34l. Last night's run took 40 minutes and Fernhollow failed. How do you find out why?** (new, Task 15)
+From the run log. Every run writes `output/logs/run_<timestamp>.jsonl`: one line per step per company
+(clean, metrics, what changed, Excel, AI, deck, memo, manifest) with how many seconds it took, its
+result and the error, then a "whole company" line with the outcome. So I'd see which step failed and
+the exact error, and which step the time went on (it's nearly always the AI call). Each line is a
+complete JSON object written the moment its step ends, so even a run that crashed leaves everything
+up to the crash; a single JSON file would be unreadable if cut off. Companies built side by side
+share the file, with a lock so their lines never mix. The web page's Recent runs card reads the same
+files, so someone who never opens a terminal sees it too, and a log that can't be written never stops
+a board pack. The first real run caught a bug the tests had missed (the company's line said it
+started when it finished), so there's now a test for it, and I planted 43 bugs in a copy to prove
+the tests catch what they claim.
+*Point to:* `run_log.CompanyLog.step`, `main.log_whole_company`, `run_log.recent_runs`; `tests/test_run_log.py::test_a_failing_step_is_logged_with_its_error_and_no_later_step_runs`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs
