@@ -13,7 +13,7 @@ from streamlit.testing.v1 import AppTest
 
 import main
 import metrics
-from config_schema import SETTINGS, ConfigError, config_problems, read_config
+from config_schema import SETTINGS, ConfigError, config_problems, is_number, read_config
 from metrics import FLAG_THRESHOLDS, evaluate_flags, load_config, validate_config
 
 # A config that passes, written out here so tuning config.yaml never breaks these tests.
@@ -113,9 +113,16 @@ def test_a_number_setting_given_something_else_is_named(key, bad):
 
 @pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
 def test_nan_and_infinity_are_not_numbers_here(bad):
-    # NaN compares False with everything, so a range check alone would let it through.
+    # YAML reads .nan and .inf as floats. Today's ranges reject them too; is_number is the check that
+    # still would for a future setting with no upper limit (found by a planted bug).
     problem = one_problem({**GOOD, "nrr_min": bad})
     assert problem.startswith("config.yaml: nrr_min must be")
+    assert not is_number(bad)
+
+
+def test_is_number_takes_only_real_finite_numbers():
+    assert is_number(3) and is_number(-0.2) and is_number(0)
+    assert not any(is_number(value) for value in (True, False, None, "1", math.nan, math.inf))
 
 
 @pytest.mark.parametrize("bad", ["yes", "true", 1, 0, None])
@@ -217,10 +224,12 @@ def test_every_problem_is_listed_at_once_in_the_schema_order():
         "nrr_min", "grr_min", "combo_lookback_quarters", "extra"]
 
 
-def test_validate_config_raises_one_error_with_every_problem():
+def test_validate_config_raises_one_error_with_every_problem_one_per_line():
+    config = {**GOOD, "nrr_min": 100, "grr_min": "85%"}
     with pytest.raises(ConfigError) as caught:
-        validate_config({**GOOD, "nrr_min": 100, "grr_min": "85%"})
-    assert "nrr_min" in str(caught.value) and "grr_min" in str(caught.value)
+        validate_config(config)
+    assert str(caught.value).splitlines() == config_problems(config)   # run together, they'd be unreadable
+    assert len(config_problems(config)) == 2
     assert isinstance(caught.value, ValueError)   # every caller that catches ValueError still does
 
 
