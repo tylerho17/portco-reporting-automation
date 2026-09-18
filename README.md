@@ -128,7 +128,18 @@ python check_deck.py         # 4 slides, slide 1 numbers match the metrics workb
 python check_main.py         # the batch survives a broken workbook; --skip-ai never calls Claude
 python check_memo.py         # every number in each memo (Word and PDF) is in that company's metrics workbook
 python eval/run_eval.py      # 12 edge-case companies (thresholds, blanks, zero revenue ...) vs their answer keys
+python golden.py             # each deck, memo and metrics workbook vs its approved text copy in tests/golden/
 ```
+
+**Golden files: changing what a deck looks like on purpose.** `tests/golden/` holds an approved text copy of every company's deck, memo and metrics workbook: every word with its size, weight and color, where each box sits, table fills, the memo's page breaks and PDF text, and every Excel cell with its number format, fill and alignment. `pytest` rebuilds all nine (from the saved analyses in `tests/golden/analysis/`, with a fixed date and commit in the footer, so no API call and nothing that changes by the day) and fails with the changed lines if any differ. When you change the output on purpose:
+
+```bash
+python golden.py             # see every difference: '-' approved, '+' now
+python golden.py --update    # accept them: rewrites tests/golden/*.txt
+git diff tests/golden        # read every changed line; it is now the approved output
+```
+
+Then commit the goldens with the code change. An unexpected line in that diff is a bug, not something to accept. If a company's numbers change (a new workbook in `data/`), its saved analysis stops matching and slide 4 would show the placeholder: the test named `test_the_saved_analysis_still_passes_the_deck_and_memo_checks` fails first and says so. Copy the new `output/<company>_analysis.json` into `tests/golden/analysis/` after a live run, then update.
 
 Note: `check_main.py` runs `main.py --all --skip-ai` into `output/`, so afterwards the decks and memos show the AI placeholder and `batch_summary.csv` holds its broken-workbook test row. `python build_deck.py data/<company>.xlsx` and `python memo.py data/<company>.xlsx` put the saved AI text back without an API call (the saved analyses aren't touched).
 
@@ -197,6 +208,7 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 15. **A new header gets a proposal, never a guess.** A company that writes "Opening ARR" or "Plan Burn" used to stop the run until someone edited `HEADER_ALIASES` in the code. Now `mapping.py` proposes the standard column each unknown header most likely means, from its name (word overlap after dropping filler like "Total" and swapping the usual synonyms, "Opening" for starting, "Plan" for budget; plus letter-by-letter similarity, so a typo still matches) and from its values (a value in the budget-only row rules out every actual column; ARR and cash must roll forward; gross profit can't exceed revenue). It shows a confidence and the reason. However high the confidence, the run stops until a person confirms or changes each one, in the web page's Review mapping step or with `python mapping.py <workbook> --confirm`; the answer is saved to `mappings/<company>.yaml`, so the next quarter runs unattended. The mapping file's hash goes into the manifest like the workbook's, so changing a mapping makes the files out of date and voids an approval. Heuristics only, no API call: tested on copies of the three companies with their headers renamed (16, 6 and 7 headers), every proposal is right and the metrics after confirming are identical to the originals'.
 16. **Edge cases have their own answer keys.** The three demo companies tell stories; 12 more in `eval/` test cases: exactly at every threshold (all pass, and a 1-point NRR drop counts as falling), a blank first, second-to-last and last quarter, zero revenue, a negative budget, NRR and pipeline both falling, 2 quarters of history, and a repeated or missing row that must stop. `python eval/run_eval.py` scores clean, metrics, flags and gaps for each against a hand-typed answer key and names every mismatch. 24 bugs planted on purpose were each caught by the company built for them.
 17. **A long batch fails one company at a time, never all at once, and never half-way.** Each company is built in a private folder and moved into `output/` only when it succeeds, so a failure or a timeout leaves last quarter's deck exactly as it was rather than a new deck beside an old memo. `--resume` skips a company only when rebuilding it would give the same files (same workbook, thresholds and mapping by hash, every file present, the same AI and `--draft` choice, no approval since), and a rebuild of unchanged numbers reuses the saved analysis for free. `--max-cost` is checked before each company starts, so the batch can pass the ceiling by what the companies already running spend, never more; a company that is up to date is skipped, not stopped. Rate limits are retried with growing waits; any other API error is not, because it would fail the same way again. Every skip, timeout, stop and failure is written down where someone auditing the run would look: the company's manifest and the batch manifest.
+18. **Golden files catch what the number checks can't see.** The check scripts prove every number on a deck is right; they don't notice the charts swapped sides, the questions lost their numbers, a heading can now end a memo page, or the Excel header row stopped being frozen. A text copy of every output, approved once and compared on every test run, catches all of those: of 17 such bugs planted on purpose, the goldens caught 17, the check scripts 2 and the unit tests 4. Text, not the files: a .pptx is a zip whose bytes change on every save, so a byte comparison would always fail and never say why. A diff of text names the slide, the box and the words.
 
 ---
 
@@ -329,6 +341,7 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
 - [x] **Column mapping:** an unknown header gets a proposed column with a confidence, reason and sample values; nothing runs until a person confirms it, and the confirmed mapping is saved to `mappings/<company>.yaml` for next quarter (`mapping.py`, the web page's Review mapping step).
 - [x] **Evaluation set:** 12 edge-case companies with answer keys, scored by `eval/run_eval.py` (clean, metrics, flags, gaps) and run by the tests.
 - [x] **Batch resilience:** `main.py --resume`, `--max-cost`, `--timeout` and `--workers` (companies in parallel), and rate-limit retries with backoff (`resilience.py`).
+- [x] **Golden files:** an approved text copy of every deck, memo and metrics workbook in `tests/golden/`, compared on every test run (`golden.py`).
 
 **Still to do:**
 

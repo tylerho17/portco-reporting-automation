@@ -2,7 +2,7 @@
 
 For you, a finance student learning Python, to understand this project well enough to explain every part of it in an interview.
 
-It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build step is done:** 1, 2, 3, 3b, 4 (the deck: `make_template.py`, `build_deck.py`, `charts.py`, `text_fit.py`), 4b, 5 (with the AI step connected to `main.py`) and 6 (the README). One live `main.py --all` run has been made. **Added since:** run manifests and the approval gate (`provenance.py`, `approve.py`), the review status in the deck's footer with the watermark made opt-in (`--draft`), the 4-slide deck, the web page (`app.py`, started by `run_app.command`), the board memo (`memo.py`), and the web page's portfolio and company pages (`portfolio.py`, final run Task 2), and batch resilience: `main.py --resume --max-cost --timeout --workers` and rate-limit retries (`resilience.py`, final run Task 7). **Not done yet:** the README screenshots, which need you at the screen.
+It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build step is done:** 1, 2, 3, 3b, 4 (the deck: `make_template.py`, `build_deck.py`, `charts.py`, `text_fit.py`), 4b, 5 (with the AI step connected to `main.py`) and 6 (the README). One live `main.py --all` run has been made. **Added since:** run manifests and the approval gate (`provenance.py`, `approve.py`), the review status in the deck's footer with the watermark made opt-in (`--draft`), the 4-slide deck, the web page (`app.py`, started by `run_app.command`), the board memo (`memo.py`), and the web page's portfolio and company pages (`portfolio.py`, final run Task 2), and batch resilience: `main.py --resume --max-cost --timeout --workers` and rate-limit retries (`resilience.py`, final run Task 7), and golden files: an approved text copy of every output, compared on every test run (`golden.py`, final run Task 8). **Not done yet:** the README screenshots, which need you at the screen.
 
 ## Contents
 
@@ -35,6 +35,7 @@ It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build st
   python check_companies.py                  # end-to-end proof for all 3 companies
   python check_deck.py                       # end-to-end proof for the 3 decks
   python eval/run_eval.py                    # the evaluation set: 12 edge-case companies vs their answer keys
+  python golden.py                           # each deck, memo and metrics workbook vs its approved text copy
   ```
 
   **These DO call the API and cost money:** `python main.py` **without** `--skip-ai` (about $0.09 per company), `python analyze.py ...` and `python compare_models.py run`. You don't need them to study: the analyses from the live run are already saved in `output/`.
@@ -1088,6 +1089,66 @@ company whose case covers them; a comment edit passed.
 
 ---
 
+### `golden.py`: approved copies of every output (final Task 8)
+
+**What it's for:** the check scripts prove every *number* is right. Nothing proved the rest of what a
+board member sees: the words around the numbers, the order, the sizes and colors, where each chart
+sits, where the memo's pages break, whether the Excel header row stays frozen. A **golden file** is a
+copy of an output that a person read and approved. `tests/golden/` holds nine, one per company for
+the deck, the memo and the metrics workbook. `tests/test_golden.py` rebuilds each output, turns it into
+text the same way, and fails if one line differs, showing that line: `-` the approved version, `+`
+what the code makes now.
+
+**Why text and not the files:** a .pptx, .docx or .xlsx is a zip file with timestamps inside, so its
+bytes differ on every save even when nothing changed. Comparing bytes would always fail and never say
+why. The text keeps only what a reader sees, one fact per line, so a diff names the slide, the box
+and the words.
+
+**What would change by itself, and is fixed:** the footer's run date (fixed at `RUN_DATE`, 2026-07-15)
+and git commit (`COMMIT`, "0000000"). The AI text comes from the saved analyses in
+`tests/golden/analysis/`, so no API call. Numbers in the Excel dump are written to 12 significant
+digits, because a float's last digits are rounding noise.
+
+**Changing an output on purpose** (a new slide title, a new color): run `python golden.py` to see every
+difference, `python golden.py --update` to accept them, then read `git diff tests/golden` line by line
+before committing. The update makes whatever the code produces now the approved version, so an
+unexpected line in that diff is a bug, not something to accept.
+
+| Function | What it does, in plain English |
+|---|---|
+| `companies()` | Every company with a workbook in `data/`: alderpeak, fernhollow, northwind. |
+| `golden_path(company, kind, folder)` | ("northwind", "deck") → `tests/golden/northwind_deck.txt`. |
+| `fixture_path(company)` | The saved analysis the goldens are built with, in `tests/golden/analysis/`. |
+| `inches(emu)` | PowerPoint's unit (914,400 per inch) → inches, 2 decimals. |
+| `run_style(run)` | "15 pt bold 1F2A44": a piece of text's size, weight and color. |
+| `text_lines(frame, indent)` | Each paragraph of a text box, with its style. |
+| `cell_fill(cell)` / `table_lines(table)` | A slide table row by row: each cell's text, style and fill (the status colors). |
+| `shape_lines(shape)` | One shape: its name, kind (text, table, picture), position and size, then its text. |
+| `dump_deck(path)` | The whole deck, slide by slide. The chart pictures are listed by name, place and size, not pixel by pixel. |
+| `docx_style(paragraph)` | A Word paragraph's style, size, weight, color, and "keep with next" (a heading never ends a page). |
+| `docx_cell_fill(cell)` | A Word table cell's fill color. |
+| `docx_lines(document)` | The Word file's body in order: paragraphs, and the table row by row (with its alignment). |
+| `dump_memo(docx_path, pdf_path)` | Page size and margins, the body, the footer, then each PDF page's text (so line wrapping and the page break show). |
+| `cell_value_text(value)` | A cell's value: text in quotes, a decimal to 12 significant digits. |
+| `excel_cell_line(cell)` | "B2  0.971  [0.0%]  fill FFC7CE  right": value, number format, fill, bold, text color, alignment. |
+| `dump_workbook(path)` | Every sheet: column widths, frozen panes, then every filled cell. |
+| `build_dumps(company, folder)` | Builds one company's three outputs into a folder with the fixed date and commit, and dumps each. |
+| `build_all(folder)` | The same for every company. |
+| `compare(actual, path)` | None if the text matches the golden, else the changed lines and the command to accept them. |
+| `write_goldens(dumps, folder)` | `--update`: writes each golden whose text changed, deletes goldens for outputs that no longer exist, and names them. |
+| `main(argv)` | `python golden.py` compares and exits 1 on any difference; `--update` rewrites. |
+
+**Proof it catches what it claims:** 17 bugs planted one at a time in temporary copies of the project,
+each one a reader would notice but no number changes: charts swapped left and right, table stripes
+swapped, questions not numbered, flag lines without bullets, the AI-drafted line at 12 pt, risk
+titles not bold, slide 2's title reworded, memo headings allowed to end a page, memo margins, footer
+size, intro sentence and table centering, and in Excel no frozen header row, headers not bold, column
+widths not set, numbers left-aligned, and a metric label renamed everywhere at once. The goldens
+caught 17, the check scripts 2 and the unit tests 4; 12 were caught by the goldens alone. A comment
+edit passed all three.
+
+---
+
 ### `compare_models.py`: Sonnet vs Haiku, scored blind (build step 3b)
 
 **What it's for:** runs the same Northwind payload through `claude-sonnet-5` and `claude-haiku-4-5` 3 times each, shuffles the answers, and lets you score them without knowing which model wrote which. `run` calls the API (costs money); `score` is free. **Already done; the results are in README.md.**
@@ -1117,7 +1178,7 @@ company whose case covers them; a comment edit passed.
 
 ### `tests/`: unit tests (pytest)
 
-Run with `python -m pytest -q` (815 tests, about three minutes). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
+Run with `python -m pytest -q` (841 tests, about three minutes). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
@@ -1140,6 +1201,7 @@ Run with `python -m pytest -q` (815 tests, about three minutes). Expected values
 | `test_app.py` (30) | `no_real_client` (as in test_main.py). `folders`: a temporary `data/` with copies of the three workbooks and an empty `output/`. `company_data(name)`. `render`, `page(folders, company)`: draw the page on those folders with Streamlit's `AppTest`. `downloads(test)`, `texts(test)`, `html_bodies(test)`, `tables(test)`, `primary_buttons(test)`. | The checkbox names the cost; the palette's status colors; HTML tables with escaped text and the metric names in the first column; `$` survives markdown; Northwind's 6 of 9 flags in red and green rows; Fernhollow's "Cannot evaluate: missing input" with no em dash; "data missing" gray and a tripped NRR red; both charts. **The pages:** every company listed with nothing to download yet; search narrows the table and a missing name says upload one; Generate on a row builds and enables its 3 downloads; Generate all builds 3 of 3; an unreadable workbook shows clean.py's message and Generate all still builds the other 3; clicking a name opens its page; the company page's flags, 2 tables, 2 charts, 4 downloads and a greyed-out Approve; a name with no workbook; Approve records the typed reviewer; saved commentary is shown; no em dash anywhere on either page (tables included); **Task 3:** both pages carry theme.py's style sheet, each page has exactly one primary button (Generate all; Generate) and Approve is secondary, the flags table's six tripped rows in the red fill; `run_app.command` is executable and starts app.py. **Task 5:** Review mapping shows each pair with its proposal preselected under Change, its confidence and values; Save mapping stays greyed out until every pair is confirmed; confirming all saves the file and the page shows the company's flags; Change clears that pair's tick and saves the new column; a company with known headers has no review step. |
 | `test_portfolio.py` (44) | `FakeClient`, `summary(headline)`, `no_real_client` (as in test_main.py). `folders` (as in test_app.py). `unreadable_workbook_bytes`: a real .xlsx clean.py stops on, and clean.py's own message. `rows_by_company`, `generate`, `save_northwind_analysis`, `headline_on_deck`, `add`, `approve`. | Em dashes, last run and company-name rules; each company's row matches its story (6 of 9, 7 of 9 with 1 cannot evaluate, 0 of 9 and no gaps); "never" and "Not generated yet" before a run; an unreadable workbook, a non-Excel file and a bug each give plain words while the other rows are unaffected; search and the "No KPI workbook found" message; `find_workbook` stays inside `data/`; Generate builds all four files and the row then reads the manifest; the AI note for not asked, **reused with no call even with the box unticked**, asked once, no key, and an API failure; clean.py's message from Generate; Generate all carries on past a failure, reports progress and writes batch_summary.csv; a changed workbook makes the row out of date and its downloads disappear; Add a company saves only a readable workbook, refuses a non-Excel file and a bad name, and replaces only when asked; Approve records the typed reviewer, needs a name, and refuses before Generate or after a change; saved commentary only for exactly these numbers. **Task 5:** headers to confirm show on the row in the page's words (no command line, no temp path); proposals for a workbook and for an upload; confirming saves the mapping and the company reads as the original; an unchosen header or a mapping the workbook can't be read with saves nothing; Generate records the mapping in the manifest; a changed mapping makes the row out of date; an upload with unknown headers is added only with confirmed columns, and then both are saved. |
 | `test_eval.py` (35) | `company(name)`: a deep copy of one eval company, so a test can break its answer key without touching the real one. `run(companies, capsys)`: the scorecard's exit code and text. | The set: 12 companies, every case asked for, blanks first, second to last and last, the two stop companies; **every answer key ties out** (roll-forwards, money in 10s); Tidewell's hand formulas give each config.yaml threshold exactly; Larkspur's answer key covers all 19 metrics; **the saved eval/data workbooks are what eval/make_eval_data.py writes**. The run: 12 of 12 match, both stop companies stop. **A mismatch is named, never passed:** a wrong flag, a wrong cannot-evaluate reason, a wrong latest value, an unlisted not-meaningful cell, a wrong runway at budget, a wrong cleaned value, an unpredicted gap, a trip in a never-trips company, a workbook that should stop but reads, a stop with the wrong words, a missing workbook (with the command to make it). The gap rules for a blank first and last quarter, and no prior period never a gap. |
+| `test_golden.py` (26) | `rebuilt`: every company's three outputs built once for the file, from the analysis fixtures, and dumped. | **Each of the 9 outputs matches its approved golden**, failing with the changed lines; every company in `data/` has three goldens and an analysis fixture, and there are no stray goldens; each fixture still passes the deck's and memo's checks (else the goldens would quietly show the placeholder); the footer uses the fixed date and commit; building twice gives the same text; the dumps hold positions, sizes, colors, fills, pictures, page-break rules, the PDF, number formats and alignment; a difference names the changed lines and the update command; a missing golden says how to make one; `--update` writes only what changed and deletes stray goldens; `python golden.py` exits 1 on a difference and 0 when all 9 match. |
 | `test_docs.py` (19) | `python_files_named(text)`, `study_guide_tables()`, `defined_in(files, name)`, `files_named`, `functions_named`, `watermark_lines(text)`, `em_dash_lines(text)`, `code_strings(path)`: every quoted string in a .py file (read with Python's `ast`, so comments don't count). | README keeps the model comparison markers, and rewriting that block leaves the rest alone; every `.py` file named in README, CLAUDE.md, this guide and LOOM_SCRIPT.md exists; **every function in this guide's tables exists** in the file its heading names; INTERVIEW_PREP.md's files, functions and group order; README, CLAUDE.md, this guide and LOOM_SCRIPT.md never describe the watermark without `--draft`, all name `--draft`, app.py and run_app.command, and count 4 slides. README and this guide list `python eval/run_eval.py` with the other checks. **Task 4: no em dash** in any .md file, in any string of the project's .py files (and eval/'s), or in what the code builds when it runs (the AI system prompt, the metric and input labels, each "cannot evaluate" status). |
 | `test_theme.py` (22) | `code_files()`, `missing(*families)`: a findfont that can't find those fonts. `css_rules(css)`, `rule(css, *words, plain)`: read the style sheet back. | The palette typed from the brief; status colors; **the Excel workbook keeps its fills**; **no code file but theme.py types a color** (and the pattern finds colors written four ways); no code, config or template names another brand; Arial, then Helvetica, then DejaVu Sans, and the PDF's font is a single .ttf; the sizes and the 12 pt floor; primary buttons navy with white text (navy dark on hover, surface when greyed out), secondary white with a navy border, the Download popover styled as secondary, **no button rule red or green**; 1100 px column, white cards, navy table header, 40 px rows, wide tables scroll; Arial and the sizes on the page; `.streamlit/config.toml` matches `theme.streamlit_theme()`. |
 

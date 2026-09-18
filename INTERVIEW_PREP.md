@@ -415,6 +415,18 @@ manifest. I proved it with fake clients (one that hangs, one that's rate limited
 many calls are in flight) and by planting bugs in throwaway copies.
 *Point to:* `main.run_batch`, `resilience.RateLimitRetry`, `resilience.resume_problem`, `resilience.commit_stage`; `tests/test_batch.py::test_a_company_past_its_timeout_is_given_up_and_the_next_one_still_runs`.
 
+**Q34e. Your checks prove the numbers. How do you know the deck still looks right?** (new, Task 8)
+Golden files. I read each company's deck, memo and metrics workbook once, approved them, and saved
+a text copy: every word with its size and color, where each box sits, the table fills, the memo's
+page breaks, every Excel cell's format. Every test run rebuilds them and fails with the exact
+changed lines. Text, not the files, because a PowerPoint file's bytes change on every save. To make
+the test repeatable I fixed the two things that change by themselves, the date and the commit in the
+footer, and the AI text comes from saved analyses, so no API call. I planted 17 bugs a reader would
+notice but that change no number, like charts swapped sides or an Excel header row no longer
+frozen. The goldens caught all 17; my number checks caught 2. The trade-off: an intended change
+fails too, so you rerun with `--update` and read the diff before committing it.
+*Point to:* `golden.dump_deck`, `golden.compare`, `tests/golden/northwind_deck.txt`; `tests/test_golden.py::test_the_output_matches_its_approved_golden`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs

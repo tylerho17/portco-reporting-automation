@@ -868,3 +868,145 @@ work, reran the proofs, closed one hole they found, and committed it.
   left to move. Two guards for one case, like Task 6's budget guards.
 - **`--workers` hasn't been run against the real API,** so how many workers a rate limit allows is
   unmeasured. A timeout stops waiting, not the work (README limitations).
+
+---
+
+## Task 8: golden files (golden.py, tests/golden/, tests/test_golden.py)
+
+### What I built
+
+- **`golden.py`**, the dump helper. It builds each company's deck, memo (Word and PDF) and metrics
+  workbook into a temporary folder and turns each into plain text, one fact per line:
+  - **Deck:** slide by slide, every shape's name, kind, position and size; every paragraph's words
+    with its font size, bold and color; every table cell's text, style and fill; the two charts by
+    name, position and size.
+  - **Memo:** page size and margins; every Word paragraph with its style, size, bold, color and
+    "keep with next"; the table row by row with fills and its centering; the footer; then each PDF
+    page's text, so line wrapping and the page break show.
+  - **Metrics workbook:** every sheet's column widths and frozen panes, then every filled cell's
+    value, number format, fill, bold, text color and alignment.
+- **`tests/golden/`:** the 9 approved dumps (3 companies × deck, memo, metrics), plus
+  `tests/golden/analysis/`, copies of the 3 analyses saved by the last live run. The goldens are built
+  from those, so **no API call**.
+- **`tests/test_golden.py` (26 tests, written first; 841 in all):** rebuilds all 9 and compares, and on
+  any difference fails with a unified diff (`-` approved, `+` now), the file name and the command to
+  accept it. It also checks the helper: every company has 3 goldens and a fixture, no stray goldens,
+  each fixture still passes the deck's and memo's checks, the fixed date and commit are used, two
+  builds give the same text, the dumps hold what they claim, and the update and check commands.
+  Adds about 7 seconds to `pytest`.
+- **Updating on purpose** (README, STUDY_GUIDE): `python golden.py` shows every difference and exits 1;
+  `python golden.py --update` rewrites the goldens that changed and deletes any for an output that no
+  longer exists; then read `git diff tests/golden` before committing. Used for real once in this task
+  (below).
+- **Docs:** README (Prove it works, the update steps, design decision 18, Next steps), STUDY_GUIDE (a
+  golden.py section with every function, the tests table, counts), INTERVIEW_PREP (Q34e),
+  LOOM_SCRIPT (count, a proof row).
+
+### What goldens catch that value checks miss
+
+The check scripts ask "is every number right?" They read the numbers off the deck, memo and workbook
+and compare them with metrics.py, so they're blind to anything that isn't a number, and to anything
+that changes the same way on both sides of their comparison. A golden asks "is this exactly what a
+person approved?", so it sees everything a reader sees.
+
+**Proof:** `output/task8_mutations.py` planted 17 bugs one at a time in temporary copies of the
+project, each one a reader would notice but that changes no number, and ran three sets of checks on
+each: the goldens, the value checks (`check_deck.py`, `check_memo.py`, `check_excel_output.py`) and
+the unit tests for those modules.
+
+| Planted bug | Goldens | Value checks | Unit tests |
+|---|---|---|---|
+| Deck: the two charts swapped left and right | caught | missed | missed |
+| Deck: table stripes swapped | caught | missed | caught |
+| Deck: the questions lose their numbers | caught | missed | missed |
+| Deck: flag lines lose their bullet | caught | caught | missed |
+| Deck: the AI-drafted line at 12 pt, not 13 | caught | missed | caught |
+| Deck: risk titles not bold | caught | missed | missed |
+| Deck: slide 2's title reworded | caught | caught | caught |
+| Memo: a heading can end a page (no "keep with next") | caught | missed | caught |
+| Memo: margins 0.6 in, not 0.7 | caught | missed | missed |
+| Memo: footer at 9 pt, not 7 | caught | missed | missed |
+| Memo: intro sentence reworded | caught | missed | missed |
+| Memo: key metrics table not centered | caught | missed | missed |
+| Excel: header row not frozen | caught | missed | missed |
+| Excel: headers not bold | caught | missed | missed |
+| Excel: column widths not set | caught | missed | missed |
+| Excel: numbers left-aligned | caught | missed | missed |
+| Everywhere: a metric label renamed ("Gross margin %") | caught | missed | missed |
+| **Total** | **17 of 17** | **2** | **4** |
+
+A comment edit (the control) passed all three. **12 of the 17 were caught by the goldens alone.** The
+last row is the clearest case: the label is defined once in metrics.py, so the deck, memo and
+workbook all change together, and a check comparing the deck with the workbook sees them agree.
+Only a copy of what was approved notices that a board member now reads different words.
+
+What goldens don't replace: they say *something* changed, not whether the number is right. If the
+approved copy had a wrong number, the golden would protect the wrong number. The value checks and
+the eval are what prove the numbers; the goldens hold everything else still.
+
+### Decisions you didn't specify
+
+1. **Text dumps, not the files.** A .pptx, .docx or .xlsx is a zip with timestamps inside, so its
+   bytes differ on every save; a byte comparison would always fail and never say why.
+2. **The date and commit are fixed** (`RUN_DATE` 2026-07-15, `COMMIT` "0000000") by patching
+   `git_commit` inside golden.py while it builds, rather than adding a parameter to `save_deck` and
+   `save_memo`. The pipeline's code is unchanged. 2026-07-15 is in the past, so a footer that read the
+   clock can never match it by chance.
+3. **The analyses are committed copies** in `tests/golden/analysis/`, not read from `output/`, which is
+   git-ignored and gets overwritten (`check_main.py` puts the placeholder there). A test fails if a
+   fixture stops passing the deck's checks, so a stale fixture can't quietly turn the goldens into
+   placeholder decks.
+4. **Charts by name, place and size only, not pixels.** A picture diff isn't readable, and a
+   matplotlib or font update would change every golden. The charts' content is covered by
+   `tests/test_charts.py` and `check_deck.py` (a blank quarter has no bar and no line).
+5. **The memo's PDF text is in the memo golden** (pypdf was already a dependency), so a change in line
+   wrapping or where page 2 starts shows up, not only the Word file.
+6. **Excel numbers to 12 significant digits**: enough to catch any real change, not a float's last bits.
+7. **The AI-text version of each output only.** The placeholder slide, the `--draft` watermark and the
+   "reviewed by" footer aren't goldened; the unit tests cover each of them.
+8. **The 3 demo companies, not the 12 eval companies.** The eval checks values; the demo companies
+   are the ones that make decks a person reads.
+9. **`--update` also deletes a golden with no output**, so a removed company can't leave a file that is
+   never compared (a test checks there are no strays).
+10. **I approved the goldens by reading them** (Northwind's deck, memo and workbook in full, the others
+    for the AI text and flag counts). They match the company stories: Northwind 6 of 9, NRR 97.1%,
+    runway 11.0 mo. **Please read them once yourself**: from now on they are the definition of right.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **The dumps first missed alignment.** The planted "numbers left-aligned" bug stopped the proof
+   script (its anchor matched 3 lines), and fixing the anchor showed the Excel dump didn't record
+   alignment at all, nor the memo table's centering, so the goldens would have missed both. Tests
+   first, then the dumps record both, then `python golden.py --update`, the first real use of the
+   update path. A script (`output/task8_alignment_diff.py`) confirmed the new goldens differ from the
+   committed ones only by those facts. Both bugs are now caught.
+2. **Two checks that proved nothing**: a shell one-liner that compared "+" lines with "-" lines without
+   removing the sign, and an `or True` I briefly wrote into a test. Replaced by the Python comparison
+   script, and the test now asserts today's date is not in the footer.
+
+### Also in this task: finishing Task 7
+
+Task 7's last tests and docs were uncommitted and its FINAL_REPORT section unwritten. I checked them
+(815 passed), reran its 35 planted bugs in full (its log covered only 21), found and closed one hole
+(a timed-out company's error was never checked), reran all 7 check scripts and the eval in a
+temporary copy (all pass), wrote its section above and committed it separately.
+
+### Unresolved
+
+- **CLAUDE.md doesn't list `golden.py` or `tests/golden/`.** You said not to edit it. Suggested
+  Architecture line: "golden.py: text dumps of each company's deck, memo and metrics workbook (fixed
+  date and commit, AI text from tests/golden/analysis/); tests/golden/ holds the approved copies and
+  tests/test_golden.py fails with a diff; `python golden.py --update` accepts an intended change".
+  (The Task 6 line for `eval/` is still pending too.)
+- **The goldens show a wording difference between outputs** that I didn't change because nobody asked:
+  the deck says the combo rule trips when NRR "falls by at least 1.0 pts", the memo and Excel say
+  "falls at least 1 pt". If you want them the same, change it and run `python golden.py --update`.
+- **A package upgrade can change the goldens with no code change**, most likely the PDF text
+  (reportlab's line breaking or pypdf's text extraction). That is worth reading when it happens, but
+  it isn't always a bug in this project.
+- **When a new live run saves new analyses**, the goldens keep using the old copies until someone
+  copies the new ones into `tests/golden/analysis/` and updates. That's deliberate (the goldens
+  shouldn't change on their own), but it's a manual step, written in README.
+- **Not rerun after this task's code:** `check_deck.py`, `check_memo.py`, `check_excel_output.py`,
+  `check_main.py` in the project itself. No code they use changed (golden.py is new and only reads
+  their outputs), and all 7 ran green in a temporary copy at the start of the task. All 841 tests pass.

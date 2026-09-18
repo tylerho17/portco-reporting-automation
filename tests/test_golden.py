@@ -10,6 +10,7 @@ hold what the value checks (check_deck.py and friends) don't look at.
 Run from the project folder:  pytest
 """
 
+import datetime
 from pathlib import Path
 
 import pytest
@@ -70,6 +71,7 @@ def test_the_saved_analysis_still_passes_the_deck_and_memo_checks(rebuilt, compa
 def test_the_footer_uses_the_fixed_date_and_commit_not_todays(rebuilt):
     deck = rebuilt["northwind"]["deck"]
     assert golden.RUN_DATE.isoformat() in deck and golden.COMMIT["commit"] in deck
+    assert datetime.date.today().isoformat() not in deck   # RUN_DATE is in the past, so today never matches it
 
 def test_building_twice_gives_the_same_text(rebuilt, tmp_path):
     again = golden.build_dumps("northwind", tmp_path / "again")
