@@ -5,8 +5,8 @@ built with --skip-ai or --draft, exports, a rollup, a half-finished batch. This 
 1. Takes a copy of every saved analysis (output/<company>_analysis.json). They cost money to make
    and are never deleted; if anything changed one, the copy is put back and the demo isn't ready.
 2. Deletes every file the tool builds (decks, memos, metrics workbooks, manifests, exports, charts,
-   the batch summary, the rollup, a killed batch's private folders). Any other file in output/ is
-   left alone and listed.
+   the batch summary, the rollup, a killed batch's private folders, the run logs in output/logs).
+   Any other file in output/ is left alone and listed.
 3. Builds each demo company's workbook as it stood a quarter ago (check_diff.py's
    last_quarter_workbook), so the page's "What changed since the last run" has a run to compare with.
 4. Builds today's files for every company in data/ exactly as the page's Generate all does with the AI
@@ -45,6 +45,7 @@ from portfolio import generate_all, run_state
 from provenance import NOT_REVIEWED, git_commit, manifest_path, read_manifest
 from resilience import STAGING_FOLDER
 from rollup import rollup_paths
+from run_log import log_folder, no_log
 
 DEMO_COMPANY = "northwind"   # the company DEMO.md walks through: it must have AI text
 ANSWER_KEYS = {"northwind": make_data, "alderpeak": make_data_alderpeak, "fernhollow": make_data_fernhollow}
@@ -73,10 +74,11 @@ def built_files(stem, output_dir):
 
 
 def shared_built(output_dir):
-    """The files and folders built for the whole portfolio: batch summary, rollup, charts, private folders."""
+    """The files and folders built for the whole portfolio: batch summary, rollup, charts, private folders, run logs."""
     output_dir = Path(output_dir)
     return [output_dir / SUMMARY_CSV_PATH.name, output_dir / BATCH_MANIFEST_PATH.name,
-            *rollup_paths(output_dir).values(), output_dir / CHART_FOLDER, output_dir / STAGING_FOLDER]
+            *rollup_paths(output_dir).values(), output_dir / CHART_FOLDER, output_dir / STAGING_FOLDER,
+            log_folder(output_dir)]
 
 
 def company_stems(data_dir, output_dir):
@@ -156,8 +158,11 @@ def last_quarter_run(stem, config, output_dir):
 
 
 def rebuild(config, data_dir, output_dir):
-    """Today's files for every company, as the page's Generate all with the AI box unticked. Returns its outcomes."""
-    return quietly(generate_all, config, False, data_dir, output_dir, client=NoApiClient())
+    """Today's files for every company, as the page's Generate all with the AI box unticked. Returns its outcomes.
+
+    Not written to the run log, so the demo's Recent runs card starts empty (Task 15).
+    """
+    return quietly(generate_all, config, False, data_dir, output_dir, client=NoApiClient(), log=no_log())
 
 
 # ---------------------------------------------------------------------------

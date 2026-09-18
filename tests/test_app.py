@@ -18,6 +18,7 @@ from streamlit.testing.v1 import AppTest
 import analyze
 import app
 import export
+import main
 import make_data
 import mapping
 import portfolio
@@ -291,6 +292,36 @@ def test_generate_all_builds_every_company(folders):
     assert test.success[0].value == "Generate all: 3 of 3 companies generated."
     assert all(not disabled for _, disabled in downloads(test))
     assert (folders[1] / "batch_summary.csv").exists()
+
+
+def run_expanders(test):
+    """The labels of the Recent runs card's expanders (one per run)."""
+    return [block.label for block in test.expander if "companies:" in block.label or "company:" in block.label]
+
+
+def test_recent_runs_says_there_are_none_before_any_run(folders):
+    # Task 15.
+    test = page(folders)
+    assert app.NO_RUNS in [info.value for info in test.info]
+    assert run_expanders(test) == []
+
+
+def test_recent_runs_shows_a_generate_click_with_a_line_per_step(folders):
+    test = page(folders)
+    test.button(key="generate_northwind").click().run()
+    assert not test.exception and not test.error
+    [label] = run_expanders(test)
+    assert "web page · 1 company: 1 built" in label
+    [steps] = [body for body in tables(test) if "<th>Step</th>" in body]
+    assert steps.count("<tr>") == 1 + 9   # the header, 8 steps and the whole company
+    assert "AI commentary" in steps and "whole company" in steps
+
+
+def test_recent_runs_reads_the_command_line_s_logs_too(folders):
+    main.run_batch([folders[0] / "fernhollow.xlsx"], load_config(), True, output_dir=folders[1])
+    test = page(folders)
+    [label] = run_expanders(test)
+    assert "command line · 1 company: 1 built" in label
 
 
 def test_an_unreadable_workbook_shows_clean_py_s_message_and_the_others_still_work(folders):

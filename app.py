@@ -4,7 +4,9 @@ Two pages:
 1. Portfolio: a table of every company in data/ (latest quarter, flags tripped, data gaps, last run,
    deck status), with Generate, Download deck, Download memo and Download Excel on each row; a
    search box; Generate all with a progress bar; Download rollup (Task 9: rollup.py's one deck and
-   one workbook across every company, built when clicked); and an "Add a company" panel for a new workbook.
+   one workbook across every company, built when clicked); an "Add a company" panel for a new workbook;
+   and Recent runs (Task 15: the newest five run logs from output/logs, each step with its seconds,
+   result and any error, whether the run came from this page or the command line).
 2. Company (click a company's name): its flags with thresholds and reasons, what changed since the
    last run (Task 10: flags that flipped, metrics that moved, new and resolved data gaps), data gaps, metrics
    table in the status colors (red = tripped, green = passed, gray = data missing / cannot
@@ -55,6 +57,7 @@ from portfolio import (NO_WORKBOOK_FOUND, add_company, approve_company, confirm_
                        portfolio_rows, run_changes, run_state, saved_commentary, search_message, search_rows,
                        suggested_name, upload_proposals)
 from rollup import rollup_download, rollup_paths
+from run_log import recent_runs, run_label, step_rows
 from theme import STATUS_COLORS, streamlit_css
 
 PAGE_TITLE = "Board Pack Generator"
@@ -110,6 +113,12 @@ EXPORT_DOWNLOADS = [("metrics_csv", "Metrics (CSV)", "text/csv"), ("flags_csv", 
 EXPORT_HELP = ("Metrics and flags for other tools (CSV, JSON), and an email summary: open the HTML file in a "
                "browser, select all, copy, and paste into Outlook. Built from today's workbook when you click; "
                "no AI text, and nothing is written to output/.")
+
+# Task 15: the portfolio's Recent runs card, read from output/logs (run_log.py).
+NO_RUNS = "No runs yet. Generate a company here, or run python main.py, and each step will be listed."
+RUNS_CAPTION = ("The newest five runs from here or the command line, newest first. Open one for each company's "
+                "steps, how long each took and any error. The full logs are in output/logs.")
+RUN_COLUMNS = ["Company", "Step", "Seconds", "Result", "Error"]
 
 CHART_INCHES = (6.4, 4.4)       # each chart's size on the page
 COMPANY_KEY = "company"         # st.session_state: the company page being shown, or none (the portfolio)
@@ -428,6 +437,24 @@ def portfolio_page(data_dir, output_dir):
             portfolio_table(search_rows(rows, query), ask_claude, config, output_dir)
     with st.container(key="card-add"):
         add_company_panel(config, data_dir, expanded=bool(not_found or not rows))
+    with st.container(key="card-runs"):
+        recent_runs_panel(output_dir)
+
+
+def recent_runs_panel(output_dir):
+    """Recent runs (Task 15): the newest run logs in output/logs, one expander per run with a line per step."""
+    st.subheader("Recent runs")
+    runs = recent_runs(output_dir)
+    if not runs:
+        st.info(NO_RUNS)
+        return
+    st.caption(RUNS_CAPTION)
+    for run in runs:
+        with st.expander(md(run_label(run))):
+            for problem in run["problems"]:
+                st.error(problem)
+            table = pd.DataFrame(step_rows(run), columns=RUN_COLUMNS)
+            st.html(table_html(table, pd.DataFrame("", index=table.index, columns=table.columns)))
 
 
 # ---------------------------------------------------------------------------

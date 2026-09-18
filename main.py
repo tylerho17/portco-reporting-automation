@@ -84,6 +84,8 @@ from provenance import build_manifest, git_commit, manifest_path, read_manifest,
 from resilience import (UP_TO_DATE, Cancelled, CompanyControl, RateLimitRetry, SpendMeter, clear_old_stages,
                         commit_stage, discard_stage, make_stage, rate_limit_note, record_batch_event, resume_problem,
                         routed_stdout)
+import run_log
+from run_log import COMMAND_LINE, CompanyLog, RunLog
 from text_fit import TextDoesNotFitError
 
 PROJECT_DIR = Path(__file__).parent
@@ -365,33 +367,53 @@ def blank_quarters(actuals):
     return list(actuals.index[actuals.isna().any(axis=1)])
 
 
-def company_facts(workbook_path, config):
-    """Clean the workbook and work out what the summary table shows: (result, actuals, next_budget)."""
-    actuals, next_budget = clean_workbook(workbook_path)
-    metrics = compute_metrics(actuals)
-    flags = evaluate_flags(metrics, metric_reasons(actuals, metrics), config)  # latest quarter
+def company_facts(workbook_path, config, log=None):
+    """Clean the workbook and work out what the summary table shows: (result, actuals, next_budget).
+
+    log (run_log.CompanyLog) times the clean and metrics steps; None logs nothing.
+    """
+    log = log or CompanyLog(None, company_name(workbook_path))
+    with log.step(run_log.CLEAN):
+        actuals, next_budget = clean_workbook(workbook_path)
+    with log.step(run_log.METRICS):
+        metrics = compute_metrics(actuals)
+        flags = evaluate_flags(metrics, metric_reasons(actuals, metrics), config)  # latest quarter
+        gaps = data_gaps(actuals, metrics, flags)
     result = {
         "company": company_name(workbook_path),
         "quarter": flags[0]["quarter"],
         "flags_total": len(flags),
         "tripped": [flag["flag"] for flag in flags if flag["status"] == TRIP],
         "cannot_evaluate": [flag["flag"] for flag in flags if flag["status"] == CANNOT_EVALUATE],
-        "gap_count": len(data_gaps(actuals, metrics, flags)),
+        "gap_count": len(gaps),
         "blank_quarters": blank_quarters(actuals),
     }
     return result, actuals, next_budget
 
 
+def ai_log_result(ai):
+    """(result, error) for the AI step's line in the run log: skipped, reused, ok, or failed with why."""
+    if ai is None:
+        return run_log.SKIPPED, None
+    if ai["validation"] == AI_REUSED:
+        return run_log.REUSED, None
+    if ai["validation"].startswith("failed"):   # "failed: <why>" (ai_step)
+        return run_log.FAILED, ai["validation"].removeprefix("failed: ")
+    return run_log.OK, None
+
+
 def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_DIR, draft=False, reuse_saved=False,
-                control=None):
+                control=None, log=None):
     """Run every step for one workbook and print a line per step.
 
     Returns a result dict for the summary table. Raises if any step fails.
     reuse_saved=True (the web page, --resume) uses a saved analysis of exactly these numbers instead of asking Claude.
     control (resilience.CompanyControl) is how a batch gives up on a company: it stops before its next step.
+    log (run_log.CompanyLog) writes a line per step to the run log; None logs nothing.
     """
     control = control or CompanyControl()
-    result, actuals, next_budget = company_facts(workbook_path, config)
+    log = log or CompanyLog(None, company_name(workbook_path))
+    result, actuals, next_budget = company_facts(workbook_path, config, log)
     budget_label = next_budget.name if next_budget is not None else "none"
     print(f"  ✓ Cleaned: {len(actuals)} quarters ({actuals.index[0]} to {actuals.index[-1]}), "
           f"budget row: {budget_label}")
@@ -399,20 +421,27 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
     for name in result["tripped"]:
         print(f"      tripped: {name}")
     print(f"  ✓ Data gaps: {gaps_text(result)}")
-    changes = changes_step(workbook_path, actuals, next_budget, config, output_dir)
+    with log.step(run_log.CHANGES):
+        changes = changes_step(workbook_path, actuals, next_budget, config, output_dir)
 
     control.checkpoint()
-    excel_path = save_metrics_workbook(workbook_path, config, output_dir)
+    with log.step(run_log.EXCEL):
+        excel_path = save_metrics_workbook(workbook_path, config, output_dir)
     print(f"  ✓ Excel: {shown_path(excel_path)}")
     control.checkpoint()
-    ai, analysis_file = ai_part(workbook_path, actuals, next_budget, config, output_dir, skip_ai, client, reuse_saved,
-                                control)
+    with log.step(run_log.AI) as step:
+        ai, analysis_file = ai_part(workbook_path, actuals, next_budget, config, output_dir, skip_ai, client,
+                                    reuse_saved, control)
+        step.result, step.error = ai_log_result(ai)
     control.checkpoint()
-    why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir, draft)
+    with log.step(run_log.DECK):
+        why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir, draft)
     control.checkpoint()
-    memo = memo_step(workbook_path, config, analysis_file, output_dir)
+    with log.step(run_log.MEMO):
+        memo = memo_step(workbook_path, config, analysis_file, output_dir)
     control.checkpoint()
-    manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo, draft, changes)
+    with log.step(run_log.MANIFEST):
+        manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo, draft, changes)
     result["ai"] = ai_status(ai is None, why_unavailable)   # a reused analysis isn't "skipped"
     result["deck_status"] = manifest["deck"]["status"]
     result["cost_usd"] = manifest["ai"]["cost_usd"]
@@ -433,7 +462,7 @@ def describe_error(error):
 # ---------------------------------------------------------------------------
 
 def run_batch(workbook_paths, config, skip_ai, client=None, output_dir=OUTPUT_DIR, draft=False, resume=False,
-              max_cost=None, timeout=None, workers=1, spend=None):
+              max_cost=None, timeout=None, workers=1, spend=None, log=None):
     """Run every workbook, up to `workers` at a time. A failure, timeout or stop is recorded and the batch moves on.
 
     Returns one result per workbook, in the order given (whatever order they finished in).
@@ -441,9 +470,12 @@ def run_batch(workbook_paths, config, skip_ai, client=None, output_dir=OUTPUT_DI
     draft=True puts the DRAFT watermark on every deck nobody has approved (--draft).
     resume, max_cost (dollars), timeout (seconds per company), workers: see the module docstring.
     spend (resilience.SpendMeter) adds up the AI cost; main() passes one in to print the total.
+    log (run_log.RunLog) gets a line per step per company, then one for the whole company; None
+    starts a new one in <output_dir>/logs. main() passes one in to print where it is.
     """
     batch = SimpleNamespace(config=config, skip_ai=skip_ai, client=client, output_dir=Path(output_dir), draft=draft,
                             resume=resume, max_cost=max_cost, timeout=timeout, spend=spend or SpendMeter(),
+                            log=log or RunLog(output_dir, COMMAND_LINE),
                             finished=queue.Queue())   # each company's thread puts itself here when it's done
     clear_old_stages(batch.output_dir)
     waiting, running, results = list(enumerate(workbook_paths)), {}, {}
@@ -460,17 +492,28 @@ def run_batch(workbook_paths, config, skip_ai, client=None, output_dir=OUTPUT_DI
 
 def start_or_settle(index, path, batch, running, results):
     """Skip the company (--resume, up to date), stop it (--max-cost reached), or start it in its own thread."""
+    started = time.monotonic()
     skipped, why_rebuilt = resume_check(path, batch) if batch.resume else (None, None)
     if skipped:
-        results[index] = skipped
+        results[index] = log_whole_company(skipped, started, batch)
     elif batch.max_cost is not None and batch.spend.total >= batch.max_cost:
-        results[index] = stopped_result(path, batch)
+        results[index] = log_whole_company(stopped_result(path, batch), started, batch)
     else:
         notes = [f"rebuilt (--resume): {why_rebuilt}"] if why_rebuilt else []
         job = SimpleNamespace(index=index, path=Path(path), notes=notes, control=CompanyControl(batch.spend),
                               started=time.monotonic(), stage=None, buffer=None, result=None)
         threading.Thread(target=company_worker, args=(job, batch), daemon=True).start()
         running[index] = job
+
+
+def log_whole_company(result, started, batch):
+    """Write the company's last line in the run log: its outcome, seconds since `started`, and why if it wasn't built.
+
+    Returns the result unchanged, so the caller can store it in the same line.
+    """
+    error = None if outcome_of(result) in (BUILT, SKIPPED) else result["error"]
+    batch.log.write(result["company"], run_log.WHOLE_COMPANY, time.monotonic() - started, outcome_of(result), error)
+    return result
 
 
 def resume_check(path, batch):
@@ -508,7 +551,8 @@ def company_worker(job, batch):
         job.stage = make_stage(job.path, batch.output_dir)
         _private.stage, _private.output_dir = job.stage, batch.output_dir
         job.result = run_company(job.path, batch.config, batch.skip_ai, batch.client, job.stage, batch.draft,
-                                 reuse_saved=batch.resume, control=job.control)
+                                 reuse_saved=batch.resume, control=job.control,
+                                 log=batch.log.company(company_name(job.path)))
         job.result["error"] = None
     except Cancelled:  # the batch gave up on it (--timeout): nothing to report, it's already recorded
         pass
@@ -533,7 +577,7 @@ def wait_for_a_company(running, results, batch):
             discard_stage(job.stage)
         return
     del running[job.index]
-    results[job.index] = settle(job, batch)
+    results[job.index] = log_whole_company(settle(job, batch), job.started, batch)
 
 
 def seconds_to_first_deadline(running, timeout):
@@ -549,7 +593,7 @@ def give_up_on_overdue(running, results, batch):
         if time.monotonic() - job.started >= batch.timeout:
             job.control.cancel.set()
             del running[index]
-            results[index] = timed_out_result(job, batch)
+            results[index] = log_whole_company(timed_out_result(job, batch), job.started, batch)
 
 
 def timed_out_result(job, batch):
@@ -920,9 +964,9 @@ def run_workbooks(args, config):
         return EXIT_PROBLEM
     options = {"resume": args.resume, "max_cost": args.max_cost, "timeout": args.timeout, "workers": args.workers,
                "skip_ai": args.skip_ai, "draft": args.draft}
-    spend = SpendMeter()
-    results = run_batch(paths, config, args.skip_ai, draft=args.draft, resume=args.resume,
-                        max_cost=args.max_cost, timeout=args.timeout, workers=args.workers, spend=spend)
+    spend, log = SpendMeter(), RunLog(OUTPUT_DIR, COMMAND_LINE)
+    results = run_batch(paths, config, args.skip_ai, output_dir=OUTPUT_DIR, draft=args.draft, resume=args.resume,
+                        max_cost=args.max_cost, timeout=args.timeout, workers=args.workers, spend=spend, log=log)
     print_summary(results)
     if not args.skip_ai or args.max_cost is not None:
         print(spend_text(spend.total, args.max_cost))
@@ -931,6 +975,8 @@ def run_workbooks(args, config):
             print(warning)
     print(f"Summary saved: {shown_path(write_summary_csv(results))}")
     print(f"Batch manifest saved: {shown_path(save_batch_manifest(results, options, spend.total))}")
+    if log.path is not None:   # None: nothing was logged (tests that replace run_batch)
+        print(f"Run log saved: {shown_path(log.path)}")
     return EXIT_PROBLEM if any(result["error"] for result in results) else EXIT_OK   # failed, timed out or stopped
 
 

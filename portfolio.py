@@ -23,6 +23,7 @@ Rules:
 import json
 import re
 import tempfile
+import time
 import traceback
 import zipfile
 from pathlib import Path
@@ -35,13 +36,15 @@ from build_deck import PLACEHOLDER_TEXT, collect_deck_data, deck_path, flag_coun
 from clean import UnconfirmedMappingError, clean_workbook
 from diff_runs import changes_since_last_run, move_settings
 from excel_output import output_path as excel_path
-from main import (AI_FAILED, AI_REUSED, AI_SKIPPED, DATA_DIR, INPUT_ERRORS, OUTPUT_DIR, SUMMARY_CSV_PATH,
-                  api_key_problem, blank_quarters, company_name, find_workbooks, gaps_text, reusable_analysis,
-                  run_company, write_summary_csv)
+from main import (AI_FAILED, AI_REUSED, AI_SKIPPED, BUILT, DATA_DIR, FAILED, INPUT_ERRORS, OUTPUT_DIR,
+                  SUMMARY_CSV_PATH, api_key_problem, blank_quarters, company_name, find_workbooks, gaps_text,
+                  reusable_analysis, run_company, write_summary_csv)
 from mapping import mapping_sha256, review_workbook, save_mapping, saved_columns
 from memo import memo_paths, no_em_dash
 from metrics import CONFIG_PATH
 from provenance import approval_status, deck_status, file_sha256, manifest_path, read_manifest
+import run_log
+from run_log import WEB_PAGE, RunLog
 
 # Files that aren't Excel workbooks at all: clean.py never gets to read them.
 NOT_A_WORKBOOK = "This file isn't a readable Excel workbook. Save it from Excel as .xlsx and try again."
@@ -259,41 +262,49 @@ def ai_note(result, manifest, no_key):
     return AI_REUSED_NOTE if validation == AI_REUSED else AI_NEW_NOTE
 
 
-def generate_company(workbook_path, config, ask_claude, output_dir=OUTPUT_DIR, client=None):
+def generate_company(workbook_path, config, ask_claude, output_dir=OUTPUT_DIR, client=None, log=None):
     """Build one company's files, as `python main.py <workbook>` does. Never raises.
 
     Returns {"company", "ok", "message" (for the page), "result" (main.py's, for batch_summary.csv)}.
     ask_claude=False never calls the API. client is for tests (a fake Claude client).
+    log (run_log.RunLog): Generate all passes one for the whole click; None starts a new one (Generate
+    on one row). Each step gets a line, then one for the whole company, as in main.py's log.
     """
     workbook_path = Path(workbook_path)
     company = company_name(workbook_path)
+    log, started = log or RunLog(output_dir, WEB_PAGE), time.monotonic()
     try:
         if not is_excel_workbook(workbook_path):
-            raise ValueError(NOT_A_WORKBOOK)
+            with log.company(company).step(run_log.CLEAN):   # where main.py's run would fail too
+                raise ValueError(NOT_A_WORKBOOK)
         no_key = bool(ask_claude and client is None and api_key_problem())   # a fake client needs no key
         result = run_company(workbook_path, config, skip_ai=not ask_claude or no_key, client=client,
-                             output_dir=output_dir, reuse_saved=True)
+                             output_dir=output_dir, reuse_saved=True, log=log.company(company))
     except Exception as error:  # noqa: BLE001 - one company failing must not stop the others
         message = error_message(error)
+        log.write(company, run_log.WHOLE_COMPANY, time.monotonic() - started, FAILED, f"{type(error).__name__}: {message}")
         return {"company": company, "ok": False, "message": f"{company}: {message}",
                 "result": {"company": company, "error": f"{type(error).__name__}: {message}"}}
+    log.write(company, run_log.WHOLE_COMPANY, time.monotonic() - started, BUILT)
     result["error"] = None
     manifest = read_manifest(manifest_path(workbook_path, output_dir))
     return {"company": company, "ok": True, "result": result,
             "message": f"{company}: generated. {ai_note(result, manifest, no_key)}"}
 
 
-def generate_all(config, ask_claude, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, client=None, on_progress=None):
+def generate_all(config, ask_claude, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, client=None, on_progress=None,
+                 log=None):
     """Generate every company in data/ in turn, then save batch_summary.csv as main.py --all does.
 
     on_progress(done, total, company about to start or None at the end) moves the page's progress bar.
+    log (run_log.RunLog): None starts one run log for the whole click; demo_reset.py passes run_log.no_log().
     """
     paths = find_workbooks(data_dir)
-    outcomes = []
+    outcomes, log = [], log or RunLog(output_dir, WEB_PAGE)   # one run log for the whole click
     for done, path in enumerate(paths):
         if on_progress:
             on_progress(done, len(paths), company_name(path))
-        outcomes.append(generate_company(path, config, ask_claude, output_dir, client))
+        outcomes.append(generate_company(path, config, ask_claude, output_dir, client, log))
     if on_progress:
         on_progress(len(paths), len(paths), None)
     write_summary_csv([outcome["result"] for outcome in outcomes], Path(output_dir) / SUMMARY_CSV_PATH.name)

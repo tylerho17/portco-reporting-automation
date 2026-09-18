@@ -74,6 +74,7 @@ def leave_practice_mess(data_dir, output_dir):
     """What a practice run leaves: an approved deck, exports, a rollup, a half-finished batch, other files."""
     config = load_config()
     portfolio.generate_company(data_dir / "northwind.xlsx", config, False, output_dir)
+    assert list((output_dir / "logs").glob("run_*.jsonl"))   # the practice Generate was logged (Task 15)
     assert portfolio.approve_company("northwind", "Practice Reviewer", data_dir, output_dir)["ok"]
     for path in list(export_paths(data_dir / "northwind.xlsx", output_dir).values()) + list(rollup_paths(output_dir).values()):
         path.write_text("left from practice")
@@ -123,10 +124,15 @@ def test_built_files_are_what_the_tool_writes_and_never_the_saved_analysis(tmp_p
     assert "northwind_analysis.json" not in names
 
 
-def test_shared_files_are_the_batch_rollup_charts_and_staging(tmp_path):
+def test_shared_files_are_the_batch_rollup_charts_staging_and_run_logs(tmp_path):
     names = [path.name for path in demo_reset.shared_built(tmp_path)]
     assert names == ["batch_summary.csv", "batch_manifest.json", "portfolio_rollup.pptx", "portfolio_rollup.xlsx",
-                     "charts", ".staging"]
+                     "charts", ".staging", "logs"]
+
+
+def test_the_reset_clears_the_run_logs_and_logs_nothing_itself(reset_twice):
+    # Task 15: the practice run's Generate wrote a log; a demo starts with "No runs yet".
+    assert not (reset_twice["output_dir"] / "logs").exists()
 
 
 def test_company_stems_include_a_company_whose_workbook_was_removed(tmp_path):
