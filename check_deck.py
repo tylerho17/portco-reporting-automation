@@ -56,7 +56,7 @@ from mapping import mapping_sha256
 from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, CONFIG_PATH, PASS, TRIP, compute_metrics, load_config
 from provenance import NOT_REVIEWED, approval_status, file_sha256, manifest_path, read_manifest
 from text_fit import MIN_FONT_PT, paragraph, text_height_pt, text_width_pt
-from theme import EXCEL_STATUS_COLORS, STATUS_COLORS
+from theme import EXCEL_STATUS_COLORS, STATUS_COLORS, WHITE
 
 PROJECT_DIR = Path(__file__).parent
 LATEST, PRIOR, FIRST = "Q2 2026", "Q1 2026", "Q3 2024"
@@ -495,7 +495,7 @@ def lost_color(slide):
     """The first colored cell goes back to white."""
     grid = shape(slide, "Appendix table").table
     colored = next(cell for row in grid.rows for cell in row.cells if str(cell.fill.fore_color.rgb) in STATUS_FILLS.values())
-    colored.fill.fore_color.rgb = RGBColor.from_string("FFFFFF")
+    colored.fill.fore_color.rgb = RGBColor.from_string(WHITE)
 
 
 def lost_key_entry(slide):
