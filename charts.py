@@ -1,9 +1,11 @@
-"""The two charts on the deck's Charts slide, drawn with matplotlib and saved as PNG images.
+"""The two charts on the deck's Charts slide (and the rollup's runway chart), drawn with matplotlib and saved as PNG.
 
 - ARR chart:  ending ARR by quarter (top) and net new ARR by quarter (bottom). Two panels
               with their own scales instead of one chart with two y-axes: net new ARR is
               a small fraction of ARR and can go negative, so it gets its own zero line.
 - Cash chart: ending cash by quarter as a line, with runway in the title.
+- Runway chart (the portfolio rollup, rollup.py): runway at current burn by company, one bar each,
+              red where the runway flag trips, with the flag's threshold as a dashed line.
 
 A blank quarter is never hidden or bridged:
 - bars: no bar is drawn, and "data missing" is written where the bar would be;
@@ -27,7 +29,7 @@ from matplotlib.figure import Figure  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from metrics import INPUT_LABELS, METRIC_LABELS, MISSING_INPUT, REASON_DISPLAY, format_value  # noqa: E402
-from theme import CAPTION_PT, FONT_STACK, MID_GRAY, NAVY, SLATE, WHITE, css_color  # noqa: E402
+from theme import CAPTION_PT, FONT_STACK, MID_GRAY, NAVY, RED, SLATE, WHITE, css_color  # noqa: E402
 
 # Every chart is drawn in the first of Arial, Helvetica, DejaVu Sans this computer has.
 matplotlib.rcParams["font.family"] = "sans-serif"
@@ -43,6 +45,7 @@ X_PADDING = 0.5                # half a quarter of space left of the first and r
 HEADROOM = 1.2                 # top of the cash axis = 1.2 x the highest cash, room for the label
 GAP_LABEL = REASON_DISPLAY[MISSING_INPUT]   # "data missing"
 NAVY_HEX, MID_GRAY_HEX, SLATE_HEX, WHITE_HEX = css_color(NAVY), css_color(MID_GRAY), css_color(SLATE), css_color(WHITE)
+TRIPPED_WORD = "tripped"       # the runway chart says it in words as well as red
 LABEL_BACKGROUND = {"facecolor": WHITE_HEX, "edgecolor": "none", "pad": 1}  # keeps a label readable over lines
 
 
@@ -125,6 +128,45 @@ def cash_chart(quarters, ending_cash, runway_text, size_inches):
     # The line reaches the last point from the left: put the label on the side the line isn't.
     came_down = len(values) > 1 and not math.isnan(values[-2]) and values[-2] > values[-1]
     label_latest(axis, values, "ending_cash", below=came_down)
+    return figure
+
+
+def runway_chart(companies, runways, texts, tripped, threshold, threshold_text, size_inches):
+    """The rollup's chart (rollup.py): one horizontal bar per company, months of runway, first company on top.
+
+    companies, runways (months; NaN = no number, inf = not burning), texts (what each bar says, from
+    build_deck.value_text) and tripped (the runway flag's result) are in the same order. Only a real
+    number gets a bar: an infinite or missing runway gets its words instead, at the start of the row.
+    Tripped bars are red (a flag's status, the only thing red means), the rest navy. The dashed line
+    is the runway flag's threshold from config.yaml.
+    """
+    figure = Figure(figsize=size_inches, constrained_layout=True)
+    axis = figure.subplots()
+    rows = range(len(companies))
+    drawn = [row for row in rows if math.isfinite(runways[row])]
+    axis.barh(drawn, [runways[row] for row in drawn], height=BAR_WIDTH,
+              color=[css_color(RED) if tripped[row] else NAVY_HEX for row in drawn])
+    for row in rows:   # the value past the end of its bar, or the words where a bar would start
+        at = runways[row] if row in drawn else 0
+        text = f"{texts[row]}, {TRIPPED_WORD}" if tripped[row] else texts[row]   # never color alone
+        axis.annotate(text, (at, row), xytext=(LABEL_OFFSET_PT, 0), textcoords="offset points", va="center",
+                      fontsize=FONT_SIZE, color=SLATE_HEX, fontweight="bold" if tripped[row] else None,
+                      bbox=LABEL_BACKGROUND, zorder=3)   # above the threshold line
+    axis.axvline(threshold, color=SLATE_HEX, linestyle="--", linewidth=1, zorder=2)
+    axis.text(threshold, 1.0, f" {threshold_text}", transform=axis.get_xaxis_transform(), va="bottom",
+              fontsize=FONT_SIZE, color=SLATE_HEX)
+    axis.set_yticks(list(rows), companies)
+    axis.invert_yaxis()   # first company at the top, as in a ranked list
+    longest = max([runways[row] for row in drawn] + [threshold])
+    axis.set_xlim(0, longest * HEADROOM)   # room for the last label past the longest bar
+    axis.xaxis.set_major_formatter(FuncFormatter(lambda value, _: format_value("runway_months", value)))
+    for side in ("top", "right"):
+        axis.spines[side].set_visible(False)
+    axis.spines["left"].set_color(MID_GRAY_HEX)
+    axis.spines["bottom"].set_color(MID_GRAY_HEX)
+    axis.grid(axis="x", color=MID_GRAY_HEX, alpha=0.25, linewidth=0.8)
+    axis.set_axisbelow(True)
+    axis.tick_params(labelsize=FONT_SIZE, colors=SLATE_HEX)
     return figure
 
 
