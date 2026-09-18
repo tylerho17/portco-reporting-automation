@@ -139,7 +139,8 @@ def run_northwind(tmp_path, skip_ai=False, client=None, draft=False):
 
 
 def headline_on_deck(tmp_path):
-    slide = Presentation(tmp_path / "northwind_board_pack.pptx").slides[0]
+    """The Headline box on the last slide, AI commentary (slide 4)."""
+    slide = Presentation(tmp_path / "northwind_board_pack.pptx").slides[-1]
     return next(shape.text_frame.text for shape in slide.shapes if shape.name == "Headline")
 
 
@@ -203,7 +204,7 @@ def test_ai_text_too_long_for_the_slides_is_ai_failed_not_a_failed_company(tmp_p
     path.write_text(json.dumps(saved))
 
     why_unavailable = main.deck_step(NORTHWIND, main.load_config(), path, tmp_path)
-    assert "does not fit slide 1" in why_unavailable
+    assert "does not fit slide 4" in why_unavailable
     assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
     assert main.RESULT_TEXTS[main.ai_status(False, why_unavailable)] == "OK (AI failed)"
 
@@ -211,9 +212,9 @@ def test_ai_text_too_long_for_the_slides_is_ai_failed_not_a_failed_company(tmp_p
 def test_a_text_that_does_not_fit_prints_one_clear_line_not_a_traceback(capsys):
     # Review finding 2: the message already names the slide and the box, so a traceback (which means
     # "this is a bug in the code") only makes the real problem harder to see.
-    main.describe_error(TextDoesNotFitError("Slide 4, Risks and flags: text doesn't fit"))
+    main.describe_error(TextDoesNotFitError("Slide 3, Risks and flags: text doesn't fit"))
     printed = capsys.readouterr()
-    assert "Slide 4, Risks and flags" in printed.out
+    assert "Slide 3, Risks and flags" in printed.out
     assert "Traceback" not in printed.out + printed.err
 
 
@@ -333,7 +334,15 @@ def test_a_run_has_no_watermark_by_default_and_the_footer_says_not_reviewed(tmp_
 
 def test_draft_watermarks_every_slide_of_an_unreviewed_deck(tmp_path):
     run_northwind(tmp_path, skip_ai=True, draft=True)
-    assert len(deck_watermarks(tmp_path)) == 5
+    assert len(deck_watermarks(tmp_path)) == 4
+
+
+def test_the_printout_names_the_slide_the_ai_text_is_on(tmp_path, capsys):
+    # The deck has 4 slides and the AI text is only on slide 4 (AI commentary).
+    run_northwind(tmp_path, client=FakeClient(summary()))
+    assert "(AI text on slide 4)" in capsys.readouterr().out
+    run_northwind(tmp_path, skip_ai=True)
+    assert f"({PLACEHOLDER_TEXT} on slide 4)" in capsys.readouterr().out
 
 
 def test_the_footer_of_a_re_run_names_a_reviewer_whose_approval_still_counts(tmp_path):

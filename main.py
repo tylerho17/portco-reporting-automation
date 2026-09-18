@@ -8,9 +8,9 @@ Steps for each company:
 5. Deck (build_deck.py): output/<company>_board_pack.pptx
 
 The deck is always built, because its numbers come from Python (CLAUDE.md decisions K and L):
-- AI passed validation      -> the AI text is on slides 1 and 5, result "OK"
+- AI passed validation      -> the AI text is on slide 4 (AI commentary), result "OK"
 - AI failed (validation failed after the retry, or an API error)
-                            -> "AI summary unavailable" on slides 1 and 5, result "OK (AI failed)"
+                            -> "AI summary unavailable" on slide 4, result "OK (AI failed)"
 - --skip-ai                 -> the same placeholder with no API call, result "OK (AI skipped)"
 Without --skip-ai, the API key is checked before any company runs.
 
@@ -39,7 +39,8 @@ import anthropic
 from dotenv import load_dotenv
 
 from analyze import PROMPT_VERSION, AnalysisError, analyze, build_payload, payload_to_text, save_analysis
-from build_deck import PLACEHOLDER_TEXT, analysis_details, analysis_path, deck_path, save_deck
+from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, commentary_slide, deck_path, save_deck,
+                        slide_number)
 from clean import clean_workbook
 from compare_models import run_cost
 from excel_output import save_metrics_workbook
@@ -130,10 +131,11 @@ def ai_step(workbook_path, actuals, next_budget, config, output_dir, client=None
 def deck_step(workbook_path, config, analysis_file, output_dir, draft=False):
     """Build and save the deck (draft=True: watermarked unless approved). Returns why the AI summary isn't on it, or None."""
     path, why_unavailable = save_deck(workbook_path, config, analysis_file, output_dir=output_dir, draft=draft)
+    where = f"on slide {slide_number(commentary_slide)}"   # the AI commentary slide
     if why_unavailable is None:
-        print(f"  ✓ Deck: {shown_path(path)} (AI text on slides 1 and 5)")
+        print(f"  ✓ Deck: {shown_path(path)} (AI text {where})")
     else:
-        print(f"  ✓ Deck: {shown_path(path)} ({PLACEHOLDER_TEXT} on slides 1 and 5)")
+        print(f"  ✓ Deck: {shown_path(path)} ({PLACEHOLDER_TEXT} {where})")
     if analysis_file is not None and why_unavailable is not None:  # the AI passed, but the deck rejected it
         print(f"      {PLACEHOLDER_TEXT}: {why_unavailable}")
     return why_unavailable

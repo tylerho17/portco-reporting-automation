@@ -1,16 +1,19 @@
-"""Build the 5-slide board deck: output/<company>_board_pack.pptx (build step 4).
+"""Build the 4-slide board deck: output/<company>_board_pack.pptx (build step 4).
 
 Slides (every one on templates/base.pptx's "Title and Content" layout, with a footer):
-1. Summary:          company and quarter, AI headline, 3 wins and 3 risks, "6 of 9 flags tripped"
-2. Key metrics:      latest quarter, prior quarter, budget or threshold, status (red / green / gray)
-3. ARR and cash:     two matplotlib charts (charts.py); a blank quarter shows as a gap
-4. Risks and flags:  each tripped flag with value vs threshold, the combo rule; the Data gaps line beside them
-5. Questions:        the AI's 3 questions for management
+1. Key metrics:      company, latest quarter, prior quarter, budget or threshold, status (red / green / gray)
+2. ARR and cash:     two matplotlib charts (charts.py); a blank quarter shows as a gap
+3. Risks and flags:  "6 of 9 flags tripped", each tripped flag with value vs threshold, the combo rule;
+                     the Data gaps line beside them
+4. AI commentary:    "AI-drafted from computed metrics - review before use" under the title, then the
+                     AI headline, and its 3 risks and 3 questions for management side by side
+
+The analysis also has 3 wins (analyze.py still asks for them); they aren't on the deck.
 
 Inputs: metrics, flags and data gaps (metrics.py) and the AI analysis JSON (analyze.py).
 The analysis is checked again here against today's numbers; if it's missing or fails,
-slides 1 and 5 say "AI summary unavailable" and everything else is built as normal
-(CLAUDE.md step 4 decisions K and L).
+slide 4 says "AI summary unavailable" and everything else is built as normal
+(CLAUDE.md step 4 decisions K and L). Slides 1 to 3 have no AI text at all.
 
 Rules:
 - No math and no hand-typed numbers: every number comes from metrics.py, config.yaml or the
@@ -24,7 +27,7 @@ Rules:
   Off by default: the footer already says it on every slide.
 
 Run: python build_deck.py data/northwind.xlsx                  (uses output/northwind_analysis.json if it exists)
-     python build_deck.py data/northwind.xlsx --no-analysis    (placeholder on slides 1 and 5)
+     python build_deck.py data/northwind.xlsx --no-analysis    (placeholder on slide 4)
      python build_deck.py data/northwind.xlsx --draft          (DRAFT watermark unless reviewed)
 """
 
@@ -59,10 +62,11 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 CHART_FOLDER = "charts"   # PNGs go in output/charts/
 
 PLACEHOLDER_TEXT = "AI summary unavailable"
-PLACEHOLDER_NOTE = ("The headline, wins, risks and questions are written by Claude, and no validated version "
+PLACEHOLDER_NOTE = ("The headline, risks and questions are written by Claude, and no validated version "
                     "is available for this deck. Every number on the other slides is computed in Python "
                     "and is unaffected.")
 FICTIONAL_NOTE = "Fictional data"     # short: the footer line has no room to spare (add_footer)
+AI_DRAFTED_LINE = "AI-drafted from computed metrics - review before use"   # under slide 4's title
 NO_AI_MODEL = "no AI text"            # the footer's model when the deck shows the placeholder
 AI_DRAFTED = "AI-drafted"             # the footer's review status starts with this, reviewed or not
 NOT_REVIEWED_TEXT = "not reviewed"
@@ -71,6 +75,7 @@ LOCAL_CHANGES = "*"                   # after the commit: the code had uncommitt
 UNKNOWN_PROMPT_VERSION = "unknown (saved before prompt versions)"
 NOT_APPLICABLE = "—"
 COMBO_TABLE_TEXT = "rule on Risks and flags slide"
+QUESTIONS_HEADING = "Questions for management"
 
 # ---------------------------------------------------------------------------
 # Look: font sizes (pt), spacing (pt) and layout sizes. Positions come from the template.
@@ -78,10 +83,9 @@ COMBO_TABLE_TEXT = "rule on Risks and flags slide"
 
 TITLE_SIZE = 28
 HEADLINE_SIZE = 22
-FLAG_COUNT_SIZE = 18
 HEADING_SIZE = 18
-BODY_SIZE = 14        # wins and risks: two columns of AI text, so a little smaller
-LIST_SIZE = 16        # risks-and-flags and questions: one wide column
+BODY_SIZE = 14        # risks and questions: two columns of AI text, so a little smaller
+LIST_SIZE = 16        # risks and flags, data gaps
 TABLE_SIZE = 14
 FOOTER_SIZE = MIN_FONT_PT
 
@@ -89,7 +93,6 @@ HEADING_SPACE = 6     # after a heading
 POINT_TITLE_SPACE = 2  # between a point's title and its detail
 ITEM_SPACE = 10       # after each list item
 SECTION_SPACE = 14    # after the last item of a section
-QUESTION_SPACE = 18
 
 # The DRAFT watermark (--draft only), on decks no person has approved (provenance.py, approve.py).
 WATERMARK_SIZE = 48
@@ -99,9 +102,9 @@ WATERMARK_WIDTH = Inches(9.5)
 WATERMARK_HEIGHT = Inches(1.2)
 
 GAP = Inches(0.15)            # vertical gap between boxes
-COLUMN_GAP = Inches(0.35)     # between the two columns (wins/risks, the two charts)
+COLUMN_GAP = Inches(0.35)     # between two columns (the charts, flags/data gaps, risks/questions)
+AI_LINE_HEIGHT = Inches(0.4)  # the "AI-drafted ... review before use" line: one line at 14 pt
 HEADLINE_HEIGHT = Inches(1.05)
-FLAG_COUNT_HEIGHT = Inches(0.5)
 TEXT_MARGIN_X = Inches(0.1)
 TEXT_MARGIN_Y = Inches(0.05)
 CELL_MARGIN_X = Inches(0.08)
@@ -216,7 +219,7 @@ def load_analysis(path, payload):
     Checks: the file exists and is JSON; the analysis passed when it was made; it is for this
     company and this latest quarter; it has the required shape; and analyze.validate_summary
     still passes against today's payload - so every number in it is in today's data, and the
-    text still fits slides 1 and 5 (ai_text_problems).
+    text still fits slide 4 (ai_text_problems).
     """
     path = Path(path)
     if not path.exists():
@@ -416,7 +419,7 @@ def set_alpha(run, percent):
 def add_watermark(slide, deck):
     """Stamp DRAFT - NOT REVIEWED diagonally across the slide, on top of everything else.
 
-    On top, not behind: slides 2 and 3 are covered by an opaque table and two chart images, and a
+    On top, not behind: slides 1 and 2 are covered by an opaque table and two chart images, and a
     watermark underneath them would be invisible on exactly the slides carrying the numbers. It is
     see-through, so those numbers stay readable through it.
     """
@@ -434,62 +437,7 @@ def add_watermark(slide, deck):
 
 
 # ---------------------------------------------------------------------------
-# 5. Slide 1: Summary
-# ---------------------------------------------------------------------------
-
-def points_paragraphs(heading, items):
-    """A column heading, then each point's title (bold) and detail."""
-    result = [paragraph(heading, HEADING_SIZE, bold=True, color=NAVY, space_after=HEADING_SPACE)]
-    for item in items:
-        result.append(paragraph(item.title, BODY_SIZE, bold=True, space_after=POINT_TITLE_SPACE))
-        result.append(paragraph(item.detail, BODY_SIZE, space_after=ITEM_SPACE))
-    return result
-
-
-def summary_boxes(area):
-    """Slide 1's three boxes, top to bottom: the headline, the flag count, the wins/risks columns.
-
-    ai_text_problems measures the same boxes, so what is measured can't drift from what is drawn.
-    """
-    left, top, width, height = area
-    count_top = top + HEADLINE_HEIGHT + GAP
-    columns_top = count_top + FLAG_COUNT_HEIGHT + GAP
-    return ((left, top, width, HEADLINE_HEIGHT),
-            (left, count_top, width, FLAG_COUNT_HEIGHT),
-            (left, columns_top, width, top + height - columns_top))
-
-
-def headline_paragraph(text, from_ai):
-    """The headline: navy for Claude's, gray for the "AI summary unavailable" placeholder."""
-    return paragraph(text, HEADLINE_SIZE, bold=True, color=NAVY if from_ai else MID_GRAY)
-
-
-def summary_columns(summary):
-    """Slide 1's two columns of AI text, as [(box name, paragraphs), ...]."""
-    return [("Wins", points_paragraphs("Wins", summary.wins)),
-            ("Risks", points_paragraphs("Risks", summary.risks))]
-
-
-def summary_slide(slide, deck):
-    """Headline, flag count, then wins and risks side by side (or the placeholder note)."""
-    data, summary = deck["data"], deck["summary"]
-    set_title(slide, f"{data['company']}: {data['latest']} board update", deck)
-    headline_box, count_box, columns_box = summary_boxes(deck["area"])
-
-    headline = summary.headline if summary else PLACEHOLDER_TEXT
-    add_text_box(slide, "Headline", headline_box, [headline_paragraph(headline, summary is not None)], deck)
-    add_text_box(slide, "Flag count", count_box,
-                 [paragraph(flag_count_text(data["flags"]), FLAG_COUNT_SIZE, bold=True)], deck)
-
-    _, columns_top, _, columns_height = columns_box
-    if summary is None:
-        add_text_box(slide, "AI note", columns_box, [paragraph(PLACEHOLDER_NOTE, BODY_SIZE, color=MID_GRAY)], deck)
-        return
-    add_columns(slide, summary_columns(summary), columns_top, columns_height, deck)
-
-
-# ---------------------------------------------------------------------------
-# 6. Slide 2: Key metrics table
+# 5. Slide 1: Key metrics table
 # ---------------------------------------------------------------------------
 
 def kpi_rows(data):
@@ -552,7 +500,7 @@ def kpi_slide(slide, deck):
     """Latest quarter, prior quarter, budget or threshold, status for each key metric and flag."""
     data = deck["data"]
     prior_words = f" vs {data['prior']}" if data["prior"] else ""
-    set_title(slide, f"Key metrics — {data['latest']}{prior_words}", deck)
+    set_title(slide, f"{data['company']}: key metrics — {data['latest']}{prior_words}", deck)
     left, top, width, height = deck["area"]
     header, rows = kpi_header(data), kpi_rows(data)
     widths = column_widths(width)
@@ -574,7 +522,7 @@ def kpi_slide(slide, deck):
 
 
 # ---------------------------------------------------------------------------
-# 7. Slide 3: Charts
+# 6. Slide 2: Charts
 # ---------------------------------------------------------------------------
 
 def charts_slide(slide, deck):
@@ -601,7 +549,7 @@ def charts_slide(slide, deck):
 
 
 # ---------------------------------------------------------------------------
-# 8. Slide 4: Risks and flags
+# 7. Slide 3: Risks and flags
 # ---------------------------------------------------------------------------
 
 def section(heading, lines):
@@ -639,31 +587,77 @@ def risks_slide(slide, deck):
 
 
 # ---------------------------------------------------------------------------
-# 9. Slide 5: Questions for management
+# 8. Slide 4: AI commentary
 # ---------------------------------------------------------------------------
 
-def questions_paragraphs(summary):
-    """The AI's questions, numbered. ai_text_problems measures these same paragraphs."""
-    return [paragraph(f"{number}. {question}", LIST_SIZE, space_after=QUESTION_SPACE)
-            for number, question in enumerate(summary.questions, start=1)]
+def commentary_boxes(area):
+    """Slide 4's three boxes, top to bottom: the AI-drafted line, the headline, the risks/questions columns.
+
+    ai_text_problems measures the same boxes, so what is measured can't drift from what is drawn.
+    """
+    left, top, width, height = area
+    headline_top = top + AI_LINE_HEIGHT + GAP
+    columns_top = headline_top + HEADLINE_HEIGHT + GAP
+    return ((left, top, width, AI_LINE_HEIGHT),
+            (left, headline_top, width, HEADLINE_HEIGHT),
+            (left, columns_top, width, top + height - columns_top))
 
 
-def questions_slide(slide, deck):
+def headline_paragraph(text, from_ai):
+    """The headline: navy for Claude's, gray for the "AI summary unavailable" placeholder."""
+    return paragraph(text, HEADLINE_SIZE, bold=True, color=NAVY if from_ai else MID_GRAY)
+
+
+def column_heading(text):
+    """The bold navy heading at the top of a column of AI text."""
+    return paragraph(text, HEADING_SIZE, bold=True, color=NAVY, space_after=HEADING_SPACE)
+
+
+def points_paragraphs(heading, items):
+    """A column heading, then each point's title (bold) and detail."""
+    result = [column_heading(heading)]
+    for item in items:
+        result.append(paragraph(item.title, BODY_SIZE, bold=True, space_after=POINT_TITLE_SPACE))
+        result.append(paragraph(item.detail, BODY_SIZE, space_after=ITEM_SPACE))
+    return result
+
+
+def questions_paragraphs(questions):
+    """A column heading, then the AI's questions, numbered."""
+    result = [column_heading(QUESTIONS_HEADING)]
+    for number, question in enumerate(questions, start=1):
+        result.append(paragraph(f"{number}. {question}", BODY_SIZE, space_after=ITEM_SPACE))
+    return result
+
+
+def commentary_columns(summary):
+    """Slide 4's two columns of AI text, as [(box name, paragraphs), ...]. The wins aren't shown."""
+    return [("Risks", points_paragraphs("Risks", summary.risks)),
+            ("Questions", questions_paragraphs(summary.questions))]
+
+
+def commentary_slide(slide, deck):
+    """The AI-drafted line, the headline, then risks and questions side by side (or the placeholder)."""
     data, summary = deck["data"], deck["summary"]
-    set_title(slide, f"Questions for management — {data['latest']}", deck)
-    if summary is None:
-        paragraphs = [paragraph(PLACEHOLDER_TEXT, HEADLINE_SIZE, bold=True, color=MID_GRAY, space_after=SECTION_SPACE),
-                      paragraph(PLACEHOLDER_NOTE, BODY_SIZE, color=MID_GRAY)]
-    else:
-        paragraphs = questions_paragraphs(summary)
-    add_text_box(slide, "Questions", deck["area"], paragraphs, deck)
+    set_title(slide, f"AI commentary — {data['latest']}", deck)
+    line_box, headline_box, columns_box = commentary_boxes(deck["area"])
+
+    if summary is None:  # nothing here is AI-drafted, so the AI-drafted line is left off
+        add_text_box(slide, "Headline", headline_box, [headline_paragraph(PLACEHOLDER_TEXT, from_ai=False)], deck)
+        add_text_box(slide, "AI note", columns_box, [paragraph(PLACEHOLDER_NOTE, BODY_SIZE, color=MID_GRAY)], deck)
+        return
+    add_text_box(slide, "AI-drafted line", line_box, [paragraph(AI_DRAFTED_LINE, BODY_SIZE, color=MID_GRAY)], deck)
+    add_text_box(slide, "Headline", headline_box, [headline_paragraph(summary.headline, from_ai=True)], deck)
+    _, columns_top, _, columns_height = columns_box
+    add_columns(slide, commentary_columns(summary), columns_top, columns_height, deck)
 
 
 # ---------------------------------------------------------------------------
-# 10. Putting it together
+# 9. Putting it together
 # ---------------------------------------------------------------------------
 
-SLIDE_BUILDERS = [summary_slide, kpi_slide, charts_slide, risks_slide, questions_slide]
+SLIDE_BUILDERS = [kpi_slide, charts_slide, risks_slide, commentary_slide]
+COLUMN_ADVICE = {"Risks": "shorten each risk detail", "Questions": "shorten the questions"}
 
 
 def slide_number(build_slide):
@@ -672,22 +666,20 @@ def slide_number(build_slide):
 
 
 def ai_text_problems(summary):
-    """Problems if Claude's text is too long for its boxes on slides 1 and 5, even at the 12 pt floor.
+    """Problems if Claude's text is too long for its boxes on slide 4 (AI commentary), even at the 12 pt floor.
 
+    Measures the headline, the risks column and the questions column - the same boxes the slide
+    draws (commentary_boxes). The wins aren't on the deck, so their length can't matter.
     analyze.validate_summary calls this, so an over-long answer is caught with the other validation
     problems and gets the one retry. If it still doesn't fit, load_analysis rejects it and the deck
     is built with the placeholder - a company is never left without a deck (decision K).
     """
-    headline_box, _, columns_box = summary_boxes(content_area())
-    summary_slide_number = slide_number(summary_slide)
-    boxes = [(f"slide {summary_slide_number} (Headline)", headline_box,
-              [headline_paragraph(summary.headline, from_ai=True)], "shorten the headline")]
-    for position, (name, paragraphs) in enumerate(summary_columns(summary)):
-        advice = f"shorten each {name.lower()[:-1]} detail"   # "Wins" -> "shorten each win detail"
-        boxes.append((f"slide {summary_slide_number} ({name})", column_box(columns_box, position),
-                      paragraphs, advice))
-    boxes.append((f"slide {slide_number(questions_slide)} (Questions)", content_area(),
-                  questions_paragraphs(summary), "shorten the questions"))
+    _, headline_box, columns_box = commentary_boxes(content_area())
+    slide = f"slide {slide_number(commentary_slide)}"
+    boxes = [(f"{slide} (Headline)", headline_box, [headline_paragraph(summary.headline, from_ai=True)],
+              "shorten the headline")]
+    for position, (name, paragraphs) in enumerate(commentary_columns(summary)):
+        boxes.append((f"{slide} ({name})", column_box(columns_box, position), paragraphs, COLUMN_ADVICE[name]))
 
     problems = []
     for where, box, paragraphs, advice in boxes:
@@ -700,7 +692,7 @@ def ai_text_problems(summary):
 
 
 def build_presentation(data, summary, run_date, chart_dir, approval=None, model=None, draft=False):
-    """Build all 5 slides on the template.
+    """Build all 4 slides on the template.
 
     summary = a validated BoardSummary, or None for the placeholder. approval = the record of a
     person having reviewed this deck (provenance.approval_status), or None; the footer says which.

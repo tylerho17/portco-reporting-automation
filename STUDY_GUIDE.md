@@ -106,14 +106,13 @@ check_*.py and tests/   prove each step gives the right answer
 **Step 4: output.**
 - `excel_output.py` writes a 3-sheet workbook: Metrics (red = tripped, gray = data missing), Flags, and Data gaps. It does no math.
 - `analyze.py` turns the numbers into display text ("97.1%") and sends it to Claude with writing rules. It checks the answer: the right JSON shape, exactly 3 wins/risks/questions, short enough for a slide, and **every number Claude wrote must appear in the data**. If a check fails, it retries once and tells Claude what was wrong. The saved file keeps the data Claude saw next to what it wrote, so any claim can be traced back.
-- `build_deck.py` builds the 5-slide deck on the brand template (`templates/base.pptx`, made once by `make_template.py`):
-  1. **Summary:** Claude's headline, wins and risks, and "6 of 9 flags tripped" (counted by Python).
-  2. **Key metrics:** a table of latest quarter, prior quarter, threshold and a red / green / gray status.
-  3. **ARR and cash:** two charts from `charts.py`. The blank quarter is a visible gap.
-  4. **Risks and flags:** each tripped flag vs its threshold, the combo rule, and the Data gaps line.
-  5. **Questions for management:** Claude's 3 questions.
+- `build_deck.py` builds the 4-slide deck on the brand template (`templates/base.pptx`, made once by `make_template.py`):
+  1. **Key metrics:** a table of latest quarter, prior quarter, threshold and a red / green / gray status.
+  2. **ARR and cash:** two charts from `charts.py`. The blank quarter is a visible gap.
+  3. **Risks and flags:** "6 of 9 flags tripped" (counted by Python), each tripped flag vs its threshold, the combo rule, and the Data gaps line.
+  4. **AI commentary:** a line under the title, "AI-drafted from computed metrics - review before use", then Claude's headline, and its 3 risks and 3 questions for management side by side. Claude still writes 3 wins, but the deck doesn't show them.
 
-  **Before it uses Claude's text, it checks it again** against numbers rebuilt from today's workbook. If the analysis is missing, failed, is for another quarter or has a number that's no longer in the data, slides 1 and 5 say "AI summary unavailable". The other slides are built as normal, because their numbers come from Python. `text_fit.py` measures every piece of text and shrinks it to fit, down to 12 pt; below that, the build stops and names the slide and box.
+  **Before it uses Claude's text, it checks it again** against numbers rebuilt from today's workbook. If the analysis is missing, failed, is for another quarter or has a number that's no longer in the data, slide 4 says "AI summary unavailable". The other slides are built as normal, because their numbers come from Python. `text_fit.py` measures every piece of text and shrinks it to fit, down to 12 pt; below that, the build stops and names the slide and box.
 
 **Step 5: run the batch** (`main.py`). For each workbook it runs clean → metrics → Excel → AI → deck and prints a ✓ line per step. It catches failures so one broken company doesn't stop the rest. **The deck is always built:**
 - **Claude's answer passed:** its text is on the deck, result `OK`.
@@ -431,17 +430,17 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 ---
 
-### `build_deck.py`: the 5-slide board deck (build step 4)
+### `build_deck.py`: the 4-slide board deck (build step 4)
 
 **What it's for:** `output/<company>_board_pack.pptx`. Run on its own with `python build_deck.py data/northwind.xlsx` (no API call: it uses the saved `output/northwind_analysis.json` if there is one). Add `--no-analysis` for the placeholder, or `--analysis PATH` for another file.
 
 **Rules it follows:**
 - **No math and no typed numbers.** Every number comes from metrics.py, config.yaml or the validated analysis. A test reads the code and fails if any text in it contains a digit.
-- **Claude's text is checked again before it's used** (`load_analysis`). If it fails, slides 1 and 5 say "AI summary unavailable", and the other slides are built as normal.
+- **Claude's text is checked again before it's used** (`load_analysis`). If it fails, slide 4 says "AI summary unavailable", and the other slides are built as normal.
 - **Text must fit** (text_fit.py), and every slide gets a footer: "Fictional data, generated for demonstration | Source: northwind.xlsx | Run date: 2026-09-17".
 - **The old deck is deleted first**, so a failed build never leaves last run's deck looking current.
 
-**Constants worth knowing:** `PLACEHOLDER_TEXT = "AI summary unavailable"`, `PLACEHOLDER_NOTE` (says the numbers are unaffected), font sizes (`TITLE_SIZE` 28, `HEADLINE_SIZE` 22, `BODY_SIZE` 14, `LIST_SIZE` 16, `TABLE_SIZE` 14), `KPI_COLUMN_SHARES` (table column widths), `CONTEXT_ROWS` (the 3 non-flag rows on slide 2), `SLIDE_BUILDERS` (the 5 slide functions in order).
+**Constants worth knowing:** `PLACEHOLDER_TEXT = "AI summary unavailable"`, `PLACEHOLDER_NOTE` (says the numbers are unaffected), font sizes (`TITLE_SIZE` 28, `HEADLINE_SIZE` 22, `BODY_SIZE` 14, `LIST_SIZE` 16, `TABLE_SIZE` 14), `KPI_COLUMN_SHARES` (table column widths), `CONTEXT_ROWS` (the 3 non-flag rows on slide 1), `SLIDE_BUILDERS` (the 4 slide functions in order), `AI_DRAFTED_LINE` (the line under slide 4's title).
 
 **The call order:** `save_deck` → `clean_workbook` → `collect_deck_data` → `load_analysis` → `build_presentation` → for each slide: `new_slide`, that slide's function, `add_footer` → save.
 
@@ -473,34 +472,38 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `write_paragraphs(frame, paragraphs)` | Writes sized paragraphs into a text box, with PowerPoint's autofit switched off. | Autofit off means the saved sizes are the sizes shown, so the fit check means something. |
 | `fitted(paragraphs, width, height, where)` | `shrink_to_fit` for a box, minus the box's inner margins. | |
 | `add_text_box(slide, name, box, paragraphs, deck)` | Adds a named text box, shrunk to fit (or stops). | Names like "Headline" let check_deck.py find each box. |
-| `add_columns(slide, columns, top, height, deck)` | Two boxes side by side. Fits each, then shrinks both by the bigger shrink. | Wins and Risks never show two different font sizes. |
+| `add_columns(slide, columns, top, height, deck)` | Two boxes side by side. Fits each, then shrinks both by the bigger shrink. | Risks and Questions never show two different font sizes. |
 | `set_title(slide, text, deck)` | Writes the slide title, shrunk to fit. | |
 | `new_slide(presentation, layout)` | Adds a slide and removes its empty body placeholder. | Each slide places its own boxes in that area. |
 | `add_footer(slide, deck, run_date)` | The footer text on every slide. | |
 
-**4. The five slides**
+**4. The four slides**
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
-| `points_paragraphs(heading, items)` | A heading, then each point's title (bold) and detail. | |
-| `summary_slide(slide, deck)` | **Slide 1:** title "Northwind: Q2 2026 board update", headline, flag count, wins and risks in two columns, or the gray placeholder note. | |
-| `kpi_rows(data)` | **Slide 2's rows:** Ending ARR (with "vs budget: 2.5%"), ARR growth YoY, gross margin, then all 9 flags in order. The combo row shows "—" and "rule on Risks and flags slide". | All 9 flags, so the statuses add up to slide 1's "of 9". |
+| `kpi_rows(data)` | **Slide 1's rows:** Ending ARR (with "vs budget: 2.5%"), ARR growth YoY, gross margin, then all 9 flags in order. The combo row shows "—" and "rule on Risks and flags slide". | All 9 flags, so the statuses add up to slide 3's "of 9". |
 | `kpi_header(data)` | Metric, Q2 2026, Q1 2026, Budget or threshold, Status. | |
 | `column_widths(total_width)` | Splits the table width by `KPI_COLUMN_SHARES`. | |
 | `write_cell(cell, text, size, fill_hex, text_hex, bold)` | One table cell: fill, margins, text. | |
 | `fill_table(table, header, rows, size)` | Navy header, striped rows, and each status cell red / green / gray. | Same colors as the Excel file (`excel_output.STATUS_COLORS`). |
-| `kpi_slide(slide, deck)` | **Slide 2:** fits the table (`fit_table`), then draws it. | |
-| `charts_slide(slide, deck)` | **Slide 3:** draws both charts at their slide size, saves the PNGs to `output/charts/`, places them side by side. | |
+| `kpi_slide(slide, deck)` | **Slide 1:** title "Northwind: key metrics — Q2 2026 vs Q1 2026"; fits the table (`fit_table`), then draws it. | The company name is in this title: the slide that used to carry it is gone. |
+| `charts_slide(slide, deck)` | **Slide 2:** draws both charts at their slide size, saves the PNGs to `output/charts/`, places them side by side. | |
 | `section(heading, lines)` | A bold heading and its bullet lines. | |
-| `flags_paragraphs(data)` | **Slide 4, left:** tripped flags with value and threshold, a "Cannot evaluate" section if any, and the combo rule. | Fernhollow's Rule of 40 isn't silently absent. |
-| `risks_slide(slide, deck)` | **Slide 4:** flags on the left, Data gaps on the right. | Two columns: Fernhollow's text didn't fit in one (LEARNINGS). |
-| `questions_slide(slide, deck)` | **Slide 5:** the 3 numbered questions, or the placeholder. | |
+| `flags_paragraphs(data)` | **Slide 3, left:** "Tripped flags (6 of 9 flags tripped)", each with value and threshold, a "Cannot evaluate" section if any, and the combo rule. | Fernhollow's Rule of 40 isn't silently absent. |
+| `risks_slide(slide, deck)` | **Slide 3:** flags on the left, Data gaps on the right. | Two columns: Fernhollow's text didn't fit in one (LEARNINGS). |
+| `commentary_boxes(area)` | **Slide 4's boxes**, top to bottom: the AI-drafted line, the headline, the two columns. | `ai_text_problems` measures these same boxes, so the check can't drift from the slide. |
+| `headline_paragraph(text, from_ai)` | The headline: navy for Claude's, gray for the placeholder. | |
+| `column_heading(text)` / `points_paragraphs(heading, items)` / `questions_paragraphs(questions)` | A column's bold heading; each risk's title (bold) and detail; the numbered questions. | |
+| `commentary_columns(summary)` | Slide 4's two columns: Risks, and Questions for management. | The wins are left out here, so they are neither drawn nor measured. |
+| `commentary_slide(slide, deck)` | **Slide 4:** "AI-drafted from computed metrics - review before use", the headline, then risks and questions side by side. Or the gray placeholder and note, without the AI-drafted line. | |
 
 **5. Putting it together**
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
-| `build_presentation(data, summary, run_date, chart_dir)` | Opens the template, runs the 5 slide functions in order, adds footers. Sets `deck["where"] = "Slide 3"` first, so a fit error names the slide. | |
+| `build_presentation(data, summary, run_date, chart_dir)` | Opens the template, runs the 4 slide functions in order, adds footers. Sets `deck["where"] = "Slide 3"` first, so a fit error names the slide. | |
+| `slide_number(build_slide)` | Which slide a function builds, counting from 1. | Messages say "slide 4" without the number being typed anywhere. |
+| `ai_text_problems(summary)` | Problems if the headline, risks or questions don't fit slide 4's boxes even at 12 pt. | analyze.py calls it, so an over-long answer gets the retry. |
 | `deck_path(workbook_path, output_dir)` | `data/northwind.xlsx` → `output/northwind_board_pack.pptx`. | |
 | `analysis_path(workbook_path, output_dir)` | `data/northwind.xlsx` → `output/northwind_analysis.json`. | main.py and check scripts use it too, so the name is set once. |
 | `save_deck(workbook_path, config, analysis_file, run_date, output_dir)` | **The one function `main.py` calls.** Deletes the old deck, cleans the workbook, collects the data, loads the analysis (or none), builds and saves. Returns (deck path, why the AI text isn't on it, or None). | |
@@ -514,7 +517,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 **What happens to each company, and what the Result column says:**
 
-| What happened | Deck slides 1 and 5 | Result | `output/<company>_analysis.json` |
+| What happened | Deck slide 4 | Result | `output/<company>_analysis.json` |
 |---|---|---|---|
 | Claude's answer passed validation | Claude's text | `OK` | summary, run info, payload |
 | It failed validation twice, **or** the API call failed (connection, rate limit, server) | "AI summary unavailable" | `OK (AI failed)` | summary `null`, the reason in `error` |
