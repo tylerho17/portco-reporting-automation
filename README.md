@@ -74,13 +74,14 @@ python make_data.py                            # regenerate data/northwind.xlsx 
 
 **Or use the web page (no command line).** On a Mac, double-click `run_app.command` in Finder. The first time, it sets up Python's packages (a few minutes, needs internet); then your browser opens the Board Pack Generator. The Terminal window that opens must stay open while you use it. (From a terminal: `streamlit run app.py`.)
 
-1. Drag a KPI workbook (.xlsx) onto the page.
-2. The flags and the metrics table appear in the metrics workbook's colors: red = tripped, green = passed, gray = data missing or cannot evaluate.
-3. Download the deck and the metrics workbook with the two buttons.
+The page has two parts:
 
-- **"Include AI commentary"** is off by default; its label gives the typical cost (about $0.09 and 70 seconds per workbook, from the [Cost](#cost) table). Ticked, the page first looks in `output/` for a saved analysis made from exactly the same numbers and reuses it for free; only if there isn't one does it call Claude (this needs the key in `.env`).
-- **A workbook it can't read** shows `clean.py`'s own message (which sheet, row and cell, and what to fix), never a traceback.
-- **Nothing is written to `output/`**: the page builds in a temporary folder and hands you the files. The deck's footer says "not reviewed"; approvals (`approve.py`) belong to the command-line decks.
+1. **Portfolio** (the first page): one row per company in `data/`, with its latest quarter, flags tripped, data gaps, when it was last generated and its deck status (read from `output/<company>_manifest.json`: not generated yet, not reviewed, approved by NAME, or out of date because the workbook changed). Each row has **Generate** (builds the deck, memo and metrics workbook into `output/`, exactly as `python main.py` does) and **Download deck / memo / Excel** (greyed out until there are files built from today's workbook). A search box narrows the table, and a name with no workbook says so. **Generate all** runs every company under a progress bar; one company failing never stops the others. **Add a company** takes a new workbook, and adds it to `data/` only if it can be read (otherwise it shows clean.py's message saying what to fix).
+2. **Company** (click a company's name): its flags with thresholds and reasons, the data gaps, the metrics table in the metrics workbook's colors (red = tripped, green = passed, gray = data missing or cannot evaluate), both charts, the AI commentary when a saved analysis matches these numbers, and the buttons Generate, the downloads and **Approve** (type your name: it records you as the reviewer, as `approve.py` does; click Generate afterwards so the footers say reviewed).
+
+- **The AI box** ("Ask Claude for AI commentary when no saved analysis matches") is off by default; its label gives the typical cost (about $0.09 and 70 seconds per company, from the [Cost](#cost) table). Either way, Generate first looks in `output/` for a saved analysis made from exactly the same numbers and reuses it for free. Only with the box ticked, and no such analysis, does it call Claude (this needs the key in `.env`).
+- **A workbook it can't read** shows `clean.py`'s own message (which sheet, row and cell, and what to fix), never a traceback, and gets "-" instead of numbers.
+- **The page writes to `output/`**, the same files and manifest as `python main.py`, so the table, `approve.py` and the command line always agree. Old files are never offered for download once the workbook or `config.yaml` has changed.
 
 **3. Review the deck, then approve it.** The footer on every slide ends with the review status. A
 new deck says `AI-drafted | not reviewed` until a person says otherwise. Open it, read it, then:
@@ -146,7 +147,8 @@ excel_output.py         analyze.py                         build_deck.py
 memo.py        the same numbers and analysis as a 1 to 2 page memo: <company>_board_memo.docx and .pdf
                (AI text only if every number in it is in the metrics workbook; else "AI commentary unavailable")
 main.py        runs the chain for one workbook or all of data/, prints the summary, writes batch_summary.csv
-app.py         the same chain for one uploaded workbook, as a web page (run_app.command starts it)
+app.py         the web page (run_app.command starts it): the portfolio table and a page per company;
+portfolio.py   its buttons run main.py's chain, memo.py and approve.py (portfolio.py does the work)
 approve.py     records a reviewer in <company>_manifest.json (provenance.py); the next build's footer says "reviewed by"
 config.yaml    flag thresholds, each with the investor reason in a comment
 ```
@@ -241,7 +243,8 @@ Placeholders: capture each one and replace the line with the image. Before captu
 - 📸 **Slide 4, AI commentary:** "AI-drafted from computed metrics - review before use", the headline, 3 risks and 3 questions for management. Include the footer: Northwind is approved, so it ends "AI-drafted | reviewed by ...".
 
 **The web page** (`run_app.command`, or `streamlit run app.py`)
-- 📸 **After dropping in `data/northwind.xlsx`:** the two download buttons, "6 of 9 flags tripped" with the red and green flag rows, and the metrics table with its gray "data missing" cells.
+- 📸 **Portfolio:** the three companies' rows with their flags, data gaps, last run and deck status, and the Generate and download buttons.
+- 📸 **Northwind's page:** "6 of 9 flags tripped" with the red and green flag rows, the metrics table with its gray "data missing" cells, and the two charts.
 
 **After: the backup workbook** (`output/northwind_metrics.xlsx`)
 - 📸 **Metrics sheet:** red tripped cells and gray "data missing" cells around Q1 2025.

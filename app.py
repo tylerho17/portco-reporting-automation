@@ -1,64 +1,80 @@
-"""A web page for people who don't use the command line: drag in a KPI workbook, get the board pack.
+"""The web page for people who don't use the command line: the whole portfolio, and a page per company.
 
-What the page does:
-1. You drag in one .xlsx workbook (the same kind main.py reads).
-2. It runs the same steps as main.py: clean -> metrics and flags -> Excel -> AI commentary (only if
-   the box is ticked) -> deck.
-3. It shows the flags and the metrics table in the Excel workbook's colors: red = tripped,
-   green = passed, gray = data missing / cannot evaluate.
-4. Two download buttons: the deck (.pptx) and the metrics workbook (.xlsx).
+Two pages:
+1. Portfolio: a table of every company in data/ (latest quarter, flags tripped, data gaps, last run,
+   deck status), with Generate, Download deck, Download memo and Download Excel on each row; a
+   search box; Generate all with a progress bar; and an "Add a company" panel for a new workbook.
+2. Company (click a company's name): its flags with thresholds and reasons, data gaps, metrics
+   table in the Excel colors (red = tripped, green = passed, gray = data missing / cannot
+   evaluate), both charts, the AI commentary when a saved one matches these numbers, and the
+   buttons Generate, the downloads and Approve.
 
 Rules:
-- No new math: every number and every word comes from metrics.py, excel_output.py and build_deck.py.
-- A workbook clean.py can't read shows clean.py's own message, never a traceback.
-- Files are built in a temporary folder and handed to the browser, so output/ (main.py's folder)
-  is never touched.
-- AI commentary: a saved analysis in output/ made from exactly the same numbers is reused (free).
-  Otherwise Claude is asked, which costs money - the checkbox says roughly how much.
+- No new math: every number and every word comes from metrics.py, excel_output.py, build_deck.py
+  and main.py. portfolio.py does the work behind the buttons; this file only draws.
+- Generate writes to output/: the same files and manifest `python main.py` writes, so the table,
+  approve.py and the command line all see the same state.
+- A workbook clean.py can't read shows clean.py's own message, never a traceback; one company
+  failing never stops the others. No em dash on the page (portfolio.plain).
+- AI commentary: a saved analysis of exactly the same numbers is always reused (free). Claude is
+  asked only when the box is ticked, which costs money - the checkbox says roughly how much.
 
 Run: streamlit run app.py      (or double-click run_app.command on a Mac)
 """
 
-import json
-import tempfile
-import traceback
-import zipfile
-from pathlib import Path
-
 import pandas as pd
 import streamlit as st
-from openpyxl.utils.exceptions import InvalidFileException
+from matplotlib import pyplot as plt
 
-from analyze import build_payload
-from build_deck import (PLACEHOLDER_TEXT, analysis_path, collect_deck_data, flag_count_text, gaps_lines,
-                        load_analysis, points_text, save_deck, threshold_text, value_text)
-from clean import clean_workbook
-from excel_output import STATUS_COLORS, save_metrics_workbook, status_label, tripped_cells
-from main import INPUT_ERRORS, OUTPUT_DIR, ai_step, api_key_problem, company_name, reusable_analysis
+from build_deck import AI_DRAFTED_LINE, QUESTIONS_HEADING, flag_count_text, gaps_lines, points_text, runway_lines, \
+    threshold_text, value_text
+from charts import arr_chart, cash_chart
+from excel_output import STATUS_COLORS, status_label, tripped_cells
+from main import DATA_DIR, OUTPUT_DIR, company_name
 from metrics import CANNOT_EVALUATE, METRIC_LABELS, MISSING_INPUT, TRIP, load_config
+from portfolio import (NO_WORKBOOK_FOUND, add_company, approve_company, download, error_message, find_workbook,
+                       generate_all, generate_company, load_company, plain, portfolio_rows, run_state,
+                       saved_commentary, search_message, search_rows, suggested_name)
 
 PAGE_TITLE = "Board Pack Generator"
-INTRO = ("Drag in a portfolio company's KPI workbook (.xlsx). You'll see its flags and metrics here, "
-         "and can download the board deck and the metrics workbook. Fictional data only.")
+INTRO = ("Every portfolio company with a KPI workbook in data/. Click a name for its flags, metrics and "
+         "charts; Generate builds its deck, memo and metrics workbook. Fictional data only.")
 
 # Typical cost of the AI step, from README.md's Cost section (latest live run: $0.0911 and about
 # 70 seconds per company with claude-sonnet-5). A label, not a calculation: update it with the README.
 TYPICAL_AI_COST_USD = 0.09
 TYPICAL_AI_SECONDS = 70
+AI_CAPTION = ("Unticked, nothing is sent to Claude. Either way, a saved analysis of exactly the same numbers "
+              "is reused for free.")
 
-# What the page says about the AI commentary.
-AI_OFF_NOTE = f"AI commentary not requested: slide 4 of the deck says \"{PLACEHOLDER_TEXT}\"."
-AI_REUSED_START = "AI commentary reused from a saved analysis of exactly these numbers"
-AI_NEW_NOTE = "AI commentary written by Claude and checked; it is on slide 4. Review it before use."
-
-# Error messages for files clean.py never gets to read.
-NOT_A_WORKBOOK = "This file isn't a readable Excel workbook. Save it from Excel as .xlsx and try again."
-UNEXPECTED_ERROR_START = "Something unexpected went wrong - please send this file to whoever looks after the tool"
-NOT_A_WORKBOOK_ERRORS = (zipfile.BadZipFile, InvalidFileException)
-EXCEL_WORKBOOK_PART = "xl/workbook.xml"   # inside every .xlsx (which is a zip file)
-
-FLAG_COLUMNS = ["Flag", "Value", "Threshold", "Status"]
 LEGEND = "Red = tripped · green = passed · gray = data missing or cannot evaluate"
+FLAG_COLUMNS = ["Flag", "Value", "Threshold", "Status"]
+NO_COMPANIES = "No KPI workbooks in data/ yet. Add one below."
+NOT_AVAILABLE = "Generate first: there is no file built from today's workbook."
+NO_COMMENTARY = ("No AI commentary: no saved analysis matches these numbers. Tick the AI box and click Generate "
+                 "to ask Claude.")
+ADD_INTRO = ("Drop in a company's KPI workbook (.xlsx). It is added to data/ only if it can be read; "
+             "otherwise you'll see what to fix.")
+APPROVE_INTRO = ("Approving records your name against today's workbook, as approve.py does. It builds nothing: "
+                 "click Generate afterwards so the deck and memo footers say reviewed.")
+
+# The portfolio table: a column per piece of a row, widths relative to each other.
+TABLE_HEADERS = ["Company", "Latest quarter", "Flags tripped", "Data gaps", "Last run", "Deck status"]
+ROW_TEXT_KEYS = ["latest", "flags", "gaps", "last_run", "status"]
+ROW_WIDTHS = [1.4, 1.0, 1.7, 1.8, 1.2, 2.0, 1.1, 1.2, 1.2, 1.2]
+
+# The download buttons: (portfolio.output_files name, label, file type for the browser).
+PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+ROW_DOWNLOADS = [("deck", "Download deck", PPTX), ("memo", "Download memo", "application/pdf"),
+                 ("excel", "Download Excel", XLSX)]
+PAGE_DOWNLOADS = [("deck", "Download deck", PPTX), ("memo", "Download memo (PDF)", "application/pdf"),
+                  ("memo_docx", "Download memo (Word)", DOCX), ("excel", "Download Excel", XLSX)]
+
+CHART_INCHES = (6.4, 4.4)       # each chart's size on the page
+COMPANY_KEY = "company"         # st.session_state: the company page being shown, or none (the portfolio)
+MESSAGES_KEY = "messages"       # st.session_state: what the last button did, shown once
 
 
 # ---------------------------------------------------------------------------
@@ -66,30 +82,9 @@ LEGEND = "Red = tripped · green = passed · gray = data missing or cannot evalu
 # ---------------------------------------------------------------------------
 
 def ai_checkbox_label():
-    """'Include AI commentary (typically about $0.09 and 70 seconds per workbook)'."""
-    return (f"Include AI commentary (typically about ${TYPICAL_AI_COST_USD:.2f} and "
-            f"{TYPICAL_AI_SECONDS} seconds per workbook)")
-
-
-def save_upload(file_name, data, folder):
-    """Write the uploaded bytes to folder/<file name>. Any folder part of the name is dropped."""
-    folder = Path(folder)
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / Path(file_name).name   # "../x.xlsx" -> "x.xlsx": stays inside the folder
-    path.write_bytes(data)
-    return path
-
-
-def is_excel_workbook(path):
-    """True if the file is a zip holding an Excel workbook part (every .xlsx has xl/workbook.xml).
-
-    Being a zip isn't enough: a .pptx or .docx renamed .xlsx is a zip too, and pandas' error on
-    one is cryptic.
-    """
-    if not zipfile.is_zipfile(path):
-        return False
-    with zipfile.ZipFile(path) as archive:
-        return EXCEL_WORKBOOK_PART in archive.namelist()
+    """'Ask Claude for AI commentary when no saved analysis matches (typically about $0.09 and 70 seconds per company)'."""
+    return (f"Ask Claude for AI commentary when no saved analysis matches (typically about "
+            f"${TYPICAL_AI_COST_USD:.2f} and {TYPICAL_AI_SECONDS} seconds per company)")
 
 
 def status_css(status):
@@ -98,14 +93,19 @@ def status_css(status):
     return f"background-color: #{fill}; color: #{text}"
 
 
+def md(text):
+    """Text for st.markdown: no em dash, and "$" kept as a dollar sign (two of them would start a formula)."""
+    return plain(text).replace("$", "\\$")
+
+
 # ---------------------------------------------------------------------------
-# The two tables on the page (formatting only - no math)
+# The company page's tables and charts (formatting only - no math)
 # ---------------------------------------------------------------------------
 
 def metrics_table(data):
     """One row per metric, one column per quarter, as the same text the deck shows."""
     quarters = list(data["metrics"].index)
-    rows = {METRIC_LABELS[metric]: [value_text(data, metric, quarter) for quarter in quarters]
+    rows = {METRIC_LABELS[metric]: [plain(value_text(data, metric, quarter)) for quarter in quarters]
             for metric in data["metrics"].columns}
     return pd.DataFrame.from_dict(rows, orient="index", columns=quarters)
 
@@ -133,11 +133,11 @@ def combo_rule_text(config):
 
 
 def flag_row(data, flag):
-    """One flag as [Flag, Value, Threshold, Status]. The combo rule has no single value."""
-    if flag["metric"] is None:
-        return [flag["flag"], "see NRR and pipeline", combo_rule_text(data["config"]), status_label(flag)]
-    return [flag["flag"], value_text(data, flag["metric"], flag["quarter"]), threshold_text(flag),
-            status_label(flag)]
+    """One flag as [Flag, Value, Threshold, Status]; the status carries the reason it can't be evaluated."""
+    if flag["metric"] is None:  # the combo rule has no single value
+        return [flag["flag"], "see NRR and pipeline", combo_rule_text(data["config"]), plain(status_label(flag))]
+    return [flag["flag"], plain(value_text(data, flag["metric"], flag["quarter"])), threshold_text(flag),
+            plain(status_label(flag))]
 
 
 def flags_table(data):
@@ -151,123 +151,265 @@ def flags_colors(data):
                         columns=FLAG_COLUMNS)
 
 
-# ---------------------------------------------------------------------------
-# AI commentary: reuse a saved analysis, or ask Claude
-# ---------------------------------------------------------------------------
+def chart_figures(data):
+    """The deck's two charts (ARR with net new ARR; ending cash with runway), drawn by charts.py."""
+    quarters = list(data["metrics"].index)
+    return [arr_chart(quarters, data["metrics"]["ending_arr"], data["metrics"]["net_new_arr"], CHART_INCHES),
+            cash_chart(quarters, data["actuals"]["ending_cash"], runway_lines(data), CHART_INCHES)]
 
-def ai_commentary(workbook_path, config, folder, include_ai, saved_dir, client):
-    """(analysis file for the deck or None, a note for the page saying what happened)."""
-    if not include_ai:
-        return None, AI_OFF_NOTE
-    saved = reusable_analysis(workbook_path, saved_dir, config)
-    if saved:
-        return saved, f"{AI_REUSED_START} ({saved.name}): no API call, no cost. Review it before use."
-    problem = None if client else api_key_problem()  # a test's fake client needs no key
-    if problem:
-        return None, f"{PLACEHOLDER_TEXT}: {problem}"
-    actuals, next_budget = clean_workbook(workbook_path)
-    ai = ai_step(workbook_path, actuals, next_budget, config, folder, client)
-    if ai["analysis_file"] is None:
-        return None, f"{PLACEHOLDER_TEXT}: the AI {ai['validation']}"
-    return ai["analysis_file"], AI_NEW_NOTE
-
-
-# ---------------------------------------------------------------------------
-# One upload -> everything the page shows
-# ---------------------------------------------------------------------------
-
-def build_in_folder(folder, file_name, file_bytes, include_ai, saved_dir, client):
-    """Run every step on one uploaded workbook inside folder. Raises if a step fails."""
-    workbook_path = save_upload(file_name, file_bytes, folder / "input")
-    if not is_excel_workbook(workbook_path):  # else pandas' message is cryptic
-        raise ValueError(NOT_A_WORKBOOK)
-    output_dir = folder / "output"
-    config = load_config()
-    actuals, next_budget = clean_workbook(workbook_path)   # stops here on a workbook it can't read
-    data = collect_deck_data(company_name(workbook_path), workbook_path.name, actuals, next_budget, config)
-    excel_path = save_metrics_workbook(workbook_path, config, output_dir)
-    analysis_file, ai_note = ai_commentary(workbook_path, config, output_dir, include_ai, saved_dir, client)
-    deck, why_unavailable = save_deck(workbook_path, config, analysis_file, output_dir=output_dir)
-    if analysis_file is not None and why_unavailable is not None:  # the deck rejected the analysis
-        ai_note = f"{PLACEHOLDER_TEXT}: {why_unavailable}"
-    return {
-        "error": None, "company": data["company"], "quarter": data["latest"],
-        "flag_count": flag_count_text(data["flags"]), "gaps": gaps_lines(data["gaps"]),
-        "flags": flags_table(data), "flags_colors": flags_colors(data),
-        "metrics": metrics_table(data), "metrics_colors": metrics_colors(data),
-        "deck_name": deck.name, "deck_bytes": deck.read_bytes(),
-        "excel_name": excel_path.name, "excel_bytes": excel_path.read_bytes(),
-        "ai_note": ai_note,
-    }
-
-
-def build_outputs(file_name, file_bytes, include_ai, saved_dir=OUTPUT_DIR, client=None):
-    """Everything the page shows for one upload, or {"error": a plain message}. Never raises.
-
-    saved_dir is where a reusable analysis may be (main.py's output/). client is for tests.
-    The temporary folder is deleted afterwards: the files live on as bytes for the download buttons.
-    """
-    with tempfile.TemporaryDirectory() as folder:
-        try:
-            return build_in_folder(Path(folder), file_name, file_bytes, include_ai, saved_dir, client)
-        except NOT_A_WORKBOOK_ERRORS:
-            return {"error": NOT_A_WORKBOOK}
-        except INPUT_ERRORS as error:        # clean.py's message says what's wrong and where
-            return {"error": str(error)}
-        except Exception as error:  # noqa: BLE001 - a bug: plain words on the page, details in the terminal
-            traceback.print_exc()
-            return {"error": f"{UNEXPECTED_ERROR_START} ({type(error).__name__}: {error})"}
-
-
-# ---------------------------------------------------------------------------
-# The page
-# ---------------------------------------------------------------------------
 
 def styled(table, colors):
     """The table with each cell styled by the matching cell of colors."""
     return table.style.apply(lambda _: colors, axis=None)
 
 
-def show_downloads(result):
-    """Two buttons, side by side: the deck and the metrics workbook."""
-    left, right = st.columns(2)
-    left.download_button("Download the deck (.pptx)", result["deck_bytes"], file_name=result["deck_name"],
-                         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-    right.download_button("Download the metrics workbook (.xlsx)", result["excel_bytes"],
-                          file_name=result["excel_name"],
-                          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+# ---------------------------------------------------------------------------
+# Pieces both pages use
+# ---------------------------------------------------------------------------
+
+def say(ok, text):
+    """Remember a button's outcome, to show at the top of the page after it redraws."""
+    st.session_state.setdefault(MESSAGES_KEY, []).append((ok, plain(text)))
 
 
-def show_result(result):
-    """The error message, or the downloads, flags, data gaps and metrics."""
-    if result["error"]:
-        st.error(result["error"])
+def show_messages():
+    """Show (once) what the last button did: green for done, red for a problem."""
+    for ok, text in st.session_state.pop(MESSAGES_KEY, []):
+        (st.success if ok else st.error)(text)
+
+
+def ai_checkbox():
+    """The AI box (same on both pages) and what ticking it means."""
+    ask_claude = st.checkbox(ai_checkbox_label(), key="ask_claude")
+    st.caption(AI_CAPTION)
+    return ask_claude
+
+
+def download_button(workbook, output_dir, current, kind, label, mime, key):
+    """A download button for one of the company's files; greyed out if it's missing or out of date."""
+    found = download(workbook, output_dir, kind, current)
+    if found is None:
+        st.download_button(label, b"", disabled=True, help=NOT_AVAILABLE, key=key)
+    else:
+        st.download_button(label, found[1], file_name=found[0], mime=mime, key=key)
+
+
+def generate_button(workbook, ask_claude, config, output_dir, key):
+    """Generate one company's files, then redraw the page with what happened."""
+    if st.button("Generate", key=key):
+        with st.spinner(f"Generating {company_name(workbook)}..."):
+            outcome = generate_company(workbook, config, ask_claude, output_dir)
+        say(outcome["ok"], outcome["message"])
+        st.rerun()
+
+
+def page_config():
+    """config.yaml's thresholds, or None after showing why they can't be read."""
+    try:
+        return load_config()
+    except Exception as error:  # noqa: BLE001 - plain words on the page, never a traceback
+        st.error(error_message(error))
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Page 1: the portfolio
+# ---------------------------------------------------------------------------
+
+def open_company(stem):
+    """Show a company's page on the next redraw."""
+    st.session_state[COMPANY_KEY] = stem
+    st.rerun()
+
+
+def portfolio_row(row, ask_claude, config, output_dir):
+    """One company: its name (click to open), five text cells, Generate and three downloads."""
+    cells = st.columns(ROW_WIDTHS, vertical_alignment="center")
+    if cells[0].button(row["company"], key=f"open_{row['stem']}", type="tertiary"):
+        open_company(row["stem"])
+    for cell, key in zip(cells[1:6], ROW_TEXT_KEYS):
+        cell.text(plain(row[key]))
+    with cells[6]:
+        generate_button(row["workbook"], ask_claude, config, output_dir, key=f"generate_{row['stem']}")
+    for cell, (kind, label, mime) in zip(cells[7:], ROW_DOWNLOADS):
+        with cell:
+            download_button(row["workbook"], output_dir, row["current"], kind, label, mime,
+                            key=f"{kind}_{row['stem']}")
+    if row["problem"]:
+        st.error(f"{row['company']}: {row['problem']}")
+
+
+def portfolio_table(rows, ask_claude, config, output_dir):
+    """The header line, then one line per company."""
+    for cell, text in zip(st.columns(ROW_WIDTHS), TABLE_HEADERS):
+        cell.markdown(f"**{text}**")
+    for row in rows:
+        portfolio_row(row, ask_claude, config, output_dir)
+
+
+def generate_all_button(config, ask_claude, data_dir, output_dir):
+    """Generate every company in turn under a progress bar; a failure is reported and the rest carry on."""
+    if not st.button("Generate all", key="generate_all", type="primary"):
         return
-    st.header(f"{result['company']} — {result['quarter']}")
-    show_downloads(result)
-    st.info(result["ai_note"])
-    st.subheader(result["flag_count"])
-    st.caption(LEGEND)
-    st.dataframe(styled(result["flags"], result["flags_colors"]), hide_index=True, width="stretch")
-    st.markdown("**Data gaps**\n\n" + "\n".join(f"- {line}" for line in result["gaps"]))
-    st.subheader("Metrics")
-    st.dataframe(styled(result["metrics"], result["metrics_colors"]), width="stretch")
+    bar = st.progress(0.0, text="Starting")
+
+    def progress(done, total, company):
+        text = f"Generating {company} ({done + 1} of {total})" if company else f"Done: {total} of {total}"
+        bar.progress(done / total if total else 1.0, text=text)
+
+    outcomes = generate_all(config, ask_claude, data_dir, output_dir, on_progress=progress)
+    built = sum(outcome["ok"] for outcome in outcomes)
+    say(built == len(outcomes), f"Generate all: {built} of {len(outcomes)} companies generated.")
+    for outcome in outcomes:
+        say(outcome["ok"], outcome["message"])
+    st.rerun()
 
 
-def main():
-    st.set_page_config(page_title=PAGE_TITLE, layout="wide")
+def add_company_panel(config, data_dir, expanded):
+    """Upload a new company's workbook; it joins the table only if clean.py can read it."""
+    with st.expander("Add a company", expanded=expanded):
+        st.write(ADD_INTRO)
+        upload = st.file_uploader("KPI workbook (.xlsx)", type=["xlsx"], key="new_workbook")
+        if upload is None:
+            return
+        name = st.text_input("Company name", value=suggested_name(upload.name), key=f"new_name_{upload.file_id}")
+        replace = st.checkbox("Replace its workbook", key="replace",
+                              help="Only if a company of this name is already in the table")
+        if st.button("Add company", key="add_company"):
+            outcome = add_company(upload.name, upload.getvalue(), name, config, data_dir, replace)
+            say(outcome["ok"], outcome["message"])
+            st.rerun()
+
+
+def portfolio_page(data_dir, output_dir):
+    """Page 1: search, Generate all, the table, and Add a company."""
     st.title(PAGE_TITLE)
     st.write(INTRO)
-    include_ai = st.checkbox(ai_checkbox_label())
-    upload = st.file_uploader("KPI workbook (.xlsx)", type=["xlsx"])
-    if upload is None:
+    ask_claude = ai_checkbox()
+    show_messages()
+    config = page_config()
+    if config is None:
         return
-    key = (upload.file_id, include_ai)  # build once per file and choice, not on every click
-    if st.session_state.get("built_for") != key:
-        with st.spinner("Building the board pack..."):
-            st.session_state["result"] = build_outputs(upload.name, upload.getvalue(), include_ai)
-        st.session_state["built_for"] = key
-    show_result(st.session_state["result"])
+    rows = portfolio_rows(config, data_dir, output_dir)
+    query = st.text_input("Search companies", key="search", placeholder="Company name")
+    generate_all_button(config, ask_claude, data_dir, output_dir)
+    not_found = search_message(rows, query)
+    if not_found:
+        st.warning(not_found)
+    elif not rows:
+        st.info(NO_COMPANIES)
+    else:
+        portfolio_table(search_rows(rows, query), ask_claude, config, output_dir)
+    add_company_panel(config, data_dir, expanded=bool(not_found or not rows))
+
+
+# ---------------------------------------------------------------------------
+# Page 2: one company
+# ---------------------------------------------------------------------------
+
+def company_buttons(workbook, state, ask_claude, config, output_dir):
+    """Generate and the four downloads, side by side."""
+    cells = st.columns(1 + len(PAGE_DOWNLOADS))
+    with cells[0]:
+        generate_button(workbook, ask_claude, config, output_dir, key="generate_page")
+    for cell, (kind, label, mime) in zip(cells[1:], PAGE_DOWNLOADS):
+        with cell:
+            download_button(workbook, output_dir, state["current"], kind, label, mime, key=f"{kind}_page")
+
+
+def approve_panel(workbook, state, data_dir, output_dir):
+    """The reviewer's name and the Approve button (only for files built from today's workbook)."""
+    st.subheader("Approve")
+    st.caption(APPROVE_INTRO)
+    name_cell, button_cell = st.columns([3, 1], vertical_alignment="bottom")
+    reviewer = name_cell.text_input("Reviewer name", key=f"reviewer_{workbook.stem}")
+    if button_cell.button("Approve", key="approve", disabled=not state["current"],
+                          help=None if state["current"] else NOT_AVAILABLE):
+        outcome = approve_company(workbook.stem, reviewer, data_dir, output_dir)
+        say(outcome["ok"], outcome["message"])
+        st.rerun()
+
+
+def show_flags(data):
+    """The flag count, the colored flags table, and runway at next quarter's budget (context, not a flag)."""
+    st.subheader(flag_count_text(data["flags"]))
+    st.caption(LEGEND)
+    st.dataframe(styled(flags_table(data), flags_colors(data)), hide_index=True, width="stretch")
+    st.caption(md(runway_lines(data).splitlines()[-1] + " (context, not a flag)"))
+
+
+def show_gaps(data):
+    """Every metric and flag with an input missing, by quarter."""
+    st.markdown("**Data gaps**\n\n" + "\n".join(f"- {md(line)}" for line in gaps_lines(data["gaps"])))
+
+
+def show_metrics(data):
+    st.subheader("Metrics")
+    st.dataframe(styled(metrics_table(data), metrics_colors(data)), width="stretch")
+
+
+def show_charts(data):
+    """The deck's two charts, side by side."""
+    st.subheader("ARR and cash")
+    for cell, figure in zip(st.columns(2), chart_figures(data)):
+        cell.pyplot(figure)
+        plt.close(figure)  # free its memory: the page redraws often
+
+
+def show_commentary(workbook, config, output_dir):
+    """The AI headline, risks and questions (as on slide 4) if a saved analysis matches these numbers."""
+    st.subheader("AI commentary")
+    summary = saved_commentary(workbook, config, output_dir)
+    if summary is None:
+        st.info(NO_COMMENTARY)
+        return
+    st.caption(AI_DRAFTED_LINE)
+    st.markdown(f"**{md(summary.headline)}**")
+    risks, questions = st.columns(2)
+    risks.markdown("**Risks**\n\n" + "\n".join(f"- **{md(point.title)}:** {md(point.detail)}"
+                                               for point in summary.risks))
+    questions.markdown(f"**{QUESTIONS_HEADING}**\n\n" + "\n".join(f"- {md(question)}"
+                                                                  for question in summary.questions))
+
+
+def company_page(stem, data_dir, output_dir):
+    """Page 2: everything about one company, and its buttons."""
+    if st.button("Back to portfolio", key="back"):
+        st.session_state.pop(COMPANY_KEY, None)
+        st.rerun()
+    workbook = find_workbook(stem, data_dir)
+    if workbook is None:
+        st.error(NO_WORKBOOK_FOUND.format(name=stem.title()))
+        return
+    config = page_config()
+    if config is None:
+        return
+    data, problem = load_company(workbook, config)
+    state = run_state(workbook, output_dir)
+    st.title(f"{company_name(workbook)}: {data['latest']}" if data else company_name(workbook))
+    st.caption(f"Last run: {state['last_run']} · Deck status: {plain(state['status'])}")
+    ask_claude = ai_checkbox()
+    show_messages()
+    company_buttons(workbook, state, ask_claude, config, output_dir)
+    if problem:
+        st.error(problem)
+        return
+    show_flags(data)
+    show_gaps(data)
+    show_metrics(data)
+    show_charts(data)
+    show_commentary(workbook, config, output_dir)
+    approve_panel(workbook, state, data_dir, output_dir)
+
+
+def main(data_dir=DATA_DIR, output_dir=OUTPUT_DIR):
+    """The page Streamlit draws: a company's page if one was clicked, else the portfolio. Tests pass temporary folders."""
+    st.set_page_config(page_title=PAGE_TITLE, layout="wide")
+    stem = st.session_state.get(COMPANY_KEY)
+    if stem:
+        company_page(stem, data_dir, output_dir)
+    else:
+        portfolio_page(data_dir, output_dir)
 
 
 if __name__ == "__main__":  # Streamlit runs this file as __main__; importing it (tests) shows nothing
