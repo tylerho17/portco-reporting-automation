@@ -15,6 +15,7 @@ Run: python analyze.py data/northwind.xlsx [--model claude-haiku-4-5]
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -443,12 +444,48 @@ def validate_summary(summary, payload_text):
 # 6-7. Calling Claude, with one retry
 # ---------------------------------------------------------------------------
 
+# What to do when the AI step can't be used, and what still happens (Task 16).
+WITHOUT_AI = "build without AI text (--skip-ai)"
+STILL_BUILT = "The numbers, deck and memo are still built, without AI text."
+NO_KEY = "ANTHROPIC_API_KEY isn't set: add it to .env, then run again"   # analyze.py's own command line
+
+
 class AnalysisError(Exception):
     """Both attempts failed validation. Carries run_info so failures can be logged (step 3b)."""
 
     def __init__(self, problems, run_info):
-        super().__init__("Claude's answer failed validation twice:\n- " + "\n- ".join(problems))
+        super().__init__(f"Claude's answer failed validation twice, so it isn't used: run again for a fresh answer, "
+                         f"or {WITHOUT_AI}. What was wrong:\n- " + "\n- ".join(problems))
         self.run_info = run_info
+
+# An API error in plain words: what happened and what to do next. The first match wins, so a
+# narrower error comes before the one it's a kind of (every one of them is an AnthropicError).
+API_ERROR_ADVICE = [
+    (anthropic.AuthenticationError,
+     f"Claude's API didn't accept the key (ANTHROPIC_API_KEY in .env): check the key, or {WITHOUT_AI}"),
+    (anthropic.PermissionDeniedError,
+     f"Claude's API says this key isn't allowed to do that: check the key's account in the Anthropic console, "
+     f"or {WITHOUT_AI}"),
+    (anthropic.RateLimitError,
+     "Claude's API was still turning requests away (rate limit) after the waits: run again in a few minutes"),
+    (anthropic.APIConnectionError,   # also a timeout
+     "couldn't reach Claude's API (no internet connection, or no answer in time): check the connection, "
+     "then run again"),
+    (anthropic.InternalServerError, "Claude's API had a problem on its side: run again in a few minutes"),
+    (anthropic.APIStatusError,
+     "Claude's API refused the request (the details say why, e.g. a low credit balance): fix that, then run again"),
+    (anthropic.AnthropicError, f"the call to Claude's API failed: run again, or {WITHOUT_AI}"),
+]
+
+
+def api_error_advice(error):
+    """What happened and what to do next, for any error the Anthropic SDK raises."""
+    return next(text for error_type, text in API_ERROR_ADVICE if isinstance(error, error_type))
+
+
+def api_error_text(error):
+    """An API error as main.py prints and saves it: what happened, what to do, then the API's own words."""
+    return f"{api_error_advice(error)}. {STILL_BUILT} Details: {error}"
 
 
 def build_messages(payload_text, previous=None):
@@ -565,6 +602,12 @@ def print_summary(summary, run_info):
           f"{run_info['input_tokens']} in / {run_info['output_tokens']} out tokens, {run_info['seconds']}s")
 
 
+def stop(message):
+    """Print why analyze.py can't go on, in plain words (never a traceback), and exit with 1."""
+    print(message)
+    sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Write board commentary with Claude.")
     parser.add_argument("workbook", help="path to a KPI workbook, e.g. data/northwind.xlsx")
@@ -573,7 +616,12 @@ def main():
 
     load_dotenv()  # puts ANTHROPIC_API_KEY from .env into the environment
     company_key = Path(args.workbook).stem              # "northwind"
-    actuals, next_budget = clean_workbook(args.workbook)
+    try:
+        actuals, next_budget = clean_workbook(args.workbook)
+    except (ValueError, OSError) as error:   # clean.py's stop already says what, where and what to do
+        stop(error)
+    if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        stop(NO_KEY)
     payload = build_payload(company_key.title(), actuals, next_budget, load_config())
     payload_text = payload_to_text(payload)
 
@@ -582,8 +630,9 @@ def main():
         summary, run_info = analyze(payload_text, args.model)
     except AnalysisError as error:
         save_analysis(output_path, payload, run_info=error.run_info, error=str(error))
-        print(error)
-        sys.exit(1)
+        stop(error)
+    except anthropic.AnthropicError as error:
+        stop(f"{api_error_advice(error)}. Details: {error}")
 
     save_analysis(output_path, payload, summary, run_info)
     print_summary(summary, run_info)

@@ -396,12 +396,29 @@ def mapping_path(workbook_path, mappings_dir=None):
     return Path(mappings_dir or MAPPINGS_DIR) / f"{Path(workbook_path).stem}.yaml"
 
 
-def check_columns(columns, where):
-    """Stop unless every mapping points at one of the 16 standard columns."""
+def check_columns(columns, where, fix="choose one of them"):
+    """Stop unless every mapping points at one of the 16 standard columns. `fix` says what to do instead."""
     for header, column in columns.items():
         if column not in STANDARD_COLUMNS:
             raise ValueError(f"{where}{header!r} -> {column!r} isn't one of the {len(STANDARD_COLUMNS)} input "
-                             f"columns ({', '.join(STANDARD_COLUMNS)})")
+                             f"columns ({', '.join(STANDARD_COLUMNS)}): {fix}")
+
+
+def confirm_again(workbook_path):
+    """The command that rebuilds a company's mapping file, for the "what to do next" of a stop."""
+    return f"python mapping.py {shown(workbook_path)} --confirm"
+
+
+def read_mapping_file(path, workbook_path):
+    """The mapping file as YAML. Broken YAML stops naming the file and line, never with a YAML library error."""
+    try:
+        return yaml.safe_load(path.read_text()) or {}
+    except yaml.YAMLError as error:
+        mark = getattr(error, "problem_mark", None)   # where the YAML library stopped reading, if it knows
+        line = f", line {mark.line + 1}" if mark else ""
+        raise ValueError(f"{shown(path)}{line}: this line isn't in 'workbook header: input column' form. Fix it, "
+                         f"or delete the file and confirm the headers again with {confirm_again(workbook_path)}") \
+            from None
 
 
 def saved_columns(workbook_path, mappings_dir=None):
@@ -409,12 +426,15 @@ def saved_columns(workbook_path, mappings_dir=None):
     path = mapping_path(workbook_path, mappings_dir)
     if not path.exists():
         return {}
-    saved = yaml.safe_load(path.read_text()) or {}
+    saved = read_mapping_file(path, workbook_path)
     columns = saved.get("columns") if isinstance(saved, dict) else None
     if not isinstance(columns, dict):
-        raise ValueError(f"{shown(path)}: expected a 'columns:' list of header: column lines")
+        raise ValueError(f"{shown(path)} isn't a mapping file this tool can read: it needs a 'columns:' line, then "
+                         f"one 'workbook header: input column' line per mapping. Fix it, or delete the file and "
+                         f"confirm the headers again with {confirm_again(workbook_path)}")
     columns = {str(header): str(column) for header, column in columns.items()}
-    check_columns(columns, f"{shown(path)}: ")
+    check_columns(columns, f"{shown(path)}: ", f"fix that line in the file, or delete it and confirm the header "
+                                               f"again with {confirm_again(workbook_path)}")
     return columns
 
 

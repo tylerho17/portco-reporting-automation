@@ -289,7 +289,7 @@ def test_generate_all_carries_on_past_a_failure_and_reports_progress(folders, tm
                         (4, 4, None)]
     with open(output_dir / "batch_summary.csv", newline="") as file:
         results = [row["Result"] for row in csv.DictReader(file)]
-    assert results[0] == "OK (AI skipped)" and results[1].startswith("FAILED: ValueError")
+    assert results[0] == "OK (AI skipped)" and results[1].startswith("FAILED: Sheet 'Sheet', row 1 (header) is missing columns")
 
 
 def test_the_row_goes_out_of_date_when_the_workbook_changes(folders):

@@ -155,7 +155,7 @@ def test_a_step_that_raises_is_failed_with_the_error_and_the_error_still_stops_t
         with log.company("Northwind").step(run_log.EXCEL):
             raise ValueError("Sheet 'KPIs', row 7: can't read '12..5'")
     [line] = lines_of(log.path)
-    assert (line["result"], line["error"]) == (run_log.FAILED, "ValueError: Sheet 'KPIs', row 7: can't read '12..5'")
+    assert (line["result"], line["error"]) == (run_log.FAILED, "Sheet 'KPIs', row 7: can't read '12..5'")
 
 
 def test_a_step_the_batch_gave_up_on_is_stopped_not_failed(tmp_path):
@@ -261,7 +261,7 @@ def test_a_failing_step_is_logged_with_its_error_and_no_later_step_runs(tmp_path
                                              (run_log.CHANGES, run_log.OK), (run_log.EXCEL, run_log.FAILED),
                                              (run_log.WHOLE_COMPANY, main.FAILED)]
     errors = [line["error"] for line in lines if line["result"] == run_log.FAILED or line["result"] == main.FAILED]
-    assert errors == ["ValueError: the metrics workbook can't be saved"] * 2
+    assert errors == ["the metrics workbook can't be saved"] * 2
 
 
 def test_a_workbook_that_cannot_be_read_fails_at_the_clean_step(tmp_path):

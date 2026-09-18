@@ -214,7 +214,8 @@ def test_rate_limits_that_never_clear_give_the_placeholder_not_a_failed_company(
     assert main.result_text(result) == "OK (AI failed)"
     # Waits of 0.01, 0.02, 0.04, then 0.05 (the cap in these tests): 0.12 s in all.
     assert result["notes"] == [f"{resilience.MAX_RATE_LIMIT_RETRIES} rate-limit retries (waited 0.12 s)"]
-    assert read_manifest(manifest_path(NORTHWIND, tmp_path))["ai"]["validation"].startswith("failed: RateLimitError")
+    assert read_manifest(manifest_path(NORTHWIND, tmp_path))["ai"]["validation"].startswith(
+        "failed: Claude's API was still turning requests away (rate limit)")
 
 
 def test_a_skipped_ai_step_records_no_rate_limit_waits(tmp_path):
@@ -506,9 +507,9 @@ def test_a_failed_company_leaves_its_earlier_outputs_as_they_were(tmp_path, monk
     batch(tmp_path, client=ScriptedClient(answer()))
     before = output_files(tmp_path)
     result = batch(tmp_path, client=ScriptedClient(KeyError("simulated bug")))[0]
-    assert result["error"] == "KeyError: 'simulated bug'"
+    assert result["error"] == main.error_text(KeyError("simulated bug"))   # "unexpected problem ... (KeyError: ...)"
     after = output_files(tmp_path)
-    assert events(tmp_path) == [("failed", "KeyError: 'simulated bug'")]
+    assert events(tmp_path) == [("failed", main.error_text(KeyError("simulated bug")))]
     after.pop("northwind_manifest.json"), before.pop("northwind_manifest.json")
     assert after == before
 

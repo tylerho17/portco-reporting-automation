@@ -18,7 +18,9 @@ Run directly to print the clean table:  python clean.py data/northwind.xlsx
 import numbers
 import re
 import sys
+import zipfile
 from decimal import Decimal
+from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -69,6 +71,8 @@ NUMBER_HINT = " (expected e.g. 1250, '$1.2M' or '850K'; leave the cell empty if 
 
 # The header that marks the quarter-label column.
 LABEL_HEADER = "quarter"
+
+EXCEL_WORKBOOK_PART = "xl/workbook.xml"   # inside every .xlsx (which is a zip file)
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +158,8 @@ def parse_quarter(label):
     """'Q2 2026' -> (2026, 2). Stops if the label isn't in that format."""
     match = QUARTER_PATTERN.match(label)
     if not match:
-        raise ValueError(f"Can't read quarter label {label!r} (expected e.g. 'Q2 2026')")
+        raise ValueError(f"Can't read quarter label {label!r} (expected e.g. 'Q2 2026') - write the label like "
+                         f"that, or if the row is a note, move it to another tab")
     return int(match.group(2)), int(match.group(1))
 
 
@@ -222,6 +227,31 @@ def header_row_of(sheet):
     return None
 
 
+def is_excel_workbook(path):
+    """True if the file is a zip holding an Excel workbook part (every .xlsx has xl/workbook.xml).
+
+    Being a zip isn't enough: a .pptx or .docx renamed .xlsx is a zip too, and pandas' error on
+    one is cryptic.
+    """
+    if not zipfile.is_zipfile(path):
+        return False
+    with zipfile.ZipFile(path) as archive:
+        return EXCEL_WORKBOOK_PART in archive.namelist()
+
+
+def check_is_workbook(path):
+    """Stop, in plain words, on a file that isn't there or isn't an Excel workbook, before pandas reads it.
+
+    pandas' own errors ("Excel file format cannot be determined, you must specify an engine
+    manually", "[Errno 2] No such file or directory") don't say what to do.
+    """
+    if not Path(path).exists():
+        raise FileNotFoundError(f"Can't find {path}: check the file name and folder, then run again")
+    if not is_excel_workbook(path):
+        raise ValueError(f"{Path(path).name} isn't a readable Excel workbook: open it in Excel, save it as an "
+                         f"Excel Workbook (.xlsx), then run again")
+
+
 def find_kpi_sheet(path):
     """Return (sheet_name, sheet, header_row) for the one tab whose header row contains 'Quarter'.
 
@@ -234,10 +264,13 @@ def find_kpi_sheet(path):
     sheets = pd.read_excel(path, sheet_name=None, header=None, keep_default_na=False, na_values=[""])
     found = [(name, sheet, header_row_of(sheet)) for name, sheet in sheets.items() if header_row_of(sheet) is not None]
     if not found:
-        raise ValueError(f"No tab in {path} has a 'Quarter' header in its first 10 rows (tabs: {list(sheets)})")
+        raise ValueError(f"No tab in {Path(path).name} has a 'Quarter' header in its first 10 rows (tabs checked: "
+                         f"{', '.join(repr(name) for name in sheets)}): add a 'Quarter' header above the column of "
+                         f"quarter labels, like 'Q2 2026'")
     if len(found) > 1:
         names = [f"'{name}'" for name, _, _ in found]
-        raise ValueError(f"Tabs {', '.join(names[:-1])} and {names[-1]} both have a 'Quarter' header - keep one "
+        each = "both" if len(found) == 2 else "all"
+        raise ValueError(f"Tabs {', '.join(names[:-1])} and {names[-1]} {each} have a 'Quarter' header - keep one "
                          f"KPI tab and delete or rename the others")
     return found[0]
 
@@ -298,7 +331,8 @@ def map_columns(headers, header_row, confirmed=None):
     names = name_headers(headers, header_row, confirmed)
     missing = [c for c in STANDARD_COLUMNS if c not in names.values()]
     if missing:
-        raise ValueError(f"row {excel_row(header_row)} (header) is missing columns: {', '.join(missing)}")
+        raise ValueError(f"row {excel_row(header_row)} (header) is missing columns: {', '.join(missing)} - add a "
+                         f"column headed with each name (its cells can stay empty if there's no data)")
     label_position = next(p for p, name in names.items() if name == LABEL_HEADER)
     column_map = {p: name for p, name in names.items() if name != LABEL_HEADER}
     return label_position, column_map
@@ -351,7 +385,9 @@ def is_budget_only_row(label, row_index, row, column_map):
     if filled_actuals:
         raise ValueError(f"row {excel_row(row_index)} ({label!r}) is labelled as a budget-only row but also has "
                          f"actual values in {', '.join(filled_actuals)} - a budget-only row may fill only "
-                         f"{', '.join(BUDGET_COLUMNS)}")
+                         f"{', '.join(BUDGET_COLUMNS)}: move the actuals to their own quarter row, or if this is "
+                         f"an actual quarter, take {', '.join(repr(w) for w in BUDGET_LABEL_WORDS[:-1])} or "
+                         f"{BUDGET_LABEL_WORDS[-1]!r} out of its label")
     return True
 
 
@@ -403,7 +439,8 @@ def clean_sheet(sheet, header_row, confirmed=None):
             row_numbers[label] = excel_row(row_index)
 
     if not actual_rows:
-        raise ValueError(f"row {excel_row(header_row)} (header) has no quarter rows under it")
+        raise ValueError(f"row {excel_row(header_row)} (header) has no quarter rows under it: add one row per "
+                         f"quarter under the header, labelled like 'Q2 2026'")
     actuals = pd.DataFrame.from_dict(actual_rows, orient="index", columns=STANDARD_COLUMNS)
     actuals.index.name = "quarter"
     check_quarters_in_order(list(actual_rows), list(row_numbers.values()))
@@ -422,6 +459,7 @@ def clean_workbook(path, mappings_dir=None):
     """
     import mapping   # here, not at the top of the file: mapping.py imports this file
 
+    check_is_workbook(path)
     sheet_name, sheet, header_row = find_kpi_sheet(path)
     try:
         confirmed = mapping.confirmed_aliases(path, mappings_dir)

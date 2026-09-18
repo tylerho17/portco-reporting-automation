@@ -122,7 +122,7 @@ def test_missing_quarter_column_stops(tmp_path):
     # Without a 'Quarter' header no tab counts as the KPI tab, so the message lists the tabs it checked.
     rows = drop_column(good_table(), "Quarter")
     message = error_from(tmp_path, rows)
-    assert "has a 'Quarter' header in its first 10 rows (tabs: ['Notes', 'KPI Tracker'])" in message
+    assert "has a 'Quarter' header in its first 10 rows (tabs checked: 'Notes', 'KPI Tracker')" in message
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +276,7 @@ def test_budget_row_message_says_which_columns_are_allowed(tmp_path):
     rows = good_table()
     set_cell(rows, BUDGET_LABEL, "revenue", 500)
     message = error_from(tmp_path, rows)
-    assert message.endswith("a budget-only row may fill only budget_new_arr, budget_arr, budget_net_burn")
+    assert "a budget-only row may fill only budget_new_arr, budget_arr, budget_net_burn:" in message
 
 
 def test_second_budget_row_stops(tmp_path):

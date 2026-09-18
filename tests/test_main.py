@@ -232,7 +232,7 @@ def test_api_error_is_ai_failed_not_a_failed_company(tmp_path):
     assert result["error"] is None and main.result_text(result) == "OK (AI failed)"
     assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
     saved = saved_analysis(tmp_path)
-    assert saved["summary"] is None and saved["error"] == "AnthropicError: simulated outage"
+    assert saved["summary"] is None and saved["error"] == analyze.api_error_text(anthropic.AnthropicError("simulated outage"))
 
 
 def test_unexpected_error_in_the_ai_step_fails_the_company(tmp_path):
@@ -240,7 +240,7 @@ def test_unexpected_error_in_the_ai_step_fails_the_company(tmp_path):
     run_northwind(tmp_path, client=FakeClient(summary()))  # an old, good analysis from an earlier run
     old_analysis = (tmp_path / "northwind_analysis.json").read_bytes()
     result = run_northwind(tmp_path, client=FakeClient(error=KeyError("simulated bug")))
-    assert result["error"] == "KeyError: 'simulated bug'"
+    assert result["error"] == main.error_text(KeyError("simulated bug"))   # "unexpected problem ... (KeyError: ...)"
     # Task 7: a failed company's files never reach output/, so the old analysis stays beside the old
     # deck it belongs to (before, it was deleted and the old deck stayed without it).
     assert (tmp_path / "northwind_analysis.json").read_bytes() == old_analysis

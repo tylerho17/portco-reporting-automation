@@ -123,6 +123,7 @@ CONTEXT_ROWS = [("ending_arr", "arr_vs_budget"), ("arr_yoy", None), ("gross_marg
 KIND_WORDS = {"min": "trips below", "max": "trips above"}              # exactly at the threshold passes
 FLAG_KINDS = {column: kind for _, column, _, kind in FLAG_RULES}       # metric -> "min" or "max"
 BODY_TYPES = {PP_PLACEHOLDER.OBJECT, PP_PLACEHOLDER.BODY}
+REBUILD_TEMPLATE = "rebuild the template with python make_template.py, then run again"   # a template stop's fix
 
 
 # ---------------------------------------------------------------------------
@@ -273,21 +274,31 @@ def layout_box(layout, placeholder_types):
     for placeholder in layout.placeholders:
         if placeholder.placeholder_format.type in placeholder_types:
             return placeholder.left, placeholder.top, placeholder.width, placeholder.height
-    raise ValueError(f"Template layout '{layout.name}' is missing a placeholder - run python make_template.py")
+    raise ValueError(f"The slide template {TEMPLATE_PATH.name}: layout '{layout.name}' has no text box of the kind "
+                     f"this slide needs: {REBUILD_TEMPLATE}")
 
 
 def find_content_layout(presentation):
     """The template's "Title and Content" layout, or a clear error if the template wasn't built."""
     layout = presentation.slide_layouts.get_by_name(CONTENT_LAYOUT)
     if layout is None:
-        raise ValueError(f"{TEMPLATE_PATH.name} has no '{CONTENT_LAYOUT}' layout - run python make_template.py")
+        raise ValueError(f"The slide template {TEMPLATE_PATH.name} has no '{CONTENT_LAYOUT}' layout: "
+                         f"{REBUILD_TEMPLATE}")
     return layout
+
+
+def open_template():
+    """The slide template, opened. A missing one stops in plain words (python-pptx says "Package not found")."""
+    if not TEMPLATE_PATH.exists():
+        raise ValueError(f"The slide template {TEMPLATE_PATH.name} is missing: build it with python "
+                         f"make_template.py, then run again")
+    return Presentation(TEMPLATE_PATH)
 
 
 @lru_cache(maxsize=1)  # read once: measuring text shouldn't open the template file every time
 def content_area():
     """(left, top, width, height) of the area each slide fills, taken from the template."""
-    return layout_box(find_content_layout(Presentation(TEMPLATE_PATH)), BODY_TYPES)
+    return layout_box(find_content_layout(open_template()), BODY_TYPES)
 
 
 def column_box(box, position):
@@ -733,7 +744,7 @@ def build_presentation(data, summary, run_date, chart_dir, approval=None, model=
     model = the Claude model whose text is on the deck, for the footer. draft=True stamps every
     slide "DRAFT - NOT REVIEWED" - but only if nobody has approved it, since the stamp says so.
     """
-    presentation = Presentation(TEMPLATE_PATH)
+    presentation = open_template()
     layout = find_content_layout(presentation)
     deck = {"data": data, "summary": summary, "chart_dir": Path(chart_dir), "approval": approval,
             "area": layout_box(layout, BODY_TYPES), "footer_box": layout_box(layout, {PP_PLACEHOLDER.FOOTER}),

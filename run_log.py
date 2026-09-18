@@ -30,6 +30,7 @@ from pathlib import Path
 
 from memo import no_em_dash
 from resilience import Cancelled
+from text_fit import TextDoesNotFitError
 
 LOG_FOLDER = "logs"          # inside output/
 FILE_PREFIX = "run_"
@@ -49,6 +50,31 @@ GIVEN_UP = "the batch gave up on this company (--timeout) before this step finis
 UNFINISHED = "unfinished"    # a company with no whole-company line: the run was killed (Ctrl+C, say)
 
 RECENT_RUNS = 5              # how many runs the web page shows
+
+# Errors caused by a bad input file (clean.py raises ValueError with a clear message; a missing
+# or unreadable file raises OSError), or by text that can't fit a slide (text_fit.py names the slide
+# and the box). Anything else is probably a bug. main.py and the web page use this list too.
+INPUT_ERRORS = (ValueError, OSError, TextDoesNotFitError)
+
+
+# ---------------------------------------------------------------------------
+# How an error reads (Task 16): the log, main.py's Result column and its printout
+# ---------------------------------------------------------------------------
+
+def error_text(error):
+    """An error in plain words: what is wrong, where, and what to do next. No Python error name.
+
+    A bug keeps its Python name and message, so whoever fixes it knows what to look for.
+    """
+    if isinstance(error, PermissionError) and error.filename:   # e.g. the deck is open in PowerPoint
+        return (f"can't open or save {error.filename}: if it's open in Excel, PowerPoint or Word, close it, "
+                f"then run again")
+    if isinstance(error, FileNotFoundError) and error.filename:
+        return f"can't find {error.filename}: check the file name and folder, then run again"
+    if isinstance(error, INPUT_ERRORS):   # clean.py's and text_fit.py's messages already say all three
+        return str(error)
+    return (f"unexpected problem, probably a bug in this tool rather than the workbook ({type(error).__name__}: "
+            f"{error}): the Terminal window shows where it happened")
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +179,7 @@ class CompanyLog:
             self.write(name, self.clock() - start, STOPPED, GIVEN_UP, started)
             raise
         except Exception as error:
-            self.write(name, self.clock() - start, FAILED, f"{type(error).__name__}: {error}", started)
+            self.write(name, self.clock() - start, FAILED, error_text(error), started)
             raise
         self.write(name, self.clock() - start, outcome.result, outcome.error, started)
 

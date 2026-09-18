@@ -68,7 +68,8 @@ from types import SimpleNamespace
 import anthropic
 from dotenv import load_dotenv
 
-from analyze import DEFAULT_MODEL, PROMPT_VERSION, AnalysisError, analyze, build_payload, payload_to_text, save_analysis
+from analyze import (DEFAULT_MODEL, PROMPT_VERSION, AnalysisError, analyze, api_error_text, build_payload,
+                     payload_to_text, save_analysis)
 from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, collect_deck_data, commentary_slide,
                         commit_text, deck_path, load_analysis, save_deck, slide_number)
 from clean import clean_workbook
@@ -85,8 +86,7 @@ from resilience import (UP_TO_DATE, Cancelled, CompanyControl, RateLimitRetry, S
                         commit_stage, discard_stage, make_stage, rate_limit_note, record_batch_event, resume_problem,
                         routed_stdout)
 import run_log
-from run_log import COMMAND_LINE, CompanyLog, RunLog
-from text_fit import TextDoesNotFitError
+from run_log import COMMAND_LINE, INPUT_ERRORS, CompanyLog, RunLog, error_text   # INPUT_ERRORS: a bad file, not a bug
 
 PROJECT_DIR = Path(__file__).parent
 DATA_DIR = PROJECT_DIR / "data"
@@ -96,11 +96,6 @@ BATCH_MANIFEST_PATH = OUTPUT_DIR / "batch_manifest.json"
 
 # What happened to a company in a batch.
 BUILT, SKIPPED, TIMED_OUT, STOPPED, FAILED = "built", "skipped", "timed out", "stopped", "failed"
-
-# Errors caused by a bad input file (clean.py raises ValueError with a clear message; a missing
-# or unreadable file raises OSError), or by text that can't fit a slide (text_fit.py names the slide
-# and the box). Anything else is probably a bug, so its traceback is printed.
-INPUT_ERRORS = (ValueError, OSError, TextDoesNotFitError)
 
 # What happened to the AI summary, and how the Result column says it.
 AI_OK, AI_SKIPPED, AI_FAILED = "ok", "skipped", "failed"
@@ -204,9 +199,9 @@ def ai_step(workbook_path, actuals, next_budget, config, output_dir, client=None
         return {"analysis_file": None, "run_info": error.run_info, "validation": f"failed: {error}",
                 "rate_limit_waits": retrying.waits}
     except anthropic.AnthropicError as error:  # the API call itself failed (connection, rate limit that never cleared, ...)
-        message = f"{type(error).__name__}: {error}"
+        message = api_error_text(error)   # what happened and what to do, then the API's own words
         save_analysis(path, payload, error=message)
-        print(f"  ✗ AI commentary: API error ({shown_path(path)}): {message}")
+        print(f"  ✗ AI commentary ({shown_path(path)}): {message}")
         return {"analysis_file": None, "run_info": None, "validation": f"failed: {message}",
                 "rate_limit_waits": retrying.waits}
     control.add_cost(ai_cost(run_info))
@@ -451,8 +446,8 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
 
 
 def describe_error(error):
-    """Print why a company failed. Unexpected errors also get a traceback, to help fix the bug."""
-    print(f"  ✗ FAILED: {type(error).__name__}: {error}")
+    """Print why a company failed, in plain words. Unexpected errors also get a traceback, to help fix the bug."""
+    print(f"  ✗ FAILED: {error_text(error)}")
     if not isinstance(error, INPUT_ERRORS):
         traceback.print_exc()
 
@@ -524,7 +519,7 @@ def resume_check(path, batch):
     try:
         result, _, _ = company_facts(path, batch.config)   # the table still shows the flags and gaps
     except Exception as error:  # noqa: BLE001 - can't read it after all: build it, and let that step report why
-        return None, f"could not read it again ({type(error).__name__})"
+        return None, f"could not read it again ({error_text(error)})"
     print(f"\n=== {Path(path).name} ===\n  ✓ Skipped (--resume): {UP_TO_DATE}")
     record_batch_event(path, batch.output_dir, SKIPPED, f"{UP_TO_DATE} (--resume)")
     result.update(outcome=SKIPPED, error=None, ai=None, cost_usd=None, notes=[])
@@ -558,7 +553,7 @@ def company_worker(job, batch):
         pass
     except Exception as error:  # noqa: BLE001 - one bad company must not stop the batch
         describe_error(error)
-        job.result = {"company": company_name(job.path), "error": f"{type(error).__name__}: {error}"}
+        job.result = {"company": company_name(job.path), "error": error_text(error)}
     finally:
         if job.control.cancel.is_set() and job.stage:   # given up on: nothing it built may reach output/
             discard_stage(job.stage)
@@ -789,9 +784,9 @@ def more_than_zero(text):
     try:
         value = float(text)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number: give one above 0, e.g. 2.5") from None
     if value <= 0:
-        raise argparse.ArgumentTypeError(f"must be more than 0, not {text}")
+        raise argparse.ArgumentTypeError(f"must be more than 0, not {text}: give a number above 0, e.g. 2.5")
     return value
 
 
@@ -800,9 +795,9 @@ def at_least_one(text):
     try:
         value = int(text)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number: give one of 1 or more, e.g. 4") from None
     if value < 1:
-        raise argparse.ArgumentTypeError(f"must be 1 or more, not {text}")
+        raise argparse.ArgumentTypeError(f"must be 1 or more, not {text}: give a whole number, e.g. 4")
     return value
 
 

@@ -33,7 +33,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 from analyze import BoardSummary
 from approve import approve
 from build_deck import PLACEHOLDER_TEXT, collect_deck_data, deck_path, flag_count_text
-from clean import UnconfirmedMappingError, clean_workbook
+from clean import UnconfirmedMappingError, clean_workbook, is_excel_workbook
 from diff_runs import changes_since_last_run, move_settings
 from excel_output import output_path as excel_path
 from main import (AI_FAILED, AI_REUSED, AI_SKIPPED, BUILT, DATA_DIR, FAILED, INPUT_ERRORS, OUTPUT_DIR,
@@ -49,7 +49,6 @@ from run_log import WEB_PAGE, RunLog
 # Files that aren't Excel workbooks at all: clean.py never gets to read them.
 NOT_A_WORKBOOK = "This file isn't a readable Excel workbook. Save it from Excel as .xlsx and try again."
 NOT_A_WORKBOOK_ERRORS = (zipfile.BadZipFile, InvalidFileException)
-EXCEL_WORKBOOK_PART = "xl/workbook.xml"   # inside every .xlsx (which is a zip file)
 UNEXPECTED_ERROR_START = "Something unexpected went wrong - please send this file to whoever looks after the tool"
 
 # What a row says before or instead of a number.
@@ -101,17 +100,6 @@ def last_run_text(run_at):
     """'2026-09-17T14:03:11' -> '2026-09-17 14:03'; no run -> 'never'."""
     return run_at.replace("T", " ")[:16] if run_at else NEVER_RUN
 
-
-def is_excel_workbook(path):
-    """True if the file is a zip holding an Excel workbook part (every .xlsx has xl/workbook.xml).
-
-    Being a zip isn't enough: a .pptx or .docx renamed .xlsx is a zip too, and pandas' error on
-    one is cryptic.
-    """
-    if not zipfile.is_zipfile(path):
-        return False
-    with zipfile.ZipFile(path) as archive:
-        return EXCEL_WORKBOOK_PART in archive.namelist()
 
 
 def quoted(headers):
@@ -281,10 +269,10 @@ def generate_company(workbook_path, config, ask_claude, output_dir=OUTPUT_DIR, c
         result = run_company(workbook_path, config, skip_ai=not ask_claude or no_key, client=client,
                              output_dir=output_dir, reuse_saved=True, log=log.company(company))
     except Exception as error:  # noqa: BLE001 - one company failing must not stop the others
-        message = error_message(error)
-        log.write(company, run_log.WHOLE_COMPANY, time.monotonic() - started, FAILED, f"{type(error).__name__}: {message}")
+        message = error_message(error)   # plain words; a bug's message keeps its Python name
+        log.write(company, run_log.WHOLE_COMPANY, time.monotonic() - started, FAILED, message)
         return {"company": company, "ok": False, "message": f"{company}: {message}",
-                "result": {"company": company, "error": f"{type(error).__name__}: {message}"}}
+                "result": {"company": company, "error": message}}
     log.write(company, run_log.WHOLE_COMPANY, time.monotonic() - started, BUILT)
     result["error"] = None
     manifest = read_manifest(manifest_path(workbook_path, output_dir))
