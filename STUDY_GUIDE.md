@@ -783,6 +783,8 @@ Run with `python -m pytest -q` (415 tests, about 15 seconds). Expected values ar
 
 Short answers you can say out loud in 30–60 seconds. **"Point to"** says where to look in the code or docs if they ask for detail. Practise saying the answers in your own words; don't memorize them.
 
+> **For interview practice, use INTERVIEW_PREP.md.** It has these 30 in the order they'd be asked, plus 9 more (direction checks and their cost, provenance, scale, working method), with facts that changed since this section was written (cost, test count, the direction check) brought up to date.
+
 ### The project
 
 **Q1. Walk me through the project in one minute.**

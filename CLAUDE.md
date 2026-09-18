@@ -36,6 +36,7 @@ Demo project for a PE AI automation role. Must be clean, explainable, and reliab
 - check_northwind.py, check_companies.py, check_excel_output.py, check_deck.py, check_main.py   end-to-end proofs against each company's answer key (no API calls)
 - README.md              what it does, how to run it, data flow, design decisions, model comparison (compare_models.py rewrites the block between its marker comments), cost, screenshots, next steps
 - STUDY_GUIDE.md         data flow, glossary, interview questions, exercises
+- INTERVIEW_PREP.md      every interview question in the order asked, 30-60 s answers with where to point; how to answer when I can't recall (tests/test_docs.py checks the files and functions it names)
 - LEARNINGS.md           what broke and what it taught; model comparison and live-run costs
 - DAY_REPORT.md          per-task report of the day's build (decisions, failures, unresolved); OVERNIGHT_REPORT.md is a historical record
 - output/                generated files (git-ignored)
