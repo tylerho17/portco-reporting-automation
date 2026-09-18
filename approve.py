@@ -1,10 +1,11 @@
 """Record that a person has reviewed a company's board deck (the human approval gate).
 
-Every deck is watermarked "DRAFT - NOT REVIEWED" until someone approves it here. Approval is a name
-and a time written into output/<company>_manifest.json, next to the hashes of the workbook and the
-thresholds the deck was built from. Rebuilding the deck then drops the watermark; if the workbook or
-config.yaml changes afterwards, the watermark comes back on its own, because what the reviewer read
-is no longer what the deck says (provenance.approval_status).
+Every deck's footer says "AI-drafted | not reviewed" until someone approves it here (and a deck built
+with --draft is also stamped "DRAFT - NOT REVIEWED"). Approval is a name and a time written into
+output/<company>_manifest.json, next to the hashes of the workbook and the thresholds the deck was
+built from. Rebuilding the deck then makes the footer say "reviewed by NAME on DATE"; if the workbook
+or config.yaml changes afterwards, it goes back to "not reviewed" on its own, because what the
+reviewer read is no longer what the deck says (provenance.approval_status).
 
 This never builds or edits a deck. Approving and producing are two separate acts: the last word on
 whether numbers reach a board belongs to a person, and this file is only the record of it.
@@ -79,7 +80,7 @@ def main(argv=None, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, config_path=CONFIG
 
     approval = manifest["approval"]
     print(f"Approved {manifest['company']} by {approval['reviewer']} on {approval['approved_at']}")
-    print(f"Rebuild the deck to drop the DRAFT watermark: python build_deck.py data/{args.company}.xlsx")
+    print(f"Rebuild the deck so its footer says reviewed: python build_deck.py data/{args.company}.xlsx")
     return 0
 
 

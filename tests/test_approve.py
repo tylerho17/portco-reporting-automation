@@ -77,7 +77,9 @@ def test_the_command_line_prints_what_to_do_next(company, capsys):
                              output_dir=company["output_dir"], config_path=company["config"])
     printed = capsys.readouterr().out
     assert exit_code == 0
-    assert "Tyler Ho" in printed and "build_deck.py" in printed  # how to get the watermark off
+    assert "Tyler Ho" in printed and "build_deck.py" in printed  # how to get "reviewed by" on the deck
+    # The watermark is opt-in (--draft), so the hint is about the footer, not about removing a watermark.
+    assert "footer" in printed and "watermark" not in printed.lower()
     assert read_manifest(company["manifest"])["approval"]["reviewer"] == "Tyler Ho"
 
 

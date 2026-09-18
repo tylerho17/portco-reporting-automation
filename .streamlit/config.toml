@@ -1,0 +1,18 @@
+# Streamlit settings for app.py (Streamlit reads this file when started from the project folder).
+
+[server]
+# Don't stop at Streamlit's first-run "enter your email" question in the terminal.
+# run_app.command opens the browser itself.
+headless = true
+port = 8501
+
+[browser]
+# Don't send usage statistics to Streamlit.
+gatherUsageStats = false
+
+[client]
+# Never show a traceback on the page. app.py already turns every error into plain words;
+# this is the backstop for anything it misses. Details still print in the terminal.
+showErrorDetails = "none"
+# Hide the developer menu (rerun, settings, deploy) - the page is for non-technical users.
+toolbarMode = "minimal"

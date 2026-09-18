@@ -13,15 +13,17 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from pptx import Presentation
+from pptx.util import Emu
 
 from analyze import build_payload
-from build_deck import (FICTIONAL_NOTE, NO_AI_MODEL, PLACEHOLDER_TEXT, build_presentation, collect_deck_data,
-                        deck_path, flag_count_text, gaps_text, load_analysis, save_deck, threshold_text)
+from build_deck import (AI_DRAFTED_LINE, FICTIONAL_NOTE, NO_AI_MODEL, PLACEHOLDER_NOTE, PLACEHOLDER_TEXT,
+                        build_presentation, collect_deck_data, deck_path, flag_count_text, gaps_text, load_analysis,
+                        save_deck, shorten_middle, threshold_text)
 from clean import STANDARD_COLUMNS
 from metrics import CANNOT_EVALUATE, MISSING_INPUT, PASS, TRIP
 from provenance import (NOT_REVIEWED, build_manifest, file_sha256, git_commit, manifest_path, read_manifest,
                         save_manifest)
-from text_fit import TextDoesNotFitError
+from text_fit import MIN_FONT_PT, TextDoesNotFitError, text_width_pt
 
 NAN = math.nan
 PROJECT_DIR = Path(__file__).parent.parent
@@ -168,9 +170,17 @@ def test_analysis_too_long_for_the_slides_gives_the_placeholder(tmp_path, payloa
     # Decision K: the numbers are valid, so the deck is still built - it just can't carry this text
     # (review finding 1a). Before this, the build stopped and the company had no deck at all.
     too_long = summary_dict()
-    too_long["wins"] = [{"title": "Steady base", "detail": "customers " * 45}] * 3
+    too_long["risks"] = [{"title": "Steady base", "detail": "customers " * 45}] * 3
     summary, reason = load_analysis(write_analysis(tmp_path, too_long), payload)
-    assert summary is None and "does not fit slide 1" in reason
+    assert summary is None and "does not fit slide 4" in reason
+
+
+def test_long_wins_do_not_cost_the_deck_its_ai_text(tmp_path, payload):
+    # Wins aren't on the deck any more (Task 2), so their length can't make the text "not fit".
+    long_wins = summary_dict()
+    long_wins["wins"] = [{"title": "Steady base", "detail": "customers " * 45}] * 3
+    summary, reason = load_analysis(write_analysis(tmp_path, long_wins), payload)
+    assert reason is None and summary is not None
 
 
 def test_analysis_with_two_questions(tmp_path, payload):
@@ -188,35 +198,56 @@ def all_text(slide):
     return " ".join(s.text_frame.text for s in slide.shapes if s.has_text_frame)
 
 
-def build(tmp_path, summary=None, approval=None, model=None, **data_options):
+def build(tmp_path, summary=None, approval=None, model=None, draft=False, **data_options):
     from analyze import BoardSummary
     parsed = BoardSummary.model_validate(summary) if summary else None
-    return build_presentation(deck_data(**data_options), parsed, RUN_DATE, tmp_path, approval=approval, model=model)
+    return build_presentation(deck_data(**data_options), parsed, RUN_DATE, tmp_path, approval=approval, model=model,
+                              draft=draft)
 
 
-def test_five_slides_in_order(tmp_path):
+def test_four_slides_in_order(tmp_path):
     slides = build(tmp_path).slides
-    assert len(slides) == 5
-    assert [slide.shapes.title.text.split(":")[0].split(" — ")[0] for slide in slides] == [
-        "Testco", "Key metrics", "ARR and cash", "Risks and flags", "Questions for management"]
+    assert [slide.shapes.title.text for slide in slides] == [
+        "Testco: key metrics — Q2 2026 vs Q1 2026", "ARR and cash — Q4 2025 to Q2 2026",
+        "Risks and flags — Q2 2026", "AI commentary — Q2 2026"]
 
 
-def test_placeholder_on_slides_1_and_5_when_there_is_no_analysis(tmp_path):
-    slides = build(tmp_path).slides
-    assert shape(slides[0], "Headline").text_frame.text == PLACEHOLDER_TEXT
-    assert PLACEHOLDER_TEXT in shape(slides[4], "Questions").text_frame.text
-    # The Python numbers are still there: the flag count doesn't depend on the AI.
-    assert "flags tripped" in shape(slides[0], "Flag count").text_frame.text
+def test_placeholder_on_slide_4_when_there_is_no_analysis(tmp_path):
+    slide = build(tmp_path).slides[3]
+    assert shape(slide, "Headline").text_frame.text == PLACEHOLDER_TEXT
+    assert shape(slide, "AI note").text_frame.text == PLACEHOLDER_NOTE
+    # Nothing on the slide is AI-drafted, so the "AI-drafted ... review before use" line isn't shown.
+    assert AI_DRAFTED_LINE not in all_text(slide)
 
 
-def test_analysis_text_on_slides_1_and_5(tmp_path):
-    slides = build(tmp_path, summary=summary_dict()).slides
-    assert shape(slides[0], "Headline").text_frame.text == summary_dict()["headline"]
-    assert "Steady base" in shape(slides[0], "Wins").text_frame.text
-    assert "Steady base" in shape(slides[0], "Risks").text_frame.text
-    questions = shape(slides[4], "Questions").text_frame.text
+def test_analysis_text_on_slide_4(tmp_path):
+    slide = build(tmp_path, summary=summary_dict()).slides[3]
+    assert shape(slide, "Headline").text_frame.text == summary_dict()["headline"]
+    assert "Steady base" in shape(slide, "Risks").text_frame.text
+    questions = shape(slide, "Questions").text_frame.text
     assert all(question in questions for question in summary_dict()["questions"])
-    assert PLACEHOLDER_TEXT not in all_text(slides[0]) + all_text(slides[4])
+    assert PLACEHOLDER_TEXT not in all_text(slide)
+
+
+def test_the_ai_line_sits_under_the_title_and_above_the_headline(tmp_path):
+    slide = build(tmp_path, summary=summary_dict()).slides[3]
+    line = shape(slide, "AI-drafted line")
+    assert line.text_frame.text == "AI-drafted from computed metrics - review before use"
+    assert slide.shapes.title.top + slide.shapes.title.height <= line.top
+    assert line.top + line.height <= shape(slide, "Headline").top
+
+
+def test_wins_are_not_on_the_deck(tmp_path):
+    summary = summary_dict()
+    summary["wins"] = [{"title": "A win nobody sees", "detail": "Customers stayed."}] * 3
+    slides = build(tmp_path, summary=summary).slides
+    assert all("A win nobody sees" not in all_text(slide) and "Wins" not in all_text(slide) for slide in slides)
+
+
+def test_the_flag_count_is_on_the_risks_slide(tmp_path):
+    # It was on the Summary slide, which is gone. Python counts it, so it shows with or without AI text.
+    text = shape(build(tmp_path).slides[2], "Risks and flags").text_frame.text
+    assert "Tripped flags (" in text and "flags tripped" in text
 
 
 def test_footer_on_every_slide(tmp_path):
@@ -239,7 +270,7 @@ def test_status_cells_are_red_green_or_gray(tmp_path):
     # Every input 100: NRR = 1 + 4 * (100 - 100 - 100) / 100 = -300% -> trips.
     # GRR = 1 - 4 * 200 / 100 = -700% -> trips. Net new ARR = 0 while burning -> burn multiple ∞ -> trips.
     # Runway = 1200 / (100 / 3) = 36 months -> passes. 3 quarters: Rule of 40 needs 4 back -> can't evaluate.
-    table = shape(build(tmp_path).slides[1], "KPI table").table
+    table = shape(build(tmp_path).slides[0], "KPI table").table
     fills = status_fills(table)
     assert fills["NRR (annualized)"] == RED
     assert fills["Burn multiple"] == RED
@@ -249,7 +280,7 @@ def test_status_cells_are_red_green_or_gray(tmp_path):
 
 def test_kpi_table_shows_why_a_value_is_missing(tmp_path):
     # Q1 2026 blank: the prior-quarter column says "data missing"; Rule of 40 says no prior period.
-    table = shape(build(tmp_path, blank="Q1 2026").slides[1], "KPI table").table
+    table = shape(build(tmp_path, blank="Q1 2026").slides[0], "KPI table").table
     rows = {row.cells[0].text: [cell.text for cell in row.cells] for row in table.rows}
     assert rows["NRR (annualized)"][2] == "data missing"
     assert rows["Rule of 40"][1] == "n/a (no prior period)"
@@ -258,7 +289,7 @@ def test_kpi_table_shows_why_a_value_is_missing(tmp_path):
 
 
 def test_risks_slide_lists_tripped_flags_combo_and_data_gaps(tmp_path):
-    slide = build(tmp_path, blank="Q1 2026").slides[3]
+    slide = build(tmp_path, blank="Q1 2026").slides[2]
     text = shape(slide, "Risks and flags").text_frame.text
     assert "NRR (annualized): -300.0% (trips below 100.0%)" in text
     assert "NRR falling while pipeline rising: Cannot evaluate — missing input" in text
@@ -271,17 +302,17 @@ def run_sizes(text_shape):
 
 
 def test_side_by_side_columns_use_the_same_font_sizes(tmp_path):
-    # Wins are long, risks are short: the risks column must shrink along with the wins column.
+    # Risks are long, questions are short: the questions column must shrink along with the risks column.
     summary = summary_dict()
-    summary["wins"] = [{"title": "Steady base", "detail": " ".join(["Customers stayed with the product."] * 5)}] * 3
-    slide = build(tmp_path, summary=summary).slides[0]
-    wins, risks = shape(slide, "Wins"), shape(slide, "Risks")
-    assert max(run_sizes(wins)) < 18      # the wins heading had to shrink from 18 pt...
-    assert run_sizes(wins) == run_sizes(risks)  # ...and the risks column shrank with it
+    summary["risks"] = [{"title": "Steady base", "detail": " ".join(["Customers stayed with the product."] * 5)}] * 3
+    slide = build(tmp_path, summary=summary).slides[3]
+    risks, questions = shape(slide, "Risks"), shape(slide, "Questions")
+    assert max(run_sizes(risks)) < 18      # the risks heading had to shrink from 18 pt...
+    assert run_sizes(risks) == run_sizes(questions)  # ...and the questions column shrank with it
 
 
 def test_charts_slide_has_two_pictures(tmp_path):
-    slide = build(tmp_path).slides[2]
+    slide = build(tmp_path).slides[1]
     assert shape(slide, "ARR chart").shape_type == 13   # MSO_SHAPE_TYPE.PICTURE
     assert shape(slide, "Cash chart").shape_type == 13
 
@@ -292,7 +323,7 @@ def test_text_too_long_for_its_box_fails_loudly(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Provenance in the footer, and the DRAFT watermark until someone approves
+# Provenance and review status in the footer; the DRAFT watermark only with --draft
 # ---------------------------------------------------------------------------
 
 APPROVED = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00",
@@ -310,21 +341,91 @@ def test_the_footer_says_when_there_is_no_ai_text(tmp_path):
     assert NO_AI_MODEL in shape(build(tmp_path).slides[0], "Footer").text_frame.text
 
 
-def test_every_slide_is_watermarked_until_the_deck_is_approved(tmp_path):
-    for slide in build(tmp_path).slides:
+def footer(presentation):
+    return shape(presentation.slides[0], "Footer").text_frame.text
+
+
+def watermarks(presentation):
+    return [item.name for slide in presentation.slides for item in slide.shapes if item.name == "Watermark"]
+
+
+def test_no_watermark_by_default(tmp_path):
+    # The watermark is opt-in (--draft): the footer already says whether anyone has reviewed the deck.
+    assert watermarks(build(tmp_path)) == []
+
+
+def test_draft_watermarks_every_slide_of_an_unreviewed_deck(tmp_path):
+    for slide in build(tmp_path, draft=True).slides:
         assert shape(slide, "Watermark").text_frame.text == NOT_REVIEWED
 
 
 def test_the_watermark_is_drawn_over_the_content_not_under_it(tmp_path):
-    # Slides 2 and 3 are covered by an opaque table and two chart images, so a watermark added
+    # Slides 1 and 2 are covered by an opaque table and two chart images, so a watermark added
     # first would be invisible on exactly the slides that carry the numbers.
-    for slide in build(tmp_path).slides:
+    for slide in build(tmp_path, draft=True).slides:
         assert slide.shapes[-1].name == "Watermark"
 
 
-def test_an_approved_deck_has_no_watermark(tmp_path):
-    for slide in build(tmp_path, approval=APPROVED).slides:
-        assert not [item for item in slide.shapes if item.name == "Watermark"]
+def test_draft_never_stamps_an_approved_deck(tmp_path):
+    # The stamp says NOT REVIEWED; on a deck someone approved, that would be false.
+    assert watermarks(build(tmp_path, approval=APPROVED, draft=True)) == []
+
+
+def test_the_footer_says_an_unreviewed_deck_is_not_reviewed(tmp_path):
+    assert footer(build(tmp_path, model="claude-sonnet-5")).endswith(" | claude-sonnet-5 | AI-drafted | not reviewed")
+
+
+def test_the_footer_names_the_reviewer_and_the_day(tmp_path):
+    # approved_at is to the second; the footer shows the day only.
+    assert footer(build(tmp_path, approval=APPROVED)).endswith(" | AI-drafted | reviewed by Tyler Ho on 2026-09-17")
+
+
+def test_the_footer_is_on_every_slide_with_the_same_review_status(tmp_path):
+    texts = {shape(slide, "Footer").text_frame.text for slide in build(tmp_path, approval=APPROVED).slides}
+    assert len(texts) == 1
+
+
+def footer_room_pt(presentation):
+    """Width the footer text has on one line: the footer box less its two side margins."""
+    box = shape(presentation.slides[0], "Footer")
+    return Emu(box.width - box.text_frame.margin_left - box.text_frame.margin_right).pt
+
+
+def test_the_footer_fits_one_line_with_the_longest_file_name_and_a_reviewer(tmp_path):
+    # Worst case today: the longest workbook name, the default model, and a reviewer (plus the "*"
+    # for uncommitted code whenever these tests run mid-edit). Measured on width, not only height.
+    presentation = build_presentation(
+        collect_deck_data("Fernhollow", "fernhollow.xlsx", three_quarters(), None, TEST_CONFIG), None, RUN_DATE,
+        tmp_path, approval=APPROVED, model="claude-sonnet-5")
+    text = footer(presentation)
+    assert "reviewed by Tyler Ho on 2026-09-17" in text
+    assert text_width_pt(text, MIN_FONT_PT) <= footer_room_pt(presentation)
+
+
+def test_a_reviewer_name_too_long_for_the_footer_leaves_the_name_to_the_manifest(tmp_path):
+    # A name is typed by a person, so it can be any length. The footer keeps the review day on one
+    # line; who reviewed stays in the manifest, which approve.py wrote.
+    long_name = {**APPROVED, "reviewer": "Alexandra Richardson-Whitfield of the Portfolio Operations Team"}
+    presentation = build(tmp_path, approval=long_name, model="claude-sonnet-5")
+    text = footer(presentation)
+    assert text.endswith(" | AI-drafted | reviewed on 2026-09-17")
+    assert text_width_pt(text, MIN_FONT_PT) <= footer_room_pt(presentation)
+
+
+def test_a_file_name_too_long_for_the_footer_is_shortened_not_a_failed_deck(tmp_path):
+    # The web page takes whatever name the file has. Before the fix, this name stopped the whole
+    # deck with "Slide 1, Footer: text doesn't fit". The footer keeps the start and the extension.
+    long_file = "Northwind KPI workbook Q2 2026 final version for the board.xlsx"
+    presentation = build_presentation(collect_deck_data("Testco", long_file, three_quarters(), None, TEST_CONFIG),
+                                      None, RUN_DATE, tmp_path, approval=APPROVED, model="claude-sonnet-5")
+    text = footer(presentation)
+    assert text.startswith(f"{FICTIONAL_NOTE} | North") and "….xlsx |" in text
+    assert text.endswith(" | AI-drafted | reviewed by Tyler Ho on 2026-09-17")
+    assert text_width_pt(text, MIN_FONT_PT) <= footer_room_pt(presentation)
+
+
+def test_a_file_name_that_fits_is_never_shortened():
+    assert shorten_middle("fernhollow.xlsx", lambda text: True) == "fernhollow.xlsx"
 
 
 def northwind_manifest(tmp_path, input_sha256=None, config_sha256=None):
@@ -340,12 +441,25 @@ def northwind_manifest(tmp_path, input_sha256=None, config_sha256=None):
 
 
 def watermarks_in(path):
-    return [item.name for slide in Presentation(path).slides for item in slide.shapes if item.name == "Watermark"]
+    return watermarks(Presentation(path))
 
 
 def test_rebuilding_an_approved_deck_drops_the_watermark(tmp_path):
     workbook = northwind_manifest(tmp_path)
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path, draft=True)
+    assert watermarks_in(path) == []
+
+
+def test_the_footer_reads_the_review_status_from_the_manifest(tmp_path):
+    workbook = northwind_manifest(tmp_path)
     path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert footer(Presentation(path)).endswith(" | AI-drafted | reviewed by Tyler Ho on 2026-09-17")
+
+
+def test_without_a_manifest_the_footer_says_not_reviewed_and_there_is_no_watermark(tmp_path):
+    path, _ = save_deck(PROJECT_DIR / "data" / "northwind.xlsx", TEST_CONFIG, None, run_date=RUN_DATE,
+                        output_dir=tmp_path)
+    assert footer(Presentation(path)).endswith(" | AI-drafted | not reviewed")
     assert watermarks_in(path) == []
 
 
@@ -361,14 +475,26 @@ def test_a_rebuilt_deck_updates_what_the_manifest_says_about_it(tmp_path):
 def test_a_workbook_changed_since_approval_goes_back_to_draft(tmp_path):
     # Nobody has reviewed a deck built from numbers that arrived after the approval.
     workbook = northwind_manifest(tmp_path, input_sha256="the-hash-of-an-older-workbook")
-    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
-    assert len(watermarks_in(path)) == 5
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path, draft=True)
+    assert len(watermarks_in(path)) == 4
+    assert footer(Presentation(path)).endswith(" | AI-drafted | not reviewed")
 
 
 def test_changed_thresholds_send_an_approved_deck_back_to_draft(tmp_path):
     workbook = northwind_manifest(tmp_path, config_sha256="the-hash-of-older-thresholds")
-    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
-    assert len(watermarks_in(path)) == 5
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path, draft=True)
+    assert len(watermarks_in(path)) == 4
+    assert footer(Presentation(path)).endswith(" | AI-drafted | not reviewed")
+
+
+def test_command_line_draft_flag(tmp_path):
+    # build_deck.py --draft turns the watermark on; without it the deck has none.
+    import build_deck
+    workbook = str(PROJECT_DIR / "data" / "northwind.xlsx")
+    build_deck.main([workbook, "--no-analysis", "--draft"], output_dir=tmp_path)
+    assert len(watermarks_in(tmp_path / "northwind_board_pack.pptx")) == 4
+    build_deck.main([workbook, "--no-analysis"], output_dir=tmp_path)
+    assert watermarks_in(tmp_path / "northwind_board_pack.pptx") == []
 
 
 def test_deck_path():

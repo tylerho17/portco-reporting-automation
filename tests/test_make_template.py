@@ -55,6 +55,20 @@ def test_body_sits_between_title_and_footer():
     assert body.top + body.height <= footer.top
 
 
+def test_brand_name_fits_one_line_beside_the_footer():
+    # The footer box was widened to hold the review status, so the brand box is only as wide as
+    # the brand name needs. The two must not overlap, and the name must not wrap.
+    from text_fit import text_width_pt
+    presentation = build_template()
+    brand = [shape for shape in presentation.slide_master.shapes if shape.name == "Brand name"][0]
+    layout = presentation.slide_layouts.get_by_name(CONTENT_LAYOUT)
+    footer = [shape for shape in layout.placeholders if shape.placeholder_format.type == PP_PLACEHOLDER.FOOTER][0]
+    assert footer.left + footer.width <= brand.left
+    frame = brand.text_frame
+    room = Emu(brand.width - frame.margin_left - frame.margin_right).pt
+    assert text_width_pt(frame.text, 12, bold=True) <= room
+
+
 def theme(presentation):
     """The theme XML (colors and fonts) behind the slide master."""
     return etree.fromstring(presentation.slide_master.part.part_related_by(RT.THEME).blob)

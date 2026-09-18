@@ -55,8 +55,11 @@ CONTENT_WIDTH = SLIDE_WIDTH - 2 * MARGIN
 
 TITLE_BOX = (MARGIN, Inches(0.3), CONTENT_WIDTH, Inches(0.85))        # (left, top, width, height)
 BODY_BOX = (MARGIN, Inches(1.3), CONTENT_WIDTH, Inches(5.45))         # ends at 6.75 in
-FOOTER_BOX = (MARGIN, Inches(6.95), Inches(9.5), Inches(0.4))         # left part of the bottom strip
-BRAND_BOX = (MARGIN + Inches(9.5), Inches(6.95), CONTENT_WIDTH - Inches(9.5), Inches(0.4))
+# The footer takes all of the bottom strip except what the brand name needs: it carries the source,
+# commit, model and review status on one line, and needs every point of width (build_deck.add_footer).
+BRAND_WIDTH = Inches(1.65)       # "Example Capital" in 12 pt bold is 109 pt; 1.65 in = 118.8 pt
+FOOTER_BOX = (MARGIN, Inches(6.95), CONTENT_WIDTH - BRAND_WIDTH, Inches(0.4))
+BRAND_BOX = (MARGIN + CONTENT_WIDTH - BRAND_WIDTH, Inches(6.95), BRAND_WIDTH, Inches(0.4))
 TOP_BAR = (0, 0, SLIDE_WIDTH, Inches(0.12))                           # thin navy band at the very top
 FOOTER_RULE = (MARGIN, Inches(6.87), CONTENT_WIDTH, Emu(9525))        # hairline above the footer (0.75 pt)
 
@@ -204,6 +207,7 @@ def add_brand_name(master):
     shape = add_master_shape(master, "Brand name", BRAND_BOX, textbox=True)
     frame = shape.text_frame
     frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    frame.margin_left = 0  # right-aligned text needs no left margin, and the box is only as wide as the name
     paragraph = frame.paragraphs[0]
     paragraph.alignment = PP_ALIGN.RIGHT
     run = paragraph.add_run()

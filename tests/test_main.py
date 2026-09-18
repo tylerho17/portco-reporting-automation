@@ -132,13 +132,15 @@ def summary(headline="Retention is the main question for the board."):
         "questions": ["What drives churn?", "Where is pipeline coming from?", "How is hiring going?"]})
 
 
-def run_northwind(tmp_path, skip_ai=False, client=None):
+def run_northwind(tmp_path, skip_ai=False, client=None, draft=False):
     """run_batch on Northwind, saving into tmp_path. Returns Northwind's result."""
-    return main.run_batch([NORTHWIND], main.load_config(), skip_ai, client=client, output_dir=tmp_path)[0]
+    return main.run_batch([NORTHWIND], main.load_config(), skip_ai, client=client, output_dir=tmp_path,
+                          draft=draft)[0]
 
 
 def headline_on_deck(tmp_path):
-    slide = Presentation(tmp_path / "northwind_board_pack.pptx").slides[0]
+    """The Headline box on the last slide, AI commentary (slide 4)."""
+    slide = Presentation(tmp_path / "northwind_board_pack.pptx").slides[-1]
     return next(shape.text_frame.text for shape in slide.shapes if shape.name == "Headline")
 
 
@@ -202,7 +204,7 @@ def test_ai_text_too_long_for_the_slides_is_ai_failed_not_a_failed_company(tmp_p
     path.write_text(json.dumps(saved))
 
     why_unavailable = main.deck_step(NORTHWIND, main.load_config(), path, tmp_path)
-    assert "does not fit slide 1" in why_unavailable
+    assert "does not fit slide 4" in why_unavailable
     assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
     assert main.RESULT_TEXTS[main.ai_status(False, why_unavailable)] == "OK (AI failed)"
 
@@ -210,9 +212,9 @@ def test_ai_text_too_long_for_the_slides_is_ai_failed_not_a_failed_company(tmp_p
 def test_a_text_that_does_not_fit_prints_one_clear_line_not_a_traceback(capsys):
     # Review finding 2: the message already names the slide and the box, so a traceback (which means
     # "this is a bug in the code") only makes the real problem harder to see.
-    main.describe_error(TextDoesNotFitError("Slide 4, Risks and flags: text doesn't fit"))
+    main.describe_error(TextDoesNotFitError("Slide 3, Risks and flags: text doesn't fit"))
     printed = capsys.readouterr()
-    assert "Slide 4, Risks and flags" in printed.out
+    assert "Slide 3, Risks and flags" in printed.out
     assert "Traceback" not in printed.out + printed.err
 
 
@@ -308,6 +310,61 @@ def test_a_run_after_the_workbook_changed_drops_back_to_draft(tmp_path):
 
     run_northwind(tmp_path, skip_ai=True)
     assert northwind_manifest(tmp_path)["deck"]["status"] == NOT_REVIEWED
+
+
+# ---------------------------------------------------------------------------
+# The DRAFT watermark is opt-in (--draft); the footer always says whether the deck was reviewed
+# ---------------------------------------------------------------------------
+
+def deck_watermarks(tmp_path):
+    deck = Presentation(tmp_path / "northwind_board_pack.pptx")
+    return [item.name for slide in deck.slides for item in slide.shapes if item.name == "Watermark"]
+
+
+def deck_footer(tmp_path):
+    deck = Presentation(tmp_path / "northwind_board_pack.pptx")
+    return [item for item in deck.slides[0].shapes if item.name == "Footer"][0].text_frame.text
+
+
+def test_a_run_has_no_watermark_by_default_and_the_footer_says_not_reviewed(tmp_path):
+    run_northwind(tmp_path, skip_ai=True)
+    assert deck_watermarks(tmp_path) == []
+    assert deck_footer(tmp_path).endswith(" | AI-drafted | not reviewed")
+
+
+def test_draft_watermarks_every_slide_of_an_unreviewed_deck(tmp_path):
+    run_northwind(tmp_path, skip_ai=True, draft=True)
+    assert len(deck_watermarks(tmp_path)) == 4
+
+
+def test_the_printout_names_the_slide_the_ai_text_is_on(tmp_path, capsys):
+    # The deck has 4 slides and the AI text is only on slide 4 (AI commentary).
+    run_northwind(tmp_path, client=FakeClient(summary()))
+    assert "(AI text on slide 4)" in capsys.readouterr().out
+    run_northwind(tmp_path, skip_ai=True)
+    assert f"({PLACEHOLDER_TEXT} on slide 4)" in capsys.readouterr().out
+
+
+def test_the_footer_of_a_re_run_names_a_reviewer_whose_approval_still_counts(tmp_path):
+    run_northwind(tmp_path, skip_ai=True)
+    saved = northwind_manifest(tmp_path)
+    saved["approval"] = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00",
+                         "input_sha256": file_sha256(NORTHWIND), "config_sha256": file_sha256(CONFIG_FILE)}
+    save_manifest(manifest_path(NORTHWIND, tmp_path), saved)
+
+    run_northwind(tmp_path, skip_ai=True, draft=True)
+    assert deck_footer(tmp_path).endswith(" | AI-drafted | reviewed by Tyler Ho on 2026-09-17")
+    assert deck_watermarks(tmp_path) == []  # --draft never stamps an approved deck
+
+
+def test_draft_is_passed_from_the_command_line_to_the_batch(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(main, "run_batch", lambda *args, **kwargs: seen.update(kwargs) or [])
+    monkeypatch.setattr(main, "write_summary_csv", lambda results: PROJECT_DIR / "output" / "batch_summary.csv")
+    main.main(["--all", "--skip-ai", "--draft"])
+    assert seen["draft"] is True
+    main.main(["--all", "--skip-ai"])
+    assert seen["draft"] is False
 
 
 # ---------------------------------------------------------------------------

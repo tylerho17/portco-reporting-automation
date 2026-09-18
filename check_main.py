@@ -123,8 +123,8 @@ def analysis_file_state(workbook):
 
 
 def headline_on_deck(path):
-    """The text in slide 1's Headline box."""
-    slide = Presentation(path).slides[0]
+    """The text in the Headline box on slide 4 (AI commentary), the deck's last slide."""
+    slide = Presentation(path).slides[3]
     return next(shape.text_frame.text for shape in slide.shapes if shape.name == "Headline")
 
 
@@ -149,7 +149,7 @@ def check_batch_run():
     assert process.stderr == "", f"Unexpected error output:\n{process.stderr}"
     assert process.stdout.count("AI commentary: skipped (--skip-ai)") == len(COMPANIES), "AI skip message missing"
     assert process.stdout.count("✓ Deck: output/") == len(COMPANIES), "Deck line missing"
-    assert process.stdout.count("AI summary unavailable on slides 1 and 5") == len(COMPANIES), \
+    assert process.stdout.count("AI summary unavailable on slide 4") == len(COMPANIES), \
         "--skip-ai decks should say they carry the AI placeholder"
     assert f"{len(COMPANIES)} of {len(COMPANIES)} companies succeeded" in process.stdout, "Success count wrong"
     assert "AI summary unavailable for" not in process.stdout, "--skip-ai isn't an AI failure"
@@ -261,7 +261,7 @@ def check_skip_ai_never_calls_claude(folder, config):
         assert main.result_text(result) == EXPECTED_OK, f"{company['name']}: {main.result_text(result)}"
         assert headline_on_deck(deck_path(workbook, folder)) == PLACEHOLDER_TEXT, f"{company['name']}: no placeholder"
         assert not analysis_path(workbook, folder).exists(), f"{company['name']}: --skip-ai saved an analysis JSON"
-    placeholder_lines = stdout.count(f"({PLACEHOLDER_TEXT} on slides 1 and 5)")
+    placeholder_lines = stdout.count(f"({PLACEHOLDER_TEXT} on slide 4)")
     assert placeholder_lines == len(COMPANIES), "Each deck line should say it carries the placeholder"
 
 

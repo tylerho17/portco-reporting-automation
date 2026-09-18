@@ -8,11 +8,15 @@ Steps for each company:
 5. Deck (build_deck.py): output/<company>_board_pack.pptx
 
 The deck is always built, because its numbers come from Python (CLAUDE.md decisions K and L):
-- AI passed validation      -> the AI text is on slides 1 and 5, result "OK"
+- AI passed validation      -> the AI text is on slide 4 (AI commentary), result "OK"
 - AI failed (validation failed after the retry, or an API error)
-                            -> "AI summary unavailable" on slides 1 and 5, result "OK (AI failed)"
+                            -> "AI summary unavailable" on slide 4, result "OK (AI failed)"
 - --skip-ai                 -> the same placeholder with no API call, result "OK (AI skipped)"
 Without --skip-ai, the API key is checked before any company runs.
+
+Every deck's footer says whether a person has approved it ("AI-drafted | not reviewed", or
+"reviewed by NAME on DATE" after approve.py). --draft also stamps "DRAFT - NOT REVIEWED" across
+every slide of a deck nobody has approved; it's off by default.
 
 One company failing never stops the batch. The run ends with a summary table
 (company, flags tripped, data gaps, result), also saved as output/batch_summary.csv, a warning
@@ -21,6 +25,7 @@ company failed. "OK (AI failed)" is not a failed company: its outputs were all b
 
 Run: python main.py data/northwind.xlsx
      python main.py --all --skip-ai
+     python main.py --all --draft
 """
 
 import argparse
@@ -34,7 +39,8 @@ import anthropic
 from dotenv import load_dotenv
 
 from analyze import PROMPT_VERSION, AnalysisError, analyze, build_payload, payload_to_text, save_analysis
-from build_deck import PLACEHOLDER_TEXT, analysis_details, analysis_path, deck_path, save_deck
+from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, commentary_slide, deck_path, save_deck,
+                        slide_number)
 from clean import clean_workbook
 from compare_models import run_cost
 from excel_output import save_metrics_workbook
@@ -122,13 +128,14 @@ def ai_step(workbook_path, actuals, next_budget, config, output_dir, client=None
     return {"analysis_file": path, "run_info": run_info, "validation": "passed"}
 
 
-def deck_step(workbook_path, config, analysis_file, output_dir):
-    """Build and save the deck. Returns why the AI summary isn't on it, or None if it is."""
-    path, why_unavailable = save_deck(workbook_path, config, analysis_file, output_dir=output_dir)
+def deck_step(workbook_path, config, analysis_file, output_dir, draft=False):
+    """Build and save the deck (draft=True: watermarked unless approved). Returns why the AI summary isn't on it, or None."""
+    path, why_unavailable = save_deck(workbook_path, config, analysis_file, output_dir=output_dir, draft=draft)
+    where = f"on slide {slide_number(commentary_slide)}"   # the AI commentary slide
     if why_unavailable is None:
-        print(f"  ✓ Deck: {shown_path(path)} (AI text on slides 1 and 5)")
+        print(f"  ✓ Deck: {shown_path(path)} (AI text {where})")
     else:
-        print(f"  ✓ Deck: {shown_path(path)} ({PLACEHOLDER_TEXT} on slides 1 and 5)")
+        print(f"  ✓ Deck: {shown_path(path)} ({PLACEHOLDER_TEXT} {where})")
     if analysis_file is not None and why_unavailable is not None:  # the AI passed, but the deck rejected it
         print(f"      {PLACEHOLDER_TEXT}: {why_unavailable}")
     return why_unavailable
@@ -189,7 +196,7 @@ def blank_quarters(actuals):
     return list(actuals.index[actuals.isna().any(axis=1)])
 
 
-def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_DIR):
+def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_DIR, draft=False):
     """Run every step for one workbook and print a line per step.
 
     Returns a result dict for the summary table. Raises if any step fails.
@@ -224,7 +231,7 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
     else:
         ai = ai_step(workbook_path, actuals, next_budget, config, output_dir, client)
         analysis_file = ai["analysis_file"]
-    why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir)
+    why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir, draft)
     manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable)
     result["ai"] = ai_status(skip_ai, why_unavailable)
     result["deck_status"] = manifest["deck"]["status"]
@@ -238,16 +245,17 @@ def describe_error(error):
         traceback.print_exc()
 
 
-def run_batch(workbook_paths, config, skip_ai, client=None, output_dir=OUTPUT_DIR):
+def run_batch(workbook_paths, config, skip_ai, client=None, output_dir=OUTPUT_DIR, draft=False):
     """Run every workbook in turn. A failure is recorded and the batch moves on.
 
     client and output_dir are for tests: a fake Claude client, and a temporary folder.
+    draft=True puts the DRAFT watermark on every deck nobody has approved (--draft).
     """
     results = []
     for path in workbook_paths:
         print(f"\n=== {Path(path).name} ===")
         try:
-            result = run_company(path, config, skip_ai, client, output_dir)
+            result = run_company(path, config, skip_ai, client, output_dir, draft)
             result["error"] = None
         except Exception as error:  # noqa: BLE001 - one bad company must not stop the batch
             describe_error(error)
@@ -365,6 +373,7 @@ def parse_args(argv=None):
     parser.add_argument("workbook", nargs="?", help="path to one KPI workbook, e.g. data/northwind.xlsx")
     parser.add_argument("--all", action="store_true", help="run every .xlsx workbook in data/")
     parser.add_argument("--skip-ai", action="store_true", help="don't call Claude; decks show the AI placeholder")
+    parser.add_argument("--draft", action="store_true", help="stamp DRAFT - NOT REVIEWED on decks nobody has approved")
     args = parser.parse_args(argv)
     if bool(args.workbook) == args.all:  # both given, or neither
         parser.error("give one workbook path, or --all (not both)")
@@ -381,7 +390,7 @@ def main(argv=None):
     if problem:  # stop before any company runs, rather than fail the AI step for every one
         print(problem)
         return 1
-    results = run_batch(paths, load_config(), args.skip_ai)
+    results = run_batch(paths, load_config(), args.skip_ai, draft=args.draft)
     print_summary(results)
     for warning in (quarter_mismatch_warning(results), ai_failed_warning(results)):
         if warning:

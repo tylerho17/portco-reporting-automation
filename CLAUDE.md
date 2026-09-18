@@ -1,7 +1,7 @@
 # Board Pack Generator
 
 ## Goal
-Messy portfolio-company KPI workbook (.xlsx) → 5-slide board update deck (.pptx) + AI summary.
+Messy portfolio-company KPI workbook (.xlsx) → 4-slide board update deck (.pptx) + AI summary.
 Demo project for a PE AI automation role. Must be clean, explainable, and reliable.
 
 ## About me
@@ -23,17 +23,20 @@ Demo project for a PE AI automation role. Must be clean, explainable, and reliab
 - compare_models.py      step 3b: blind Sonnet vs Haiku comparison -> README table
 - excel_output.py        step 4b: output/<company>_metrics.xlsx (Metrics, Flags, Data gaps sheets)
 - make_template.py       builds templates/base.pptx: fictional "Example Capital" brand, navy/gray, 16:9, title + content layouts
-- build_deck.py          step 4: output/<company>_board_pack.pptx on templates/base.pptx; slides: Summary, Key metrics, ARR and cash charts, Risks and flags, Questions. Re-checks the analysis JSON; "AI summary unavailable" if missing, failed, or too long for slides 1 and 5 (ai_text_problems) - a company is never left without a deck. Footer carries the git commit and model; every slide is watermarked "DRAFT - NOT REVIEWED" until approve.py records a reviewer
-- charts.py              the two matplotlib charts for slide 3 (ARR + net new ARR, ending cash with runway); a blank quarter is a visible gap
+- build_deck.py          step 4: output/<company>_board_pack.pptx on templates/base.pptx; slides: Key metrics, ARR and cash charts, Risks and flags, AI commentary (headline + 3 risks + 3 questions under "AI-drafted from computed metrics - review before use"; wins aren't shown). Re-checks the analysis JSON; "AI summary unavailable" if missing, failed, or too long for slide 4 (ai_text_problems) - a company is never left without a deck. Footer carries the git commit, model and review status ("AI-drafted | not reviewed", or "AI-drafted | reviewed by NAME on DATE" once approve.py records a reviewer). The "DRAFT - NOT REVIEWED" watermark is opt-in: --draft (build_deck.py, main.py) stamps every slide of a deck nobody has approved
+- charts.py              the two matplotlib charts for slide 2 (ARR + net new ARR, ending cash with runway); a blank quarter is a visible gap
 - text_fit.py            measures slide text, shrinks it to a 12 pt floor, then stops naming the slide and box
 - provenance.py          run manifests: input/config SHA-256 hashes, git commit, model + prompt version, tokens, cost; and whether a human approved this deck (approval_status is the only judge)
-- approve.py             `python approve.py northwind [--reviewer NAME]`: records reviewer + time in the manifest, so rebuilding drops the DRAFT watermark. Never builds a deck
-- main.py                CLI: `python main.py data/northwind.xlsx` or `--all` [--skip-ai]; clean -> metrics -> Excel -> AI JSON -> deck per company; summary table + output/batch_summary.csv
+- approve.py             `python approve.py northwind [--reviewer NAME]`: records reviewer + time in the manifest, so the rebuilt deck's footer says "reviewed by" (and --draft no longer stamps it). Never builds a deck
+- main.py                CLI: `python main.py data/northwind.xlsx` or `--all` [--skip-ai] [--draft]; clean -> metrics -> Excel -> AI JSON -> deck per company; summary table + output/batch_summary.csv
+- app.py                 Streamlit web page: drag in an xlsx, see flags + metrics table in the Excel colors, download deck + metrics workbook; "Include AI commentary" checkbox labelled with the typical cost (reuses a saved analysis of the same numbers for free); errors in plain words, never a traceback; builds in a temp folder, never touches output/
+- run_app.command        double-click on a Mac: sets up .venv on first run, starts app.py, opens the browser (.streamlit/config.toml: headless, no tracebacks on the page)
 - config.yaml            flag thresholds with investor reasoning in comments (NRR < 100%, burn > 15% over budget, runway < 12 mo)
-- tests/ + pytest.ini    pytest unit tests (`python -m pytest -q`), expected values worked out by hand; tests/test_docs.py keeps README/CLAUDE.md file names real
+- tests/ + pytest.ini    pytest unit tests (`python -m pytest -q`), expected values worked out by hand; tests/test_docs.py keeps the docs' file and function names real, and README/CLAUDE.md/STUDY_GUIDE/LOOM_SCRIPT on the 4-slide deck, the opt-in (--draft) watermark and the web page
 - check_northwind.py, check_companies.py, check_excel_output.py, check_deck.py, check_main.py   end-to-end proofs against each company's answer key (no API calls)
 - README.md              what it does, how to run it, data flow, design decisions, model comparison (compare_models.py rewrites the block between its marker comments), cost, screenshots, next steps
 - STUDY_GUIDE.md         data flow, glossary, interview questions, exercises
+- INTERVIEW_PREP.md      every interview question in the order asked, 30-60 s answers with where to point; how to answer when I can't recall (tests/test_docs.py checks the files and functions it names)
 - LEARNINGS.md           what broke and what it taught; model comparison and live-run costs
 - DAY_REPORT.md          per-task report of the day's build (decisions, failures, unresolved); OVERNIGHT_REPORT.md is a historical record
 - output/                generated files (git-ignored)
@@ -124,7 +127,7 @@ The three companies together prove flags aren't hard-coded.
 6. README with before/after screenshots
 
 ## Step 4 decisions (build_deck.py, not built yet)
-- K. If the AI summary fails after its retry, still build the deck: the numbers are valid. The Summary slide says "AI summary unavailable" and the batch result reads "OK (AI failed)".
+- K. If the AI summary fails after its retry, still build the deck: the numbers are valid. The AI commentary slide says "AI summary unavailable" and the batch result reads "OK (AI failed)".
 - L. `--skip-ai` builds the deck without AI text, using the same "AI summary unavailable" slide.
 
 ## Added build steps

@@ -2,20 +2,25 @@
 
 For each of the three companies, build the deck (with output/<company>_analysis.json if it exists,
 otherwise with the placeholder), open the saved file, and check:
-1. 5 slides, titles in order (typed by hand here).
-2. Slide 1: the headline is the JSON's headline, or exactly "AI summary unavailable"; slide 5
-   matches (the JSON's 3 questions, or the placeholder). The flag count matches the company's story.
-3. Slide 2: every number on the slide appears in the metrics table - the saved
+1. 4 slides, titles in order (typed by hand here).
+2. Slide 1: every number on the slide appears in the metrics table - the saved
    output/<company>_metrics.xlsx (Metrics sheet, plus thresholds on its Flags sheet), shown in
    Excel's own number formats. Each row's latest and prior cells equal that metric's Excel cells;
    thresholds and statuses match the Flags sheet; status cells are red / green / gray.
-4. Slide 3: two chart pictures; a blank quarter has no bar and no line through it.
-5. Slide 4: every tripped flag, the combo rule, and every metric with data missing (or "None").
+3. Slide 2: two chart pictures; a blank quarter has no bar and no line through it.
+4. Slide 3: the flag count matches the company's story; every tripped flag, the combo rule, and
+   every metric with data missing (or "None").
+5. Slide 4: the JSON's headline, 3 risks and 3 questions under "AI-drafted from computed metrics -
+   review before use", and none of its wins; or exactly "AI summary unavailable" with no AI-drafted
+   line. Slides 1 to 3 carry no AI text either way.
 6. Nothing overflows: every text box and table cell is re-measured from the saved file
    (text_fit.py), every font is at least 12 pt, and every shape sits inside the slide.
    The overflow check is itself proven by breaking a deck on purpose.
-7. A footer on every slide: fictional-data note, source file, today's date.
-Plus: a tampered analysis (one number changed) or a stale one (another quarter) gets the placeholder.
+7. A footer on every slide: fictional-data note, source file, today's date, and the review status
+   read from output/<company>_manifest.json ("AI-drafted | reviewed by NAME on DATE" or
+   "AI-drafted | not reviewed"), measured to fit one line. No DRAFT watermark by default.
+Plus: a tampered analysis (one number changed) or a stale one (another quarter) gets the placeholder;
+--draft stamps every slide of an unreviewed deck and never an approved one.
 
 No API calls. Run: python check_deck.py  -> prints "All checks passed" or stops at the first failure.
 """
@@ -25,6 +30,7 @@ import datetime
 import json
 import math
 import re
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -38,8 +44,9 @@ from check_companies import COMPANIES
 from clean import clean_workbook
 from excel_output import save_metrics_workbook
 from make_template import FOOTER_RULE
-from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, TRIP, compute_metrics, load_config
-from text_fit import MIN_FONT_PT, paragraph, text_height_pt
+from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, CONFIG_PATH, TRIP, compute_metrics, load_config
+from provenance import NOT_REVIEWED, approval_status, file_sha256, manifest_path, read_manifest
+from text_fit import MIN_FONT_PT, paragraph, text_height_pt, text_width_pt
 
 PROJECT_DIR = Path(__file__).parent
 LATEST, PRIOR, FIRST = "Q2 2026", "Q1 2026", "Q3 2024"
@@ -114,7 +121,7 @@ def slide_text(slide):
 
 
 def table_rows(slide):
-    """Slide 2's table as lists of cell texts (header first)."""
+    """Slide 1's table as lists of cell texts (header first)."""
     return [[cell.text for cell in row.cells] for row in shape(slide, "KPI table").table.rows]
 
 
@@ -123,10 +130,9 @@ def table_rows(slide):
 # ---------------------------------------------------------------------------
 
 def check_titles(slides, company):
-    expected = [f"{company}: {LATEST} board update", f"Key metrics — {LATEST} vs {PRIOR}",
-                f"ARR and cash — {FIRST} to {LATEST}", f"Risks and flags — {LATEST}",
-                f"Questions for management — {LATEST}"]
-    assert len(slides) == 5, f"{company}: {len(slides)} slides, expected 5"
+    expected = [f"{company}: key metrics — {LATEST} vs {PRIOR}", f"ARR and cash — {FIRST} to {LATEST}",
+                f"Risks and flags — {LATEST}", f"AI commentary — {LATEST}"]
+    assert len(slides) == 4, f"{company}: {len(slides)} slides, expected 4"
     titles = [slide.shapes.title.text for slide in slides]
     assert titles == expected, f"{company}: titles\nExpected: {expected}\nGot:      {titles}"
 
@@ -140,32 +146,44 @@ def expected_flag_count(company):
     return text
 
 
-def check_ai_slides(slides, summary, name):
-    """Slide 1 headline and slide 5 questions: the analysis text, or the placeholder (never a mix)."""
-    headline = shape(slides[0], "Headline").text_frame.text
-    questions = shape(slides[4], "Questions").text_frame.text
+def check_ai_slide(slides, summary, name):
+    """Slide 4: the analysis text under the AI-drafted line, or the placeholder (never a mix).
+
+    Also: the wins are nowhere on the deck, and slides 1 to 3 carry no AI text or placeholder.
+    """
+    slides = list(slides)   # python-pptx's slide list can't be sliced
+    slide = slides[3]
+    headline = shape(slide, "Headline").text_frame.text
+    names = [item.name for item in slide.shapes]
+    for other in slides[:3]:
+        assert "Headline" not in [item.name for item in other.shapes], f"{name}: AI text off slide 4"
+        assert PLACEHOLDER_TEXT not in slide_text(other), f"{name}: placeholder off slide 4"
     if summary is None:
         assert headline == PLACEHOLDER_TEXT, f"{name}: headline should be the placeholder, got {headline!r}"
-        assert questions.startswith(PLACEHOLDER_TEXT), f"{name}: slide 5 should show the placeholder"
+        assert "AI-drafted line" not in names, f"{name}: 'AI-drafted' line on a slide with no AI text"
         return
+    line = shape(slide, "AI-drafted line").text_frame.text
+    assert line == "AI-drafted from computed metrics - review before use", f"{name}: AI-drafted line {line!r}"
     assert headline == summary["headline"], f"{name}: headline {headline!r} != JSON {summary['headline']!r}"
+    risks, questions = shape(slide, "Risks").text_frame.text, shape(slide, "Questions").text_frame.text
+    for point in summary["risks"]:
+        assert point["title"] in risks and point["detail"] in risks, f"{name}: risk missing: {point}"
     for question in summary["questions"]:
-        assert question in questions, f"{name}: question missing from slide 5: {question!r}"
-    for side, box in (("wins", "Wins"), ("risks", "Risks")):
-        text = shape(slides[0], box).text_frame.text
-        for point in summary[side]:
-            assert point["title"] in text and point["detail"] in text, f"{name}: {side} point missing: {point}"
-    assert PLACEHOLDER_TEXT not in slide_text(slides[0]) + slide_text(slides[4]), f"{name}: placeholder shown"
+        assert question in questions, f"{name}: question missing from slide 4: {question!r}"
+    deck_text = "\n".join(slide_text(each) for each in slides)
+    for point in summary["wins"]:
+        assert point["detail"] not in deck_text, f"{name}: a win is on the deck: {point}"
+    assert PLACEHOLDER_TEXT not in slide_text(slide), f"{name}: placeholder shown"
 
 
 def check_kpi_numbers(slide, table, flags, name):
-    """Every number on slide 2 is in the metrics workbook. (The footer's run date is checked in check_footers.)"""
+    """Every number on slide 1 is in the metrics workbook. (The footer's run date is checked in check_footers.)"""
     allowed = allowed_numbers(table, flags)
     texts = [item.text_frame.text for item in slide.shapes if item.has_text_frame and item.name != "Footer"]
     shown = set().union(*(number_tokens(text) for text in texts),
                         *(number_tokens(cell) for row in table_rows(slide) for cell in row))
     invented = shown - allowed
-    assert not invented, f"{name}: numbers on slide 2 that aren't in the metrics table: {sorted(invented)}"
+    assert not invented, f"{name}: numbers on slide 1 that aren't in the metrics table: {sorted(invented)}"
     return len(shown)
 
 
@@ -214,25 +232,47 @@ def check_charts(slide, company):
 
 def check_risks_slide(slide, company, table_flags, gap_labels):
     text = shape(slide, "Risks and flags").text_frame.text
+    count = expected_flag_count(company)
+    assert f"Tripped flags ({count})" in text, f"{company['name']}: flag count should read {count!r} on slide 3"
     for flag, status in company["expected_flags"].items():
         if status == TRIP and flag != COMBO_FLAG_NAME:
-            assert f"• {flag}: " in text, f"{company['name']}: tripped flag {flag!r} missing from slide 4"
+            assert f"• {flag}: " in text, f"{company['name']}: tripped flag {flag!r} missing from slide 3"
     combo_status = table_flags[COMBO_FLAG_NAME]["Status"]
     assert f"{COMBO_FLAG_NAME}: {combo_status}" in text, f"{company['name']}: combo result missing"
     text = shape(slide, "Data gaps").text_frame.text
     assert text.startswith("Data gaps"), f"{company['name']}: no Data gaps line"
     for label in gap_labels:
-        assert label in text, f"{company['name']}: data gap {label!r} missing from slide 4"
+        assert label in text, f"{company['name']}: data gap {label!r} missing from slide 3"
     if not gap_labels:
         assert "None — every metric and flag has the data it needs" in text, f"{company['name']}: gaps should say None"
 
 
-def check_footers(slides, source_name, name):
+def expected_review(workbook, output_dir):
+    """What the footer must end with, worked out here from the manifest (not from build_deck's code)."""
+    manifest = read_manifest(manifest_path(workbook, output_dir))
+    approval, _ = approval_status(manifest, file_sha256(workbook), file_sha256(CONFIG_PATH))
+    if approval is None:
+        return "AI-drafted | not reviewed"
+    return f"AI-drafted | reviewed by {approval['reviewer']} on {approval['approved_at'][:10]}"
+
+
+def check_footers(slides, source_name, name, review):
+    """Every footer: the note, source file, today's date, ends with the review status, and fits one line."""
     today = datetime.date.today().isoformat()
     for number, slide in enumerate(slides, start=1):
-        footer = shape(slide, "Footer").text_frame.text
+        box = shape(slide, "Footer")
+        footer = box.text_frame.text
         for part in (FICTIONAL_NOTE, source_name, today):
             assert part in footer, f"{name}: slide {number} footer lacks {part!r}: {footer!r}"
+        assert footer.endswith(" | " + review), f"{name}: slide {number} footer should end {review!r}: {footer!r}"
+        room = Emu(box.width - box.text_frame.margin_left - box.text_frame.margin_right).pt
+        width = text_width_pt(footer, MIN_FONT_PT)
+        assert width <= room, f"{name}: slide {number} footer is {width:.0f} pt wide, one line holds {room:.0f} pt"
+    return width, room
+
+
+def watermark_count(slides):
+    return sum(item.name == "Watermark" for slide in slides for item in slide.shapes)
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +335,7 @@ def check_overflow_check_catches_overflow(path):
     for break_deck in (lambda frame: setattr(frame.paragraphs[0].runs[0], "text", "overflow " * 400),
                        lambda frame: setattr(frame.paragraphs[0].runs[0].font, "size", Emu(MIN_FONT_PT * 12700 - 12700))):
         presentation = Presentation(path)
-        break_deck(shape(presentation.slides[0], "Headline").text_frame)
+        break_deck(shape(presentation.slides[3], "Headline").text_frame)
         try:
             check_no_overflow(presentation, "broken deck")
         except AssertionError:
@@ -319,19 +359,20 @@ def check_company(company, config, output_dir):
     slides = presentation.slides
 
     check_titles(slides, name)
-    check_ai_slides(slides, summary, name)
-    count = shape(slides[0], "Flag count").text_frame.text
-    assert count == expected_flag_count(company), f"{name}: flag count {count!r}, story says {expected_flag_count(company)!r}"
-    numbers = check_kpi_numbers(slides[1], table, table_flags, name)
-    check_kpi_rows(slides[1], table, table_flags, name)
-    check_charts(slides[2], company)
+    numbers = check_kpi_numbers(slides[0], table, table_flags, name)
+    check_kpi_rows(slides[0], table, table_flags, name)
+    check_charts(slides[1], company)
     gap_labels = [label for (quarter, label), text in table.items() if text == "data missing"]
-    check_risks_slide(slides[3], company, table_flags, sorted(set(gap_labels)))
-    check_footers(slides, workbook.name, name)
+    check_risks_slide(slides[2], company, table_flags, sorted(set(gap_labels)))
+    check_ai_slide(slides, summary, name)
+    count = expected_flag_count(company)
+    review = expected_review(workbook, output_dir)
+    width, room = check_footers(slides, workbook.name, name, review)
+    assert watermark_count(slides) == 0, f"{name}: a DRAFT watermark without --draft"
     check_no_overflow(presentation, name)
     ai = "AI text from the JSON" if summary else f"placeholder ({why_unavailable})"
-    print(f"✓ {name}: 5 slides, {ai}, {count}; {numbers} distinct numbers on slide 2 all in the metrics table; "
-          f"nothing overflows")
+    print(f"✓ {name}: 4 slides, {ai}, {count}; {numbers} distinct numbers on slide 1 all in the metrics table; "
+          f"nothing overflows; footer '{review}' on one line ({width:.0f} of {room:.0f} pt); no watermark")
     return deck
 
 
@@ -359,8 +400,32 @@ def check_bad_analysis_gets_placeholder(config, folder):
         deck, why_unavailable = save_deck(workbook, config, path, output_dir=folder)
         assert why_unavailable and expected_reason in why_unavailable, f"Tampered analysis accepted: {why_unavailable}"
         slides = Presentation(deck).slides
-        check_ai_slides(slides, None, f"Northwind ({change.__name__})")
+        check_ai_slide(slides, None, f"Northwind ({change.__name__})")
         print(f"✓ Northwind with a tampered analysis ({change.__name__}) shows the placeholder: {why_unavailable[:70]}...")
+
+
+def check_draft_option(config, folder):
+    """--draft: an unreviewed deck gets the watermark on all 4 slides; an approved one gets none.
+
+    Built in a temporary folder, so output/ keeps its default (unwatermarked) decks. Approved means
+    a copy of a manifest that approve.py signed, for the same workbook and thresholds.
+    """
+    folder = Path(folder)
+    for company in COMPANIES:
+        workbook = Path(company["answer_key"].OUTPUT_PATH)
+        real_manifest = manifest_path(workbook, PROJECT_DIR / "output")
+        if real_manifest.exists():
+            shutil.copy(real_manifest, manifest_path(workbook, folder))
+        review = expected_review(workbook, folder)
+        deck, _ = save_deck(workbook, config, None, output_dir=folder, draft=True)
+        slides = Presentation(deck).slides
+        count = watermark_count(slides)
+        expected = 0 if "reviewed by" in review else len(slides)
+        assert count == expected, f"{company['name']} --draft: {count} watermarks, expected {expected} ({review})"
+        if count:
+            assert shape(slides[0], "Watermark").text_frame.text == NOT_REVIEWED
+        check_footers(slides, workbook.name, company["name"], review)
+        print(f"✓ {company['name']} with --draft: {count} of {len(slides)} slides watermarked ('{review}')")
 
 
 def main():
@@ -370,6 +435,8 @@ def main():
     print("✓ The overflow check fails on a deck broken on purpose (long headline; font below the floor)")
     with tempfile.TemporaryDirectory() as folder:
         check_bad_analysis_gets_placeholder(config, folder)
+    with tempfile.TemporaryDirectory() as folder:
+        check_draft_option(config, folder)
     print("All checks passed")
 
 

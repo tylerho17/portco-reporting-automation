@@ -210,7 +210,10 @@ def find_ungrounded_numbers(summary, payload_text):
 # ---------------------------------------------------------------------------
 
 def slide_fit_problems(summary):
-    """Problems if the text is too long for slides 1 and 5, even at the 12 pt floor.
+    """Problems if the text is too long for slide 4 (AI commentary), even at the 12 pt floor.
+
+    Only the headline, risks and questions are measured: the wins are still asked for and
+    checked, but the deck doesn't show them.
 
     build_deck is imported inside the function, not at the top of the file, because build_deck
     imports this module: importing both ways at load time would fail.

@@ -165,26 +165,33 @@ def test_a_short_answer_fits_the_slides():
     assert slide_fit_problems(summary_with()) == []
 
 
-def test_details_at_the_word_limit_do_not_fit_slide_1():
+def test_details_at_the_word_limit_do_not_fit_slide_4():
     # The word limit was set in step 3, before the slides existed: 45 words per detail is more than
-    # slide 1's two columns hold at the 12 pt floor.
+    # the Risks column on slide 4 (AI commentary) holds at the 12 pt floor.
     problems = slide_fit_problems(summary_with(detail=LONGEST_ALLOWED_DETAIL.strip()))
-    assert [p for p in problems if "slide 1 (Wins)" in p] and [p for p in problems if "slide 1 (Risks)" in p]
+    assert [p for p in problems if "slide 4 (Risks)" in p]
 
 
-def test_a_very_long_headline_does_not_fit_slide_1():
+def test_wins_are_not_measured_because_they_are_not_on_the_deck():
+    # Task 2 dropped wins from the deck; long wins alone must not fail the answer for "not fitting".
+    long_wins = summary_with().model_copy(update={"wins": [Point(title="Steady base",
+                                                                  detail=LONGEST_ALLOWED_DETAIL.strip())] * 3})
+    assert slide_fit_problems(long_wins) == []
+
+
+def test_a_very_long_headline_does_not_fit_slide_4():
     # A real headline is 25 words at most, so the headline box is roomy: it takes about 60 words to
     # overflow it. The check is here so a runaway headline can't reach a slide either.
     problems = slide_fit_problems(summary_with(headline="retention " * 60))
-    assert any("slide 1 (Headline)" in problem for problem in problems)
+    assert any("slide 4 (Headline)" in problem for problem in problems)
 
 
-def test_long_questions_do_not_fit_slide_5():
-    # Slide 5 holds the whole content area for 3 questions, so it only overflows at about 150 words
-    # a question - far past anything Claude writes. It is checked for the same reason as the headline.
+def test_long_questions_do_not_fit_slide_4():
+    # The questions share slide 4 with the risks, in the right-hand column. A real question is one
+    # sentence; this one is about 200 words, far past anything Claude writes.
     question = "What is driving retention across the customer base, and who owns the response? " * 15
     problems = slide_fit_problems(summary_with(questions=[question] * 3))
-    assert any("slide 5 (Questions)" in problem for problem in problems)
+    assert any("slide 4 (Questions)" in problem for problem in problems)
 
 
 def test_text_too_long_for_a_slide_is_a_validation_problem_so_the_retry_handles_it():
