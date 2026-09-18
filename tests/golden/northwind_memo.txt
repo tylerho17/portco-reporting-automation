@@ -6,6 +6,7 @@
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
   "Northwind's burn is outpacing budget and eroding runway to 11.0 mo, while NRR fell to 97.1% and Rule of 40 hit -12.2%."  11 pt, bold, 0B2545
   'Key metrics'  12 pt, bold, 0B2545, keep with next
+  table, aligned center
   row 1: 'Metric' fill 0B2545 | 'Q2 2026' fill 0B2545 | 'Q1 2026' fill 0B2545 | 'Budget or threshold' fill 0B2545 | 'Status' fill 0B2545
   row 2: 'Ending ARR ($K)' fill FFFFFF | '27,470' fill FFFFFF | '25,810' fill FFFFFF | 'vs budget: 2.5%' fill FFFFFF | '-' fill FFFFFF
   row 3: 'Net new ARR ($K)' fill F8FAFC | '1,660' fill F8FAFC | '2,020' fill F8FAFC | '-' fill F8FAFC | '-' fill F8FAFC

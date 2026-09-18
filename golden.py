@@ -169,6 +169,7 @@ def docx_lines(document):
             lines.append(f"  {paragraph.text!r}  {docx_style(paragraph)}".rstrip())
         elif item.tag == qn("w:tbl"):
             table = next(t for t in document.tables if t._tbl is item)
+            lines.append(f"  table, aligned {table.alignment.name.lower() if table.alignment is not None else 'left'}")
             for number, row in enumerate(table.rows, start=1):
                 lines.append(f"  row {number}: " + " | ".join(f"{cell.text!r}{docx_cell_fill(cell)}"
                                                              for cell in row.cells))
@@ -203,7 +204,7 @@ def cell_value_text(value):
 
 
 def excel_cell_line(cell):
-    """'B2  0.971  [0.0%]  fill FFC7CE  bold': value, number format, fill, weight and font color."""
+    """'B2  0.971  [0.0%]  fill FFC7CE  bold  right': value, number format, fill, weight, font color, alignment."""
     parts = [cell.coordinate, cell_value_text(cell.value)]
     if cell.number_format != "General":
         parts.append(f"[{cell.number_format}]")
@@ -213,6 +214,8 @@ def excel_cell_line(cell):
         parts.append("bold")
     if cell.font.color is not None and cell.font.color.type == "rgb":
         parts.append(f"text {cell.font.color.rgb[-6:]}")
+    if cell.alignment.horizontal:
+        parts.append(cell.alignment.horizontal)
     return "  ".join(parts)
 
 

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Alignment, Font, PatternFill
 
 import golden
 
@@ -89,6 +89,7 @@ def test_the_memo_dump_has_the_word_file_its_footer_and_the_pdf(rebuilt):
     memo = rebuilt["northwind"]["memo"]
     assert "== Word file" in memo and "-- Footer" in memo and "== PDF page 1" in memo
     assert "keep with next" in memo                            # the page-break rules
+    assert "table, aligned center" in memo
 
 
 def test_the_metrics_dump_shows_every_sheet_with_formats_and_fills(rebuilt):
@@ -107,11 +108,12 @@ def test_a_workbook_cell_shows_its_value_format_fill_and_bold(tmp_path):
     sheet["B2"] = 0.123456789012345
     sheet["B2"].number_format = "0.0%"
     sheet["B2"].fill = PatternFill("solid", fgColor="FFC7CE")
+    sheet["B2"].alignment = Alignment(horizontal="right")
     path = tmp_path / "test.xlsx"
     book.save(path)
-    text = golden.dump_workbook(path)
-    assert "A1  'Header'  bold" in text
-    assert "B2  0.123456789012  [0.0%]  fill FFC7CE" in text   # 12 significant digits: no float noise
+    lines = golden.dump_workbook(path).splitlines()
+    assert "  A1  'Header'  bold" in lines
+    assert "  B2  0.123456789012  [0.0%]  fill FFC7CE  right" in lines   # 12 significant digits: no float noise
 
 
 # ---------------------------------------------------------------------------

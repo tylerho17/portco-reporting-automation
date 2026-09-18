@@ -6,6 +6,7 @@
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
   'Runway has fallen to 6.0 mo (threshold 12.0 mo) and burn multiple is now ∞ (threshold 2.00x), signaling an urgent cash crisis.'  11 pt, bold, 0B2545
   'Key metrics'  12 pt, bold, 0B2545, keep with next
+  table, aligned center
   row 1: 'Metric' fill 0B2545 | 'Q2 2026' fill 0B2545 | 'Q1 2026' fill 0B2545 | 'Budget or threshold' fill 0B2545 | 'Status' fill 0B2545
   row 2: 'Ending ARR ($K)' fill FFFFFF | '7,350' fill FFFFFF | '7,590' fill FFFFFF | 'vs budget: -25.2%' fill FFFFFF | '-' fill FFFFFF
   row 3: 'Net new ARR ($K)' fill F8FAFC | '-240' fill F8FAFC | '-110' fill F8FAFC | '-' fill F8FAFC | '-' fill F8FAFC
