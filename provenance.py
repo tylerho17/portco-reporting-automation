@@ -5,8 +5,8 @@ Every run writes output/<company>_manifest.json: which workbook (by SHA-256 hash
 whether the deck carries Claude's text or the "AI summary unavailable" placeholder. Someone holding
 a printed slide can trace it back to the exact inputs that produced it.
 
-The manifest also holds the approval: a deck is watermarked "DRAFT - NOT REVIEWED" until a person
-records their name with approve.py. `approval_status` is the only place that decides whether an
+The manifest also holds the approval: a deck's footer says "not reviewed" (and a --draft deck is
+stamped "DRAFT - NOT REVIEWED") until a person records their name with approve.py. `approval_status` is the only place that decides whether an
 approval still counts, so main.py, build_deck.py and approve.py can never disagree about it. An
 approval is void as soon as the workbook or config.yaml changes, because the reviewer approved what
 the deck said, and either change can change that.
@@ -23,7 +23,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).parent
 READ_CHUNK = 65536          # hash big files a piece at a time instead of loading them whole
 UNKNOWN_COMMIT = "unknown"  # a copy of the project without git still runs; it just can't say which commit
-NOT_REVIEWED = "DRAFT - NOT REVIEWED"   # the watermark, and the deck status when nobody has approved
+NOT_REVIEWED = "DRAFT - NOT REVIEWED"   # the manifest's deck status when nobody has approved; the --draft watermark
 
 
 # ---------------------------------------------------------------------------
