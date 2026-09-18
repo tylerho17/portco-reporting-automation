@@ -642,14 +642,14 @@ Builds each company's deck (with its saved analysis if there is one), **opens th
 | `number_tokens(text)` | Every number in a text with its sign and unit: "-19.0%", "11.0 mo". |
 | `read_metrics_workbook(path)` | The Metrics sheet as {(quarter, label): shown text}, and the Flags sheet as {flag: row}. Skips the runway context row (it has no Status). |
 | `allowed_numbers(table, flags)` | Every number shown anywhere in the metrics workbook. |
-| `shape(slide, name)` / `slide_text(slide)` / `table_rows(slide)` | Find a box by name (exactly one must exist) / all text on a slide / slide 2's table as text. |
-| `check_titles(slides, company)` | 5 slides, with titles typed by hand in the check. |
+| `shape(slide, name)` / `slide_text(slide)` / `table_rows(slide)` | Find a box by name (exactly one must exist) / all text on a slide / slide 1's table as text. |
+| `check_titles(slides, company)` | 4 slides, with titles typed by hand in the check. |
 | `expected_flag_count(company)` | "6 of 9 flags tripped", counted from the story in check_companies.py. |
-| `check_ai_slides(slides, summary, name)` | Slides 1 and 5 show the JSON's headline, every win, risk and question, **or** exactly "AI summary unavailable". Never a mix. |
-| `check_kpi_numbers(slide, table, flags, name)` | Every number on slide 2 is in the metrics workbook. The footer date is skipped here (checked in `check_footers`). |
+| `check_ai_slide(slides, summary, name)` | Slide 4 shows the "AI-drafted from computed metrics - review before use" line, the JSON's headline, every risk and question, and no win anywhere on the deck, **or** exactly "AI summary unavailable" without the AI-drafted line. Never a mix, and no AI text on slides 1 to 3. |
+| `check_kpi_numbers(slide, table, flags, name)` | Every number on slide 1 is in the metrics workbook. The footer date is skipped here (checked in `check_footers`). |
 | `check_kpi_rows(slide, table, flags, name)` | Row by row: latest and prior cells equal the Excel cells, thresholds and statuses match the Flags sheet, status cell colors are right. |
 | `check_charts(slide, company)` | Two pictures; redraws the charts and checks the blank quarter has no bar and the cash line has a NaN there. |
-| `check_risks_slide(slide, company, table_flags, gap_labels)` | Every tripped flag, the combo result, and every "data missing" metric (or "None"). |
+| `check_risks_slide(slide, company, table_flags, gap_labels)` | Slide 3: the flag count, every tripped flag, the combo result, and every "data missing" metric (or "None"). |
 | `check_footers(slides, source_name, name)` | The fictional-data note, file name and today's date on every slide. |
 | `frame_paragraphs(frame, where)` | Reads a saved text box back into text_fit.py's paragraph form; stops on any font below 12 pt. |
 | `check_text_fits(...)` / `check_table_fits(frame, where)` | Re-measures the saved text and table cells: they need no more room than they have. |
@@ -670,7 +670,7 @@ Every run uses `--skip-ai`. The `main.py` process also gets no API key and an AP
 | `write_broken_workbook(folder)` | A workbook with most columns missing, in a temp folder. |
 | `run_quietly(function, *args, **kwargs)` | Calls a function and captures what it prints. |
 | `analysis_file_state(workbook)` | (size, modified time) of a company's analysis JSON, or None. Used to prove `--skip-ai` didn't touch it. |
-| `headline_on_deck(path)` | The text in slide 1's Headline box. |
+| `headline_on_deck(path)` | The text in slide 4's Headline box. |
 | `check_finds_the_three_companies()` | `--all` finds exactly the 3 workbooks. |
 | `check_batch_run()` | Exit 0, the AI skip message 3 times, a fresh Excel file and deck per company, "OK (AI skipped)" rows matching each story, no analysis JSON written, replaced or deleted. |
 | `check_summary_csv(started)` | `output/batch_summary.csv` was written by this run and matches each story. |
