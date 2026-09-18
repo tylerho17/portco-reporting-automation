@@ -20,7 +20,7 @@ from build_deck import (AI_DRAFTED_LINE, FICTIONAL_NOTE, NO_AI_MODEL, NOT_APPLIC
                         build_presentation, collect_deck_data, deck_path, flag_count_text, gaps_text, load_analysis,
                         save_deck, shorten_middle, threshold_text)
 from clean import STANDARD_COLUMNS
-from metrics import CANNOT_EVALUATE, MISSING_INPUT, PASS, TRIP
+from metrics import CANNOT_EVALUATE, METRIC_LABELS, MISSING_INPUT, PASS, TRIP
 from provenance import (NOT_REVIEWED, build_manifest, file_sha256, git_commit, manifest_path, read_manifest,
                         save_manifest)
 from text_fit import MIN_FONT_PT, TextDoesNotFitError, text_width_pt
@@ -534,6 +534,147 @@ def test_command_line_draft_flag(tmp_path):
 
 def test_deck_path():
     assert deck_path("data/northwind.xlsx", "output") == Path("output/northwind_board_pack.pptx")
+
+
+# ---------------------------------------------------------------------------
+# The appendix slide (--appendix only): every metric for every quarter
+# ---------------------------------------------------------------------------
+# Worked out by hand for three_quarters() (every input 100, ending cash 1,200):
+#   Ending ARR = 100 + 100 + 100 - 100 - 100 = 100; net new ARR = 0
+#   NRR = 1 + 4 x (100 - 100 - 100) / 100 = -300.0%, below the 100% threshold: tripped in every quarter
+#   Burn multiple: net new ARR 0 with burn 100 -> infinite ("ARR shrank"), tripped
+#   Runway = 1,200 / (100 / 3) = 36.0 mo; CAC payback = 100 / (100 x 100%) x 12 = 12.0 mo
+#   Net new ARR vs budget: budgeted net new ARR is 100 - 100 = 0 -> not meaningful (n/m)
+#   Every QoQ metric in Q4 2025, the first quarter, has no prior period (n/a)
+
+def appendix(tmp_path, **data_options):
+    """The appendix slide of a deck built with appendix=True."""
+    presentation = build_presentation(deck_data(**data_options), None, RUN_DATE, tmp_path, appendix=True)
+    return presentation.slides[-1]
+
+
+def appendix_rows(slide):
+    return [[cell.text for cell in row.cells] for row in shape(slide, "Appendix table").table.rows]
+
+
+def appendix_row(slide, label):
+    return next(row for row in appendix_rows(slide) if row[0] == label)
+
+
+def cell_fill(slide, label, column):
+    table = shape(slide, "Appendix table").table
+    row_number = [row[0] for row in appendix_rows(slide)].index(label)
+    return str(table.cell(row_number, column).fill.fore_color.rgb)
+
+
+def test_no_appendix_by_default(tmp_path):
+    assert len(build(tmp_path).slides) == 4
+
+
+def test_the_appendix_adds_one_slide_after_the_four(tmp_path):
+    presentation = build_presentation(deck_data(), None, RUN_DATE, tmp_path, appendix=True)
+    titles = [slide.shapes.title.text for slide in presentation.slides]
+    assert len(titles) == 5
+    assert titles[:4] == [slide.shapes.title.text for slide in build(tmp_path).slides]
+    assert titles[4] == "Appendix: every metric, Q4 2025 to Q2 2026"
+
+
+def test_the_appendix_has_every_metric_and_every_quarter(tmp_path):
+    rows = appendix_rows(appendix(tmp_path))
+    assert rows[0] == ["Metric", "Q4 2025", "Q1 2026", "Q2 2026"]
+    assert [row[0] for row in rows[1:]] == list(METRIC_LABELS.values())   # all 19, in metrics.py's order
+
+
+def test_the_appendix_shows_numbers_in_the_deck_formats(tmp_path):
+    slide = appendix(tmp_path)
+    assert appendix_row(slide, "Ending ARR ($K)") == ["Ending ARR ($K)", "100", "100", "100"]
+    assert appendix_row(slide, "NRR (annualized)") == ["NRR (annualized)", "-300.0%", "-300.0%", "-300.0%"]
+    assert appendix_row(slide, "Runway at current burn") == ["Runway at current burn", "36.0 mo", "36.0 mo", "36.0 mo"]
+    assert appendix_row(slide, "CAC payback") == ["CAC payback", "12.0 mo", "12.0 mo", "12.0 mo"]
+
+
+def test_the_appendix_uses_short_marks_that_the_key_explains(tmp_path):
+    # "n/a (no prior period)" is wider than a quarter column, so the cell shows the mark and the key
+    # under the table says what it means. "data missing" fits, so it is never shortened.
+    slide = appendix(tmp_path, blank="Q1 2026")
+    assert appendix_row(slide, "ARR growth QoQ") == ["ARR growth QoQ", "n/a", "data missing", "data missing"]
+    assert appendix_row(slide, "Burn multiple") == ["Burn multiple", "∞", "data missing", "∞"]
+    assert appendix_row(slide, "Net new ARR vs budget")[1:] == ["n/a", "data missing", "data missing"]
+    key = shape(slide, "Appendix key").text_frame.text
+    assert key == ("Key: n/a = no prior period; ∞ in Burn multiple = ARR shrank; "
+                   "gray = data missing; red, bold = flag tripped")
+
+
+def test_the_key_lists_only_the_marks_on_the_slide(tmp_path):
+    key = shape(appendix(tmp_path), "Appendix key").text_frame.text
+    assert key == ("Key: n/a = no prior period; n/m = not meaningful (see the metrics workbook); "
+                   "∞ in Burn multiple = ARR shrank; red, bold = flag tripped")
+
+
+def test_appendix_colors_gaps_gray_and_tripped_cells_red_and_bold(tmp_path):
+    slide = appendix(tmp_path, blank="Q1 2026")
+    assert cell_fill(slide, "Ending ARR ($K)", 2) == GRAY          # Q1 2026 is blank
+    assert cell_fill(slide, "NRR (annualized)", 1) == RED          # trips below 100%
+    assert cell_fill(slide, "Runway at current burn", 1) not in (RED, GRAY, GREEN)   # passes: no color
+    table = shape(slide, "Appendix table").table
+    nrr_row = [row[0] for row in appendix_rows(slide)].index("NRR (annualized)")
+    assert table.cell(nrr_row, 1).text_frame.paragraphs[0].runs[0].font.bold   # not color alone
+    runway_row = [row[0] for row in appendix_rows(slide)].index("Runway at current burn")
+    assert not table.cell(runway_row, 1).text_frame.paragraphs[0].runs[0].font.bold
+
+
+def test_the_appendix_fits_at_the_twelve_point_floor_or_above(tmp_path):
+    slide = appendix(tmp_path, blank="Q1 2026")
+    sizes = {run.font.size.pt for row in shape(slide, "Appendix table").table.rows for cell in row.cells
+             for run in cell.text_frame.paragraphs[0].runs}
+    assert min(sizes) >= MIN_FONT_PT
+    assert shape(slide, "Footer").text_frame.text == footer(build(tmp_path))
+
+
+def ten_quarters():
+    """Ten complete quarters, Q1 2024 to Q2 2026, every input 100 (ending cash 1,200)."""
+    quarters = [f"Q{quarter} {year}" for year in (2024, 2025, 2026) for quarter in (1, 2, 3, 4)][:10]
+    actuals = pd.DataFrame(100.0, index=quarters, columns=STANDARD_COLUMNS)
+    actuals["ending_cash"] = 1200.0
+    return actuals
+
+
+def test_the_appendix_shows_the_last_eight_quarters_of_a_longer_workbook(tmp_path):
+    # Nine or more quarter columns don't fit at 12 pt; the board reads the recent two years.
+    data = collect_deck_data("Testco", "testco.xlsx", ten_quarters(), None, TEST_CONFIG)
+    slide = build_presentation(data, None, RUN_DATE, tmp_path, appendix=True).slides[-1]
+    assert appendix_rows(slide)[0][1:] == ["Q3 2024", "Q4 2024", "Q1 2025", "Q2 2025",
+                                           "Q3 2025", "Q4 2025", "Q1 2026", "Q2 2026"]
+    assert slide.shapes.title.text == "Appendix: every metric, Q3 2024 to Q2 2026"
+
+
+def test_an_appendix_that_cannot_fit_stops_naming_the_slide(tmp_path, monkeypatch):
+    import build_deck
+    monkeypatch.setattr(build_deck, "appendix_text", lambda data, metric, quarter: "much too long " * 8)
+    with pytest.raises(TextDoesNotFitError, match="Slide 5, Appendix table"):
+        appendix(tmp_path)
+
+
+def test_the_appendix_gets_the_watermark_too(tmp_path):
+    presentation = build_presentation(deck_data(), None, RUN_DATE, tmp_path, draft=True, appendix=True)
+    assert len(watermarks(presentation)) == 5
+
+
+def test_command_line_appendix_flag(tmp_path):
+    import build_deck
+    workbook = str(PROJECT_DIR / "data" / "northwind.xlsx")
+    build_deck.main([workbook, "--no-analysis", "--appendix"], output_dir=tmp_path)
+    assert len(Presentation(tmp_path / "northwind_board_pack.pptx").slides) == 5
+    build_deck.main([workbook, "--no-analysis"], output_dir=tmp_path)
+    assert len(Presentation(tmp_path / "northwind_board_pack.pptx").slides) == 4
+
+
+def test_the_manifest_records_whether_the_deck_has_the_appendix(tmp_path):
+    workbook = northwind_manifest(tmp_path)
+    save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path, appendix=True)
+    assert read_manifest(manifest_path(workbook, tmp_path))["deck"]["appendix"] is True
+    save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert read_manifest(manifest_path(workbook, tmp_path))["deck"]["appendix"] is False
 
 
 # ---------------------------------------------------------------------------

@@ -7,6 +7,9 @@ Slides (every one on templates/base.pptx's "Title and Content" layout, with a fo
                      the Data gaps line beside them
 4. AI commentary:    "AI-drafted from computed metrics - review before use" under the title, then the
                      AI headline, and its 3 risks and 3 questions for management side by side
+With --appendix, one more slide after these four:
+   Appendix:         every metric for every quarter (the last 8 if a workbook has more), with a key
+                     under the table. Off by default.
 
 The analysis also has 3 wins (analyze.py still asks for them); they aren't on the deck.
 
@@ -25,10 +28,12 @@ Rules:
   a changed workbook or config.yaml makes it "not reviewed" again).
 - With --draft, every slide of a deck nobody has reviewed is also stamped "DRAFT - NOT REVIEWED".
   Off by default: the footer already says it on every slide.
+- The appendix follows the same rules: numbers from format_value, the same fit checks, footer and watermark.
 
 Run: python build_deck.py data/northwind.xlsx                  (uses output/northwind_analysis.json if it exists)
      python build_deck.py data/northwind.xlsx --no-analysis    (placeholder on slide 4)
      python build_deck.py data/northwind.xlsx --draft          (DRAFT watermark unless reviewed)
+     python build_deck.py data/northwind.xlsx --appendix       (adds the full metric table after the four)
 """
 
 import argparse
@@ -49,12 +54,12 @@ from pydantic import ValidationError
 from analyze import BoardSummary, build_payload, payload_to_text, validate_summary
 from charts import arr_chart, cash_chart, save_chart
 from clean import clean_workbook
-from excel_output import INFINITE_LABELS, NO_GAPS_LABEL, gap_label, status_label
+from excel_output import INFINITE_LABELS, NO_GAPS_LABEL, gap_label, status_label, tripped_cells
 from make_template import CONTENT_LAYOUT, TEMPLATE_PATH
 from mapping import mapping_sha256
-from metrics import (CANNOT_EVALUATE, CONFIG_PATH, FLAG_RULES, METRIC_LABELS, NO_PRIOR_PERIOD, REASON_DISPLAY,
-                     TRIP, compute_metrics, data_gaps, evaluate_flags, format_value, load_config, metric_reasons,
-                     reason_text, runway_at_next_budget, runway_context_label)
+from metrics import (CANNOT_EVALUATE, CONFIG_PATH, FLAG_RULES, METRIC_LABELS, MISSING_INPUT, NO_PRIOR_PERIOD,
+                     NOT_MEANINGFUL, REASON_DISPLAY, TRIP, compute_metrics, data_gaps, evaluate_flags, format_value,
+                     load_config, metric_reasons, reason_text, runway_at_next_budget, runway_context_label)
 from provenance import (NOT_REVIEWED, approval_status, deck_status, file_sha256, git_commit, manifest_path,
                         read_manifest, save_manifest)
 from text_fit import MIN_FONT_PT, TextDoesNotFitError, fit_table, paragraph, shrink_to_fit, text_width_pt
@@ -119,6 +124,19 @@ CELL_MARGIN_Y = Inches(0.04)
 KPI_COLUMN_SHARES = [0.27, 0.14, 0.14, 0.21, 0.24]
 # Rows that aren't flags, shown first: (metric, the "vs budget" metric for its budget column or None).
 CONTEXT_ROWS = [("ending_arr", "arr_vs_budget"), ("arr_yoy", None), ("gross_margin", None)]
+
+# The appendix (--appendix): 19 metric rows and 8 quarter columns only fit at 12 pt with tighter cells
+# and short marks in place of the longer reason words; the key under the table spells them out.
+APPENDIX_MAX_QUARTERS = 8         # a longer workbook shows its last 8 (nine columns don't fit at 12 pt)
+APPENDIX_LABEL_SHARE = 0.18       # the metric-name column's share of the width; the quarters split the rest
+APPENDIX_CELL_MARGIN_X = Inches(0.05)
+APPENDIX_CELL_MARGIN_Y = Inches(0.015)
+APPENDIX_KEY_HEIGHT = Inches(0.55)   # two lines at 13 pt
+INFINITY_MARK = "∞"
+# Reason -> what an appendix cell shows. "data missing" fits a quarter column, so it keeps its words.
+APPENDIX_MARKS = {NO_PRIOR_PERIOD: "n/a", NOT_MEANINGFUL: "n/m", MISSING_INPUT: REASON_DISPLAY[MISSING_INPUT]}
+# Short mark -> its line in the key.
+KEY_WORDS = {"n/a": "n/a = no prior period", "n/m": "n/m = not meaningful (see the metrics workbook)"}
 
 KIND_WORDS = {"min": "trips below", "max": "trips above"}              # exactly at the threshold passes
 FLAG_KINDS = {column: kind for _, column, _, kind in FLAG_RULES}       # metric -> "min" or "max"
@@ -514,12 +532,12 @@ def column_widths(total_width):
     return widths + [total_width - sum(widths)]
 
 
-def write_cell(cell, text, size, fill_hex, text_hex, bold=False):
-    """One table cell: fill, margins, and a single run of text."""
+def write_cell(cell, text, size, fill_hex, text_hex, bold=False, margins=(CELL_MARGIN_X, CELL_MARGIN_Y)):
+    """One table cell: fill, margins (side, top and bottom), and a single run of text."""
     cell.fill.solid()
     cell.fill.fore_color.rgb = RGBColor.from_string(fill_hex)
-    cell.margin_left = cell.margin_right = CELL_MARGIN_X
-    cell.margin_top = cell.margin_bottom = CELL_MARGIN_Y
+    cell.margin_left = cell.margin_right = margins[0]
+    cell.margin_top = cell.margin_bottom = margins[1]
     cell.vertical_anchor = MSO_ANCHOR.MIDDLE
     cell.text_frame.word_wrap = True
     run = cell.text_frame.paragraphs[0].add_run()
@@ -551,19 +569,29 @@ def kpi_slide(slide, deck):
     widths = column_widths(width)
 
     all_text = [header] + [cells for cells, _ in rows]
-    text_widths = [points(column_width - 2 * CELL_MARGIN_X) for column_width in widths]
-    size, heights = fit_table(all_text, text_widths, points(height), f"{deck['where']}, KPI table",
-                              TABLE_SIZE, cell_padding_pt=points(2 * CELL_MARGIN_Y))
+    size, heights = fit_cells(all_text, widths, height, f"{deck['where']}, KPI table", (CELL_MARGIN_X, CELL_MARGIN_Y))
+    table = add_table(slide, "KPI table", (left, top), widths, heights)
+    fill_table(table, header, rows, size)
 
-    frame = slide.shapes.add_table(len(all_text), len(header), left, top, width, Pt(sum(heights)))
-    frame.name = "KPI table"
+
+def fit_cells(all_text, widths, height, where, margins):
+    """(font size, row heights in pt) for a table's text in columns this wide (EMU), within `height` (EMU)."""
+    text_widths = [points(column_width - 2 * margins[0]) for column_width in widths]
+    return fit_table(all_text, text_widths, points(height), where, TABLE_SIZE, cell_padding_pt=points(2 * margins[1]))
+
+
+def add_table(slide, name, position, widths, heights):
+    """An empty named table at `position` (left, top), with these column widths (EMU) and row heights (pt)."""
+    left, top = position
+    frame = slide.shapes.add_table(len(heights), len(widths), left, top, sum(widths), Pt(sum(heights)))
+    frame.name = name
     table = frame.table
     table.horz_banding = False  # our own stripes, not the template's
     for column, column_width in enumerate(widths):
         table.columns[column].width = column_width
     for row_number, row_height in enumerate(heights):
         table.rows[row_number].height = Pt(row_height)
-    fill_table(table, header, rows, size)
+    return table
 
 
 # ---------------------------------------------------------------------------
@@ -712,10 +740,113 @@ def commentary_slide(slide, deck):
 
 
 # ---------------------------------------------------------------------------
-# 9. Putting it together
+# 9. The appendix (--appendix only): every metric for every quarter
 # ---------------------------------------------------------------------------
 
-SLIDE_BUILDERS = [kpi_slide, charts_slide, risks_slide, commentary_slide]
+def appendix_quarters(data):
+    """The quarters the appendix shows: all of them, or the last APPENDIX_MAX_QUARTERS."""
+    return list(data["metrics"].index)[-APPENDIX_MAX_QUARTERS:]
+
+
+def appendix_text(data, metric, quarter):
+    """One appendix cell: the number as format_value writes it, "∞", or the short mark for why there's no number."""
+    reason = data["reasons"].loc[quarter, metric]
+    if isinstance(reason, str):
+        return APPENDIX_MARKS[reason]
+    value = data["metrics"].loc[quarter, metric]
+    return INFINITY_MARK if math.isinf(value) else format_value(metric, value)
+
+
+def appendix_rows(data, quarters):
+    """[(metric, [(cell text, style), ...]), ...] in metrics.py's order.
+
+    style = MISSING_INPUT (a data gap: gray), TRIP (its flag trips that quarter: red and bold), or None.
+    The same cells as the metrics workbook's gray and red ones (excel_output.tripped_cells).
+    """
+    tripped = tripped_cells(data["metrics"], data["reasons"], data["config"])
+    rows = []
+    for metric in METRIC_LABELS:
+        cells = []
+        for quarter in quarters:
+            style = TRIP if (quarter, metric) in tripped else None
+            if data["reasons"].loc[quarter, metric] == MISSING_INPUT:
+                style = MISSING_INPUT
+            cells.append((appendix_text(data, metric, quarter), style))
+        rows.append((metric, cells))
+    return rows
+
+
+def infinity_reason(metric):
+    """Why a metric can be infinite, from its label: "∞ (ARR shrank)" -> "ARR shrank"."""
+    return INFINITE_LABELS[metric].removeprefix(f"{INFINITY_MARK} (").removesuffix(")")
+
+
+def appendix_key(rows):
+    """The key under the table: only the marks and colors that are on this slide, or None if there are none."""
+    texts = {text for _, cells in rows for text, _ in cells}
+    styles = {style for _, cells in rows for _, style in cells}
+    entries = [words for mark, words in KEY_WORDS.items() if mark in texts]
+    entries += [f"{INFINITY_MARK} in {METRIC_LABELS[metric]} = {infinity_reason(metric)}"
+                for metric, cells in rows if INFINITY_MARK in [text for text, _ in cells]]
+    if MISSING_INPUT in styles:
+        entries.append("gray = data missing")
+    if TRIP in styles:
+        entries.append("red, bold = flag tripped")
+    return "Key: " + "; ".join(entries) if entries else None
+
+
+def appendix_widths(total_width, quarter_count):
+    """The metric-name column, then equal quarter columns; the last one takes any rounding remainder."""
+    label_width = int(total_width * APPENDIX_LABEL_SHARE)
+    quarter_width = (total_width - label_width) // quarter_count
+    widths = [label_width] + [quarter_width] * quarter_count
+    widths[-1] += total_width - sum(widths)
+    return widths
+
+
+def fill_appendix(table, header, rows, size):
+    """Header in navy; rows striped white / surface; gap cells gray, tripped cells red and bold (theme.py)."""
+    margins = (APPENDIX_CELL_MARGIN_X, APPENDIX_CELL_MARGIN_Y)
+    for column, text in enumerate(header):
+        write_cell(table.cell(0, column), text, size, NAVY, WHITE, bold=True, margins=margins)
+    for row_number, (metric, cells) in enumerate(rows, start=1):
+        stripe = SURFACE if row_number % 2 == 0 else WHITE
+        write_cell(table.cell(row_number, 0), METRIC_LABELS[metric], size, stripe, SLATE, margins=margins)
+        for column, (text, style) in enumerate(cells, start=1):
+            fill_hex, text_hex = stripe, SLATE
+            if style is not None:  # a gap takes the "cannot evaluate" gray, as on slide 1
+                fill_hex, text_hex = STATUS_COLORS[CANNOT_EVALUATE if style == MISSING_INPUT else TRIP]
+            write_cell(table.cell(row_number, column), text, size, fill_hex, text_hex, bold=style == TRIP,
+                       margins=margins)
+
+
+def appendix_slide(slide, deck):
+    """Every metric (rows) for every quarter (columns), fitted like slide 1's table, with its key under it."""
+    data = deck["data"]
+    quarters = appendix_quarters(data)
+    set_title(slide, f"Appendix: every metric, {quarters[0]} to {quarters[-1]}", deck)
+    left, top, width, height = deck["area"]
+    rows = appendix_rows(data, quarters)
+    header = ["Metric"] + quarters
+    widths = appendix_widths(width, len(quarters))
+
+    all_text = [header] + [[METRIC_LABELS[metric]] + [text for text, _ in cells] for metric, cells in rows]
+    size, heights = fit_cells(all_text, widths, height - APPENDIX_KEY_HEIGHT - GAP, f"{deck['where']}, Appendix table",
+                              (APPENDIX_CELL_MARGIN_X, APPENDIX_CELL_MARGIN_Y))
+    fill_appendix(add_table(slide, "Appendix table", (left, top), widths, heights), header, rows, size)
+
+    key = appendix_key(rows)
+    if key:
+        key_top = top + Pt(sum(heights)) + GAP
+        add_text_box(slide, "Appendix key", (left, key_top, width, APPENDIX_KEY_HEIGHT),
+                     [paragraph(key, NOTE_SIZE, color=MID_GRAY)], deck)
+
+
+# ---------------------------------------------------------------------------
+# 10. Putting it together
+# ---------------------------------------------------------------------------
+
+SLIDE_BUILDERS = [kpi_slide, charts_slide, risks_slide, commentary_slide]   # the appendix is added with --appendix
 COLUMN_ADVICE = {"Risks": "shorten each risk detail", "Questions": "shorten the questions"}
 
 
@@ -750,13 +881,14 @@ def ai_text_problems(summary):
     return problems
 
 
-def build_presentation(data, summary, run_date, chart_dir, approval=None, model=None, draft=False):
-    """Build all 4 slides on the template.
+def build_presentation(data, summary, run_date, chart_dir, approval=None, model=None, draft=False, appendix=False):
+    """Build all 4 slides on the template, and the appendix after them if appendix=True (--appendix).
 
     summary = a validated BoardSummary, or None for the placeholder. approval = the record of a
     person having reviewed this deck (provenance.approval_status), or None; the footer says which.
     model = the Claude model whose text is on the deck, for the footer. draft=True stamps every
     slide "DRAFT - NOT REVIEWED" - but only if nobody has approved it, since the stamp says so.
+    The appendix gets the same footer and watermark as the other slides.
     """
     presentation = open_template()
     layout = find_content_layout(presentation)
@@ -764,7 +896,8 @@ def build_presentation(data, summary, run_date, chart_dir, approval=None, model=
             "area": layout_box(layout, BODY_TYPES), "footer_box": layout_box(layout, {PP_PLACEHOLDER.FOOTER}),
             "slide_size": (presentation.slide_width, presentation.slide_height),
             "commit": commit_text(), "model": model or NO_AI_MODEL}
-    for number, build_slide in enumerate(SLIDE_BUILDERS, start=1):
+    builders = SLIDE_BUILDERS + ([appendix_slide] if appendix else [])
+    for number, build_slide in enumerate(builders, start=1):
         slide = new_slide(presentation, layout)
         deck["where"] = f"Slide {number}"  # names the slide in any "doesn't fit" error
         build_slide(slide, deck)
@@ -774,8 +907,8 @@ def build_presentation(data, summary, run_date, chart_dir, approval=None, model=
     return presentation
 
 
-def record_deck_status(workbook_path, output_dir, approval, ai_text, draft=False):
-    """Update the manifest to describe the deck just written: reviewed or not, AI text or not, --draft or not.
+def record_deck_status(workbook_path, output_dir, approval, ai_text, draft=False, appendix=False):
+    """Update the manifest to describe the deck just written: reviewed or not, AI text or not, --draft, --appendix.
 
     Only if a manifest is already there. main.py writes the full one (hashes, tokens, cost); this
     keeps it true when the deck is rebuilt on its own - otherwise the file could say "approved by"
@@ -785,7 +918,8 @@ def record_deck_status(workbook_path, output_dir, approval, ai_text, draft=False
     manifest = read_manifest(path)
     if manifest is None:
         return None
-    manifest["deck"] = {**manifest.get("deck", {}), "ai_text": ai_text, "status": deck_status(approval), "draft": draft}
+    manifest["deck"] = {**manifest.get("deck", {}), "ai_text": ai_text, "status": deck_status(approval), "draft": draft,
+                        "appendix": appendix}
     return save_manifest(path, manifest)
 
 
@@ -799,12 +933,13 @@ def analysis_path(workbook_path, output_dir=OUTPUT_DIR):
     return Path(output_dir) / f"{Path(workbook_path).stem}_analysis.json"
 
 
-def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_dir=OUTPUT_DIR, draft=False):
+def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_dir=OUTPUT_DIR, draft=False,
+              appendix=False):
     """Clean one workbook, build its deck and save it. Returns (deck path, why the AI summary is unavailable or None).
 
     analysis_file=None means no analysis (the placeholder). draft=True adds the DRAFT watermark
-    to a deck nobody has approved. An old deck is deleted first, so a failed build never leaves
-    last run's deck looking current.
+    to a deck nobody has approved; appendix=True adds the full metric table after the four slides.
+    An old deck is deleted first, so a failed build never leaves last run's deck looking current.
     """
     workbook_path, output_dir = Path(workbook_path), Path(output_dir)
     company = workbook_path.stem.title()   # same rule as analyze.py and main.py
@@ -826,9 +961,11 @@ def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_d
     chart_dir = output_dir / CHART_FOLDER
     chart_dir.mkdir(parents=True, exist_ok=True)
     presentation = build_presentation(data, summary, run_date or datetime.date.today(), chart_dir,
-                                      approval=approval, model=details["model"] if details else None, draft=draft)
+                                      approval=approval, model=details["model"] if details else None, draft=draft,
+                                      appendix=appendix)
     presentation.save(path)
-    record_deck_status(workbook_path, output_dir, approval, ai_text=summary is not None, draft=draft)
+    record_deck_status(workbook_path, output_dir, approval, ai_text=summary is not None, draft=draft,
+                       appendix=appendix)
     return path, why_unavailable
 
 
@@ -838,11 +975,12 @@ def main(argv=None, output_dir=OUTPUT_DIR):
     parser.add_argument("--analysis", help="analysis JSON (default: output/<company>_analysis.json)")
     parser.add_argument("--no-analysis", action="store_true", help="build with the 'AI summary unavailable' placeholder")
     parser.add_argument("--draft", action="store_true", help="stamp DRAFT - NOT REVIEWED on a deck nobody has approved")
+    parser.add_argument("--appendix", action="store_true", help="add a slide with every metric for every quarter")
     args = parser.parse_args(argv)
 
     analysis_file = None if args.no_analysis else (args.analysis or analysis_path(args.workbook, output_dir))
     path, why_unavailable = save_deck(args.workbook, load_config(), analysis_file, output_dir=output_dir,
-                                      draft=args.draft)
+                                      draft=args.draft, appendix=args.appendix)
     project = Path(__file__).parent
     print(f"Saved {path.relative_to(project) if path.is_relative_to(project) else path}")
     if why_unavailable:
