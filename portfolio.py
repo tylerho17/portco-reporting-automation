@@ -8,6 +8,8 @@ There is no Streamlit here, so every function runs (and is tested) without a bro
 - Review mapping (Task 5): headers clean.py doesn't know get mapping.py's proposals; a person's
   confirmed choices are saved to mappings/<company>.yaml, only once the workbook reads with them.
 - Approve: approve.approve, exactly what `python approve.py` records.
+- What changed since the last run (Task 10): diff_runs.py's comparison of today's workbook with
+  the last run on record whose results were different.
 
 Rules:
 - No new math and no numbers of its own: every figure comes from metrics.py through main.py and build_deck.py.
@@ -31,6 +33,7 @@ from analyze import BoardSummary
 from approve import approve
 from build_deck import PLACEHOLDER_TEXT, collect_deck_data, deck_path, flag_count_text
 from clean import UnconfirmedMappingError, clean_workbook
+from diff_runs import changes_since_last_run, move_settings
 from excel_output import output_path as excel_path
 from main import (AI_FAILED, AI_REUSED, AI_SKIPPED, DATA_DIR, INPUT_ERRORS, OUTPUT_DIR, SUMMARY_CSV_PATH,
                   api_key_problem, blank_quarters, company_name, find_workbooks, gaps_text, reusable_analysis,
@@ -430,6 +433,21 @@ def approve_company(stem, reviewer, data_dir=DATA_DIR, output_dir=OUTPUT_DIR, no
     approval = manifest["approval"]
     return {"ok": True, "message": APPROVED.format(company=manifest["company"], reviewer=approval["reviewer"],
                                                    when=last_run_text(approval["approved_at"]))}
+
+
+def run_changes(workbook_path, data, config, output_dir=OUTPUT_DIR):
+    """(what changed since the last run, the move settings, None), or (None, None, why not). Never raises.
+
+    The report is diff_runs.changes_since_last_run's: today's workbook against the last run with
+    different results, so it's the same comparison the memo built from these numbers shows. None
+    when there's no earlier run on record. A bad diff_min_* setting in config.yaml is plain words.
+    """
+    try:
+        settings = move_settings(config)
+        manifest = read_manifest(manifest_path(workbook_path, output_dir))
+        return changes_since_last_run(data, manifest, settings), settings, None
+    except Exception as error:  # noqa: BLE001 - plain words on the page, never a traceback
+        return None, None, error_message(error)
 
 
 def saved_commentary(workbook_path, config, output_dir=OUTPUT_DIR):

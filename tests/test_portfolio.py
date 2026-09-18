@@ -17,10 +17,12 @@ from openpyxl import Workbook
 from pptx import Presentation
 
 import analyze
+import make_data
 import mapping
 import portfolio
 from analyze import BoardSummary, build_payload, save_analysis
 from build_deck import PLACEHOLDER_TEXT
+from check_diff import last_quarter_workbook
 from clean import clean_workbook
 from main import AI_REUSED
 from metrics import load_config
@@ -537,3 +539,46 @@ def test_adding_with_a_mapping_the_workbook_can_t_be_read_with_saves_neither(fol
     outcome = portfolio.add_company("upload.xlsx", data, "Blue River", load_config(), folders[0], columns=choices)
     assert outcome["ok"] is False and "budget-only row" in outcome["message"]
     assert not (folders[0] / "blue river.xlsx").exists() and not mappings_dir.exists()
+
+
+# ---------------------------------------------------------------------------
+# What changed since the last run (Task 10)
+# ---------------------------------------------------------------------------
+
+def generate_last_quarter(folders, tmp_path, answer_key=make_data):
+    """Generate the company as it stood a quarter ago (Q1 2026 latest) into the test's output folder."""
+    earlier = last_quarter_workbook(answer_key, tmp_path)
+    portfolio.generate_company(earlier, load_config(), ask_claude=False, output_dir=folders[1])
+
+
+def northwind_changes(folders, config=None):
+    workbook = folders[0] / "northwind.xlsx"
+    data, _ = portfolio.load_company(workbook, load_config())
+    return portfolio.run_changes(workbook, data, config or load_config(), folders[1])
+
+
+def test_before_any_run_there_is_nothing_to_compare_with(folders):
+    report, settings, problem = northwind_changes(folders)
+    assert report is None and problem is None
+    assert settings == {"min_points": 0.05, "min_relative": 0.10}
+
+
+def test_today_s_workbook_is_compared_with_last_quarter_s_run(folders, tmp_path):
+    generate_last_quarter(folders, tmp_path)
+    report, _, problem = northwind_changes(folders)
+    assert problem is None
+    assert (report["quarter_before"], report["quarter_now"]) == ("Q1 2026", "Q2 2026")
+    assert ("Runway at current burn", "Passed", "Tripped") in report["flags"]
+
+
+def test_after_generate_the_page_still_shows_what_changed_since_the_run_before(folders, tmp_path):
+    # Today's numbers are now the last run's: comparing with it would always say nothing changed.
+    generate_last_quarter(folders, tmp_path)
+    before_generate, _, _ = northwind_changes(folders)
+    portfolio.generate_company(folders[0] / "northwind.xlsx", load_config(), ask_claude=False, output_dir=folders[1])
+    assert northwind_changes(folders)[0] == before_generate
+
+
+def test_a_bad_move_setting_is_plain_words_not_a_traceback(folders):
+    report, settings, problem = northwind_changes(folders, {**load_config(), "diff_min_points": "5%"})
+    assert report is None and settings is None and "diff_min_points" in problem

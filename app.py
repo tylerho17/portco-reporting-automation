@@ -5,7 +5,8 @@ Two pages:
    deck status), with Generate, Download deck, Download memo and Download Excel on each row; a
    search box; Generate all with a progress bar; Download rollup (Task 9: rollup.py's one deck and
    one workbook across every company, built when clicked); and an "Add a company" panel for a new workbook.
-2. Company (click a company's name): its flags with thresholds and reasons, data gaps, metrics
+2. Company (click a company's name): its flags with thresholds and reasons, what changed since the
+   last run (Task 10: flags that flipped, metrics that moved, new and resolved data gaps), data gaps, metrics
    table in the status colors (red = tripped, green = passed, gray = data missing / cannot
    evaluate), both charts, the AI commentary when a saved one matches these numbers, and the
    buttons Generate, the downloads and Approve.
@@ -42,14 +43,15 @@ from matplotlib import pyplot as plt
 from build_deck import AI_DRAFTED_LINE, QUESTIONS_HEADING, flag_count_text, gaps_lines, points_text, runway_lines, \
     threshold_text, value_text
 from charts import arr_chart, cash_chart
+from diff_runs import HEADING, NO_EARLIER_RUN, change_sections, compared_with_text
 from excel_output import status_label, tripped_cells
 from main import DATA_DIR, OUTPUT_DIR, company_name
 from mapping import confidence_text
 from metrics import CANNOT_EVALUATE, METRIC_LABELS, MISSING_INPUT, TRIP, load_config
 from portfolio import (NO_WORKBOOK_FOUND, add_company, approve_company, confirm_mapping, download, error_message,
                        find_workbook, generate_all, generate_company, load_company, mapping_proposals, plain,
-                       portfolio_rows, run_state, saved_commentary, search_message, search_rows, suggested_name,
-                       upload_proposals)
+                       portfolio_rows, run_changes, run_state, saved_commentary, search_message, search_rows,
+                       suggested_name, upload_proposals)
 from rollup import rollup_download, rollup_paths
 from theme import STATUS_COLORS, streamlit_css
 
@@ -467,6 +469,21 @@ def show_flags(data):
     st.caption(md(runway_lines(data).splitlines()[-1] + " (context, not a flag)"))
 
 
+def show_changes(workbook, data, config, output_dir):
+    """What changed since the last run (diff_runs.py): which run, then flags flipped, metrics moved and data gaps."""
+    st.subheader(HEADING)
+    report, settings, problem = run_changes(workbook, data, config, output_dir)
+    if problem:
+        st.error(problem)
+        return
+    if report is None:
+        st.caption(NO_EARLIER_RUN)
+        return
+    st.caption(md(compared_with_text(report)))
+    for title, lines in change_sections(report, settings):
+        st.markdown(f"**{md(title)}**\n\n" + "\n".join(f"- {md(line)}" for line in lines))
+
+
 def show_gaps(data):
     """Every metric and flag with an input missing, by quarter."""
     st.markdown("**Data gaps**\n\n" + "\n".join(f"- {md(line)}" for line in gaps_lines(data["gaps"])))
@@ -526,7 +543,8 @@ def company_page(stem, data_dir, output_dir):
         st.error(problem)
         mapping_panel(workbook, config)   # shown only when the problem is headers to confirm
         return
-    sections = [("flags", show_flags, (data,)), ("gaps", show_gaps, (data,)), ("metrics", show_metrics, (data,)),
+    sections = [("flags", show_flags, (data,)), ("changes", show_changes, (workbook, data, config, output_dir)),
+                ("gaps", show_gaps, (data,)), ("metrics", show_metrics, (data,)),
                 ("charts", show_charts, (data,)), ("commentary", show_commentary, (workbook, config, output_dir)),
                 ("approve", approve_panel, (workbook, state, data_dir, output_dir))]
     for name, show, arguments in sections:

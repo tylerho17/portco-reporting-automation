@@ -17,10 +17,13 @@ from streamlit.testing.v1 import AppTest
 
 import analyze
 import app
+import make_data
 import mapping
 import portfolio
 from analyze import BoardSummary, build_payload, save_analysis
+from check_diff import last_quarter_workbook
 from clean import clean_workbook
+from diff_runs import HEADING, NO_EARLIER_RUN
 import theme
 from metrics import CANNOT_EVALUATE, PASS, TRIP, load_config
 from provenance import NOT_REVIEWED, manifest_path, read_manifest
@@ -319,6 +322,25 @@ def test_the_company_page_shows_flags_gaps_metrics_charts_and_no_commentary_yet(
     assert any(info.value == app.NO_COMMENTARY for info in test.info)
     assert [label for label, _ in downloads(test)] == [label for _, label, _ in app.PAGE_DOWNLOADS]
     assert test.button(key="approve").disabled                        # nothing to approve yet
+
+
+def test_the_company_page_says_there_is_nothing_to_compare_with_before_any_run(folders):
+    test = page(folders, company="northwind")
+    assert [subheader.value for subheader in test.subheader][:2] == ["6 of 9 flags tripped", HEADING]
+    assert NO_EARLIER_RUN in [caption.value for caption in test.caption]
+
+
+def test_the_company_page_shows_what_changed_since_last_quarter_s_run(folders, tmp_path):
+    earlier = last_quarter_workbook(make_data, tmp_path)
+    portfolio.generate_company(earlier, load_config(), ask_claude=False, output_dir=folders[1])
+    test = page(folders, company="northwind")
+    assert not test.exception and not test.error
+    captions = [caption.value for caption in test.caption]
+    assert any("whose latest quarter was Q1 2026 (now Q2 2026)" in caption for caption in captions)
+    shown = "\n".join(markdown.value for markdown in test.markdown)
+    assert "**Flags that flipped**" in shown and "- Runway at current burn: Tripped (was Passed)" in shown
+    assert "- Burn multiple: 1.81x to 2.35x (up 30.0%)" in shown
+    assert "**Resolved data gaps**" in shown and "- Q1 2026: Flag: Rule of 40" in shown
 
 
 def test_a_company_page_for_a_name_with_no_workbook_says_upload_one(folders):
