@@ -380,10 +380,13 @@ def review_text(approval, with_name=True):
     return f"reviewed by {approval['reviewer']} on {day}" if with_name else f"reviewed on {day}"
 
 
-def footer_text(deck, run_date, with_name=True):
-    """The footer line: "Fictional data | northwind.xlsx | 2026-09-17 | 2a215a9 | claude-sonnet-5 | AI-drafted | ..."."""
-    return " | ".join([FICTIONAL_NOTE, deck["data"]["source_name"], run_date.isoformat(), deck["commit"],
-                       deck["model"], AI_DRAFTED, review_text(deck["approval"], with_name)])
+def footer_text(deck, run_date, with_name=True, source_name=None):
+    """The footer line: "Fictional data | northwind.xlsx | 2026-09-17 | 2a215a9 | claude-sonnet-5 | AI-drafted | ...".
+
+    source_name replaces the workbook's file name (a shortened one, from footer_that_fits).
+    """
+    return " | ".join([FICTIONAL_NOTE, source_name or deck["data"]["source_name"], run_date.isoformat(),
+                       deck["commit"], deck["model"], AI_DRAFTED, review_text(deck["approval"], with_name)])
 
 
 def fits_one_line(text, box):
@@ -392,17 +395,43 @@ def fits_one_line(text, box):
     return text_width_pt(text, FOOTER_SIZE) <= points(width - 2 * TEXT_MARGIN_X)
 
 
+def shorten_middle(file_name, fits):
+    """The file name as it is if fits(it), else its start + "…" + its extension, as long as fits allows.
+
+    "Northwind KPI workbook Q2 2026 final.xlsx" -> "Northwind KPI workbook….xlsx". If nothing fits,
+    the shortest try ("….xlsx") comes back, and the build stops on it as before.
+    """
+    if fits(file_name):
+        return file_name
+    extension = Path(file_name).suffix
+    start = file_name[:len(file_name) - len(extension)]
+    for keep in range(len(start) - 1, 0, -1):   # drop one character at a time from the end of the start
+        shorter = start[:keep].rstrip() + "…" + extension
+        if fits(shorter):
+            return shorter
+    return "…" + extension
+
+
+def footer_that_fits(deck, run_date, with_name):
+    """The footer line, with the file name shortened just enough for one line (the web page takes any name)."""
+    def fits(source_name):
+        return fits_one_line(footer_text(deck, run_date, with_name, source_name), deck["footer_box"])
+    return footer_text(deck, run_date, with_name, shorten_middle(deck["data"]["source_name"], fits))
+
+
 def add_footer(slide, deck, run_date):
     """Footer on every slide: fictional-data note, source file, run date, commit, model, review status.
 
-    The labels ("Source:", "Run date:") are left off on purpose, and the line is one line at 12 pt
-    (748 pt of 755 with the longest file name and "reviewed by Tyler Ho"). A reviewer's name is typed
-    by a person, so it can be any length: if it would wrap the line, the footer says "reviewed on
-    DATE" and the name stays in the manifest. Anything else too long still stops the build.
+    The labels ("Source:", "Run date:") are left off on purpose, and the line is one line at 12 pt.
+    Two parts can be any length, so each gives way rather than stop the build:
+    - the file name (the web page takes whatever name a file has): shortened in the middle, "….xlsx"
+    - the reviewer's name, typed by a person: if even a shortened file name leaves no room, the footer
+      says "reviewed on DATE" and the name stays in the manifest.
+    Anything else too long still stops the build.
     """
-    text = footer_text(deck, run_date)
+    text = footer_that_fits(deck, run_date, with_name=True)
     if not fits_one_line(text, deck["footer_box"]):
-        text = footer_text(deck, run_date, with_name=False)
+        text = footer_that_fits(deck, run_date, with_name=False)
     add_text_box(slide, "Footer", deck["footer_box"], [paragraph(text, FOOTER_SIZE, color=MID_GRAY)], deck)
 
 

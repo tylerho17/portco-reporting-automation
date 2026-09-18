@@ -166,6 +166,14 @@ def test_the_metrics_table_is_colored_like_the_excel_sheet(tmp_path):
     assert colors.loc["Ending ARR ($K)", "Q2 2026"] == ""                                # no flag: no color
 
 
+def test_a_long_file_name_still_gets_a_deck(tmp_path):
+    # People upload files named anything. Before the fix, this name made the footer too wide and
+    # the page showed "Slide 1, Footer: text doesn't fit" instead of a deck.
+    result = build_northwind(tmp_path, file_name="Northwind - Q2 2026 KPI pack (final version for board).xlsx")
+    assert result["error"] is None
+    assert len(Presentation(io.BytesIO(result["deck_bytes"])).slides) == 4
+
+
 def test_the_data_gaps_lines_name_the_blank_quarter(tmp_path):
     result = build_northwind(tmp_path)
     assert any(line.startswith("Q1 2025") for line in result["gaps"])

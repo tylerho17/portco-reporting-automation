@@ -18,7 +18,7 @@ from pptx.util import Emu
 from analyze import build_payload
 from build_deck import (AI_DRAFTED_LINE, FICTIONAL_NOTE, NO_AI_MODEL, PLACEHOLDER_NOTE, PLACEHOLDER_TEXT,
                         build_presentation, collect_deck_data, deck_path, flag_count_text, gaps_text, load_analysis,
-                        save_deck, threshold_text)
+                        save_deck, shorten_middle, threshold_text)
 from clean import STANDARD_COLUMNS
 from metrics import CANNOT_EVALUATE, MISSING_INPUT, PASS, TRIP
 from provenance import (NOT_REVIEWED, build_manifest, file_sha256, git_commit, manifest_path, read_manifest,
@@ -410,6 +410,22 @@ def test_a_reviewer_name_too_long_for_the_footer_leaves_the_name_to_the_manifest
     text = footer(presentation)
     assert text.endswith(" | AI-drafted | reviewed on 2026-09-17")
     assert text_width_pt(text, MIN_FONT_PT) <= footer_room_pt(presentation)
+
+
+def test_a_file_name_too_long_for_the_footer_is_shortened_not_a_failed_deck(tmp_path):
+    # The web page takes whatever name the file has. Before the fix, this name stopped the whole
+    # deck with "Slide 1, Footer: text doesn't fit". The footer keeps the start and the extension.
+    long_file = "Northwind KPI workbook Q2 2026 final version for the board.xlsx"
+    presentation = build_presentation(collect_deck_data("Testco", long_file, three_quarters(), None, TEST_CONFIG),
+                                      None, RUN_DATE, tmp_path, approval=APPROVED, model="claude-sonnet-5")
+    text = footer(presentation)
+    assert text.startswith(f"{FICTIONAL_NOTE} | North") and "….xlsx |" in text
+    assert text.endswith(" | AI-drafted | reviewed by Tyler Ho on 2026-09-17")
+    assert text_width_pt(text, MIN_FONT_PT) <= footer_room_pt(presentation)
+
+
+def test_a_file_name_that_fits_is_never_shortened():
+    assert shorten_middle("fernhollow.xlsx", lambda text: True) == "fernhollow.xlsx"
 
 
 def northwind_manifest(tmp_path, input_sha256=None, config_sha256=None):

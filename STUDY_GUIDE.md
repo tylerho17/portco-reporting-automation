@@ -496,9 +496,10 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `new_slide(presentation, layout)` | Adds a slide and removes its empty body placeholder. | Each slide places its own boxes in that area. |
 | `commit_text()` | The git commit for the footer: "9c1b52c", or "9c1b52c*" when the code had uncommitted edits. | A printed slide names the code that built it. |
 | `review_text(approval, with_name)` | "reviewed by Tyler Ho on 2026-09-17", "reviewed on 2026-09-17" (no name), or "not reviewed". | The manifest keeps the time to the second; the footer only has room for the day. |
-| `footer_text(deck, run_date, with_name)` | Joins the footer's parts with " \| ". | |
+| `footer_text(deck, run_date, with_name, source_name)` | Joins the footer's parts with " \| ". `source_name` swaps in a shortened file name. | |
 | `fits_one_line(text, box)` | True if the footer text, at 12 pt, is no wider than its box. | A reviewer's name can be any length, so its width is measured, not assumed. |
-| `add_footer(slide, deck, run_date)` | The footer on every slide. If a long reviewer name would wrap it, the name is left out ("reviewed on DATE") and stays in the manifest. | Anything else that doesn't fit still stops the build. |
+| `shorten_middle(file_name, fits)` / `footer_that_fits(deck, run_date, with_name)` | A file name too long for the footer keeps its start and extension: "Northwin….xlsx". | The web page takes any file name; a long one used to stop the whole deck (LEARNINGS, polish Task 6). |
+| `add_footer(slide, deck, run_date)` | The footer on every slide. A long file name is shortened first; if a long reviewer name still doesn't fit, it is left out ("reviewed on DATE") and stays in the manifest. | Anything else that doesn't fit still stops the build. |
 | `set_alpha(run, percent)` / `add_watermark(slide, deck)` | Only with `--draft`: "DRAFT - NOT REVIEWED" diagonally across the slide, 25% opaque, on top of everything. | On top, not behind: the table and charts are opaque and would hide it. See-through, so the numbers stay readable. |
 
 **4. The four slides**
