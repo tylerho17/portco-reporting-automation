@@ -13,6 +13,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from pptx import Presentation
+from pptx.util import Emu
 
 from analyze import build_payload
 from build_deck import (FICTIONAL_NOTE, NO_AI_MODEL, PLACEHOLDER_TEXT, build_presentation, collect_deck_data,
@@ -21,7 +22,7 @@ from clean import STANDARD_COLUMNS
 from metrics import CANNOT_EVALUATE, MISSING_INPUT, PASS, TRIP
 from provenance import (NOT_REVIEWED, build_manifest, file_sha256, git_commit, manifest_path, read_manifest,
                         save_manifest)
-from text_fit import TextDoesNotFitError
+from text_fit import MIN_FONT_PT, TextDoesNotFitError, text_width_pt
 
 NAN = math.nan
 PROJECT_DIR = Path(__file__).parent.parent
@@ -188,10 +189,11 @@ def all_text(slide):
     return " ".join(s.text_frame.text for s in slide.shapes if s.has_text_frame)
 
 
-def build(tmp_path, summary=None, approval=None, model=None, **data_options):
+def build(tmp_path, summary=None, approval=None, model=None, draft=False, **data_options):
     from analyze import BoardSummary
     parsed = BoardSummary.model_validate(summary) if summary else None
-    return build_presentation(deck_data(**data_options), parsed, RUN_DATE, tmp_path, approval=approval, model=model)
+    return build_presentation(deck_data(**data_options), parsed, RUN_DATE, tmp_path, approval=approval, model=model,
+                              draft=draft)
 
 
 def test_five_slides_in_order(tmp_path):
@@ -292,7 +294,7 @@ def test_text_too_long_for_its_box_fails_loudly(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Provenance in the footer, and the DRAFT watermark until someone approves
+# Provenance and review status in the footer; the DRAFT watermark only with --draft
 # ---------------------------------------------------------------------------
 
 APPROVED = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00",
@@ -310,21 +312,75 @@ def test_the_footer_says_when_there_is_no_ai_text(tmp_path):
     assert NO_AI_MODEL in shape(build(tmp_path).slides[0], "Footer").text_frame.text
 
 
-def test_every_slide_is_watermarked_until_the_deck_is_approved(tmp_path):
-    for slide in build(tmp_path).slides:
+def footer(presentation):
+    return shape(presentation.slides[0], "Footer").text_frame.text
+
+
+def watermarks(presentation):
+    return [item.name for slide in presentation.slides for item in slide.shapes if item.name == "Watermark"]
+
+
+def test_no_watermark_by_default(tmp_path):
+    # The watermark is opt-in (--draft): the footer already says whether anyone has reviewed the deck.
+    assert watermarks(build(tmp_path)) == []
+
+
+def test_draft_watermarks_every_slide_of_an_unreviewed_deck(tmp_path):
+    for slide in build(tmp_path, draft=True).slides:
         assert shape(slide, "Watermark").text_frame.text == NOT_REVIEWED
 
 
 def test_the_watermark_is_drawn_over_the_content_not_under_it(tmp_path):
     # Slides 2 and 3 are covered by an opaque table and two chart images, so a watermark added
     # first would be invisible on exactly the slides that carry the numbers.
-    for slide in build(tmp_path).slides:
+    for slide in build(tmp_path, draft=True).slides:
         assert slide.shapes[-1].name == "Watermark"
 
 
-def test_an_approved_deck_has_no_watermark(tmp_path):
-    for slide in build(tmp_path, approval=APPROVED).slides:
-        assert not [item for item in slide.shapes if item.name == "Watermark"]
+def test_draft_never_stamps_an_approved_deck(tmp_path):
+    # The stamp says NOT REVIEWED; on a deck someone approved, that would be false.
+    assert watermarks(build(tmp_path, approval=APPROVED, draft=True)) == []
+
+
+def test_the_footer_says_an_unreviewed_deck_is_not_reviewed(tmp_path):
+    assert footer(build(tmp_path, model="claude-sonnet-5")).endswith(" | claude-sonnet-5 | AI-drafted | not reviewed")
+
+
+def test_the_footer_names_the_reviewer_and_the_day(tmp_path):
+    # approved_at is to the second; the footer shows the day only.
+    assert footer(build(tmp_path, approval=APPROVED)).endswith(" | AI-drafted | reviewed by Tyler Ho on 2026-09-17")
+
+
+def test_the_footer_is_on_every_slide_with_the_same_review_status(tmp_path):
+    texts = {shape(slide, "Footer").text_frame.text for slide in build(tmp_path, approval=APPROVED).slides}
+    assert len(texts) == 1
+
+
+def footer_room_pt(presentation):
+    """Width the footer text has on one line: the footer box less its two side margins."""
+    box = shape(presentation.slides[0], "Footer")
+    return Emu(box.width - box.text_frame.margin_left - box.text_frame.margin_right).pt
+
+
+def test_the_footer_fits_one_line_with_the_longest_file_name_and_a_reviewer(tmp_path):
+    # Worst case today: the longest workbook name, the default model, and a reviewer (plus the "*"
+    # for uncommitted code whenever these tests run mid-edit). Measured on width, not only height.
+    presentation = build_presentation(
+        collect_deck_data("Fernhollow", "fernhollow.xlsx", three_quarters(), None, TEST_CONFIG), None, RUN_DATE,
+        tmp_path, approval=APPROVED, model="claude-sonnet-5")
+    text = footer(presentation)
+    assert "reviewed by Tyler Ho on 2026-09-17" in text
+    assert text_width_pt(text, MIN_FONT_PT) <= footer_room_pt(presentation)
+
+
+def test_a_reviewer_name_too_long_for_the_footer_leaves_the_name_to_the_manifest(tmp_path):
+    # A name is typed by a person, so it can be any length. The footer keeps the review day on one
+    # line; who reviewed stays in the manifest, which approve.py wrote.
+    long_name = {**APPROVED, "reviewer": "Alexandra Richardson-Whitfield of the Portfolio Operations Team"}
+    presentation = build(tmp_path, approval=long_name, model="claude-sonnet-5")
+    text = footer(presentation)
+    assert text.endswith(" | AI-drafted | reviewed on 2026-09-17")
+    assert text_width_pt(text, MIN_FONT_PT) <= footer_room_pt(presentation)
 
 
 def northwind_manifest(tmp_path, input_sha256=None, config_sha256=None):
@@ -340,12 +396,25 @@ def northwind_manifest(tmp_path, input_sha256=None, config_sha256=None):
 
 
 def watermarks_in(path):
-    return [item.name for slide in Presentation(path).slides for item in slide.shapes if item.name == "Watermark"]
+    return watermarks(Presentation(path))
 
 
 def test_rebuilding_an_approved_deck_drops_the_watermark(tmp_path):
     workbook = northwind_manifest(tmp_path)
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path, draft=True)
+    assert watermarks_in(path) == []
+
+
+def test_the_footer_reads_the_review_status_from_the_manifest(tmp_path):
+    workbook = northwind_manifest(tmp_path)
     path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert footer(Presentation(path)).endswith(" | AI-drafted | reviewed by Tyler Ho on 2026-09-17")
+
+
+def test_without_a_manifest_the_footer_says_not_reviewed_and_there_is_no_watermark(tmp_path):
+    path, _ = save_deck(PROJECT_DIR / "data" / "northwind.xlsx", TEST_CONFIG, None, run_date=RUN_DATE,
+                        output_dir=tmp_path)
+    assert footer(Presentation(path)).endswith(" | AI-drafted | not reviewed")
     assert watermarks_in(path) == []
 
 
@@ -361,14 +430,26 @@ def test_a_rebuilt_deck_updates_what_the_manifest_says_about_it(tmp_path):
 def test_a_workbook_changed_since_approval_goes_back_to_draft(tmp_path):
     # Nobody has reviewed a deck built from numbers that arrived after the approval.
     workbook = northwind_manifest(tmp_path, input_sha256="the-hash-of-an-older-workbook")
-    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path, draft=True)
     assert len(watermarks_in(path)) == 5
+    assert footer(Presentation(path)).endswith(" | AI-drafted | not reviewed")
 
 
 def test_changed_thresholds_send_an_approved_deck_back_to_draft(tmp_path):
     workbook = northwind_manifest(tmp_path, config_sha256="the-hash-of-older-thresholds")
-    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path, draft=True)
     assert len(watermarks_in(path)) == 5
+    assert footer(Presentation(path)).endswith(" | AI-drafted | not reviewed")
+
+
+def test_command_line_draft_flag(tmp_path):
+    # build_deck.py --draft turns the watermark on; without it the deck has none.
+    import build_deck
+    workbook = str(PROJECT_DIR / "data" / "northwind.xlsx")
+    build_deck.main([workbook, "--no-analysis", "--draft"], output_dir=tmp_path)
+    assert len(watermarks_in(tmp_path / "northwind_board_pack.pptx")) == 5
+    build_deck.main([workbook, "--no-analysis"], output_dir=tmp_path)
+    assert watermarks_in(tmp_path / "northwind_board_pack.pptx") == []
 
 
 def test_deck_path():

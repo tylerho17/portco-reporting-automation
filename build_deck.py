@@ -16,12 +16,16 @@ Rules:
 - No math and no hand-typed numbers: every number comes from metrics.py, config.yaml or the
   validated analysis, and is formatted by metrics.format_value (% formatting happens only at output).
 - Text must fit: text_fit.py shrinks it to a 12 pt floor, then stops with an error.
-- Footer on every slide: fictional-data note, source file, run date, code commit, model.
-- Every slide is stamped "DRAFT - NOT REVIEWED" until a person approves the deck with approve.py
-  (provenance.py decides; a changed workbook or config.yaml brings the stamp back).
+- Footer on every slide, on one line: fictional-data note, source file, run date, code commit, model,
+  and the review status from the manifest: "AI-drafted | reviewed by NAME on DATE" once a person
+  has approved the deck with approve.py, else "AI-drafted | not reviewed" (provenance.py decides;
+  a changed workbook or config.yaml makes it "not reviewed" again).
+- With --draft, every slide of a deck nobody has reviewed is also stamped "DRAFT - NOT REVIEWED".
+  Off by default: the footer already says it on every slide.
 
 Run: python build_deck.py data/northwind.xlsx                  (uses output/northwind_analysis.json if it exists)
      python build_deck.py data/northwind.xlsx --no-analysis    (placeholder on slides 1 and 5)
+     python build_deck.py data/northwind.xlsx --draft          (DRAFT watermark unless reviewed)
 """
 
 import argparse
@@ -49,7 +53,7 @@ from metrics import (CANNOT_EVALUATE, CONFIG_PATH, FLAG_RULES, METRIC_LABELS, NO
                      reason_text, runway_at_next_budget, runway_context_label)
 from provenance import (NOT_REVIEWED, approval_status, deck_status, file_sha256, git_commit, manifest_path,
                         read_manifest, save_manifest)
-from text_fit import MIN_FONT_PT, TextDoesNotFitError, fit_table, paragraph, shrink_to_fit
+from text_fit import MIN_FONT_PT, TextDoesNotFitError, fit_table, paragraph, shrink_to_fit, text_width_pt
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 CHART_FOLDER = "charts"   # PNGs go in output/charts/
@@ -58,8 +62,10 @@ PLACEHOLDER_TEXT = "AI summary unavailable"
 PLACEHOLDER_NOTE = ("The headline, wins, risks and questions are written by Claude, and no validated version "
                     "is available for this deck. Every number on the other slides is computed in Python "
                     "and is unaffected.")
-FICTIONAL_NOTE = "Fictional data, generated for demonstration"
+FICTIONAL_NOTE = "Fictional data"     # short: the footer line has no room to spare (add_footer)
 NO_AI_MODEL = "no AI text"            # the footer's model when the deck shows the placeholder
+AI_DRAFTED = "AI-drafted"             # the footer's review status starts with this, reviewed or not
+NOT_REVIEWED_TEXT = "not reviewed"
 LOCAL_CHANGES = "*"                   # after the commit: the code had uncommitted edits when this ran
                                       # (spelled out in the manifest; the footer has room for one line only)
 UNKNOWN_PROMPT_VERSION = "unknown (saved before prompt versions)"
@@ -85,7 +91,7 @@ ITEM_SPACE = 10       # after each list item
 SECTION_SPACE = 14    # after the last item of a section
 QUESTION_SPACE = 18
 
-# The DRAFT watermark, until a person approves the deck (provenance.py, approve.py).
+# The DRAFT watermark (--draft only), on decks no person has approved (provenance.py, approve.py).
 WATERMARK_SIZE = 48
 WATERMARK_ROTATION = 315          # degrees: bottom-left to top-right across the slide
 WATERMARK_ALPHA_PERCENT = 25      # see-through, so the numbers underneath stay readable
@@ -359,14 +365,41 @@ def commit_text(commit=None):
     return commit["commit"] + (LOCAL_CHANGES if commit["uncommitted_changes"] else "")
 
 
-def add_footer(slide, deck, run_date):
-    """Footer on every slide: fictional-data note, source file, run date, code commit, model.
+def review_text(approval, with_name=True):
+    """The footer's review status: "reviewed by Tyler Ho on 2026-09-17", or "not reviewed".
 
-    The labels ("Source:", "Run date:") are left off on purpose: with them the line is 814 pt wide
-    and wraps, without them it is 620 pt and fits on one line at 12 pt.
+    approval = provenance.approval_status's record, or None. approved_at is to the second
+    ("2026-09-17T15:00:00"); the footer shows the day. with_name=False leaves the name out.
     """
-    text = " | ".join([FICTIONAL_NOTE, deck["data"]["source_name"], run_date.isoformat(),
-                       deck["commit"], deck["model"]])
+    if not approval:
+        return NOT_REVIEWED_TEXT
+    day = approval["approved_at"].split("T")[0]
+    return f"reviewed by {approval['reviewer']} on {day}" if with_name else f"reviewed on {day}"
+
+
+def footer_text(deck, run_date, with_name=True):
+    """The footer line: "Fictional data | northwind.xlsx | 2026-09-17 | 2a215a9 | claude-sonnet-5 | AI-drafted | ..."."""
+    return " | ".join([FICTIONAL_NOTE, deck["data"]["source_name"], run_date.isoformat(), deck["commit"],
+                       deck["model"], AI_DRAFTED, review_text(deck["approval"], with_name)])
+
+
+def fits_one_line(text, box):
+    """True if the text, at the footer size, is no wider than the box less its side margins."""
+    _, _, width, _ = box
+    return text_width_pt(text, FOOTER_SIZE) <= points(width - 2 * TEXT_MARGIN_X)
+
+
+def add_footer(slide, deck, run_date):
+    """Footer on every slide: fictional-data note, source file, run date, commit, model, review status.
+
+    The labels ("Source:", "Run date:") are left off on purpose, and the line is one line at 12 pt
+    (748 pt of 755 with the longest file name and "reviewed by Tyler Ho"). A reviewer's name is typed
+    by a person, so it can be any length: if it would wrap the line, the footer says "reviewed on
+    DATE" and the name stays in the manifest. Anything else too long still stops the build.
+    """
+    text = footer_text(deck, run_date)
+    if not fits_one_line(text, deck["footer_box"]):
+        text = footer_text(deck, run_date, with_name=False)
     add_text_box(slide, "Footer", deck["footer_box"], [paragraph(text, FOOTER_SIZE, color=MID_GRAY)], deck)
 
 
@@ -666,16 +699,17 @@ def ai_text_problems(summary):
     return problems
 
 
-def build_presentation(data, summary, run_date, chart_dir, approval=None, model=None):
+def build_presentation(data, summary, run_date, chart_dir, approval=None, model=None, draft=False):
     """Build all 5 slides on the template.
 
     summary = a validated BoardSummary, or None for the placeholder. approval = the record of a
-    person having reviewed this deck (provenance.approval_status); without one, every slide is
-    watermarked. model = the Claude model whose text is on the deck, for the footer.
+    person having reviewed this deck (provenance.approval_status), or None; the footer says which.
+    model = the Claude model whose text is on the deck, for the footer. draft=True stamps every
+    slide "DRAFT - NOT REVIEWED" - but only if nobody has approved it, since the stamp says so.
     """
     presentation = Presentation(TEMPLATE_PATH)
     layout = find_content_layout(presentation)
-    deck = {"data": data, "summary": summary, "chart_dir": Path(chart_dir),
+    deck = {"data": data, "summary": summary, "chart_dir": Path(chart_dir), "approval": approval,
             "area": layout_box(layout, BODY_TYPES), "footer_box": layout_box(layout, {PP_PLACEHOLDER.FOOTER}),
             "slide_size": (presentation.slide_width, presentation.slide_height),
             "commit": commit_text(), "model": model or NO_AI_MODEL}
@@ -684,7 +718,7 @@ def build_presentation(data, summary, run_date, chart_dir, approval=None, model=
         deck["where"] = f"Slide {number}"  # names the slide in any "doesn't fit" error
         build_slide(slide, deck)
         add_footer(slide, deck, run_date)
-        if approval is None:  # nobody has signed this off, so it goes out stamped as a draft
+        if draft and approval is None:  # asked for, and nobody has signed this off
             add_watermark(slide, deck)
     return presentation
 
@@ -714,11 +748,12 @@ def analysis_path(workbook_path, output_dir=OUTPUT_DIR):
     return Path(output_dir) / f"{Path(workbook_path).stem}_analysis.json"
 
 
-def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_dir=OUTPUT_DIR):
+def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_dir=OUTPUT_DIR, draft=False):
     """Clean one workbook, build its deck and save it. Returns (deck path, why the AI summary is unavailable or None).
 
-    analysis_file=None means no analysis (the placeholder). An old deck is deleted first, so a
-    failed build never leaves last run's deck looking current.
+    analysis_file=None means no analysis (the placeholder). draft=True adds the DRAFT watermark
+    to a deck nobody has approved. An old deck is deleted first, so a failed build never leaves
+    last run's deck looking current.
     """
     workbook_path, output_dir = Path(workbook_path), Path(output_dir)
     company = workbook_path.stem.title()   # same rule as analyze.py and main.py
@@ -732,7 +767,7 @@ def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_d
     else:
         summary, why_unavailable = load_analysis(analysis_file, build_payload(company, actuals, next_budget, config))
 
-    # Watermark unless a person approved this deck, for these exact inputs (provenance.py).
+    # Reviewed only if a person approved this deck, for these exact inputs (provenance.py).
     approval, _ = approval_status(read_manifest(manifest_path(workbook_path, output_dir)),
                                   file_sha256(workbook_path), file_sha256(CONFIG_PATH))
     details = analysis_details(analysis_file) if summary else None
@@ -740,22 +775,25 @@ def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_d
     chart_dir = output_dir / CHART_FOLDER
     chart_dir.mkdir(parents=True, exist_ok=True)
     presentation = build_presentation(data, summary, run_date or datetime.date.today(), chart_dir,
-                                      approval=approval, model=details["model"] if details else None)
+                                      approval=approval, model=details["model"] if details else None, draft=draft)
     presentation.save(path)
     record_deck_status(workbook_path, output_dir, approval, ai_text=summary is not None)
     return path, why_unavailable
 
 
-def main(argv=None):
+def main(argv=None, output_dir=OUTPUT_DIR):
     parser = argparse.ArgumentParser(description="Build the board deck for one KPI workbook.")
     parser.add_argument("workbook", help="path to a KPI workbook, e.g. data/northwind.xlsx")
     parser.add_argument("--analysis", help="analysis JSON (default: output/<company>_analysis.json)")
     parser.add_argument("--no-analysis", action="store_true", help="build with the 'AI summary unavailable' placeholder")
+    parser.add_argument("--draft", action="store_true", help="stamp DRAFT - NOT REVIEWED on a deck nobody has approved")
     args = parser.parse_args(argv)
 
-    analysis_file = None if args.no_analysis else (args.analysis or analysis_path(args.workbook))
-    path, why_unavailable = save_deck(args.workbook, load_config(), analysis_file)
-    print(f"Saved {path.relative_to(Path(__file__).parent)}")
+    analysis_file = None if args.no_analysis else (args.analysis or analysis_path(args.workbook, output_dir))
+    path, why_unavailable = save_deck(args.workbook, load_config(), analysis_file, output_dir=output_dir,
+                                      draft=args.draft)
+    project = Path(__file__).parent
+    print(f"Saved {path.relative_to(project) if path.is_relative_to(project) else path}")
     if why_unavailable:
         print(f"{PLACEHOLDER_TEXT}: {why_unavailable}")
 
