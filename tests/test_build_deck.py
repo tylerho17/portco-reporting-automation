@@ -289,7 +289,7 @@ def status_text_colors(table):
 def test_status_text_is_red_green_or_slate_and_the_table_is_navy_over_white_and_surface(tmp_path):
     table = shape(build(tmp_path).slides[0], "KPI table").table
     colors = status_text_colors(table)
-    assert colors["NRR (annualized)"] == "C0392B" and colors["Runway at current burn"] == "1E8449"
+    assert colors["NRR (annualized)"] == "C0392B" and colors["Runway at current burn"] == "1A7742"
     assert colors["Rule of 40"] == "334155"
     header = table.cell(0, 0)
     assert str(header.fill.fore_color.rgb) == "0B2545"

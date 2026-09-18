@@ -157,7 +157,8 @@ def set_placeholder_style(placeholder, size_pt, hex_color, bold=False):
 
 
 def style_cover_layout(layout):
-    """Title Slide: navy background, white 28 pt title, 20 pt subtitle on the surface color, no master decorations."""
+    """Title Slide: navy background, white 28 pt title, 20 pt subtitle and 12 pt footer in the surface color,
+    no master decorations. The footer needs its own color: the master's is a dark gray, unreadable on navy."""
     layout.element.set("showMasterSp", "0")  # hide the top bar and footer rule from the master
     layout.background.fill.solid()
     layout.background.fill.fore_color.rgb = RGBColor.from_string(NAVY)
@@ -167,6 +168,8 @@ def style_cover_layout(layout):
             set_placeholder_style(placeholder, TITLE_PT, WHITE, bold=True)
         elif kind == PP_PLACEHOLDER.SUBTITLE:
             set_placeholder_style(placeholder, SECTION_PT, SURFACE)
+        elif kind == PP_PLACEHOLDER.FOOTER:
+            set_placeholder_style(placeholder, MIN_PT, SURFACE)
 
 
 # ---------------------------------------------------------------------------

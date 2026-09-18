@@ -80,9 +80,10 @@ def test_the_ai_checkbox_label_names_the_typical_cost():
 
 
 def test_status_colors_are_the_palette_s():
-    # Typed from the Task 3 brief: red C0392B on FDE8E6, green 1E8449 on EAF6EF, gray fill EDF0F3.
+    # Typed from the Task 3 brief: red C0392B on FDE8E6, green on EAF6EF, gray fill EDF0F3.
+    # Task 18 darkened the green from 1E8449 to 1A7742 so it passes WCAG AA on its fill.
     assert app.status_css(TRIP) == "background-color: #FDE8E6; color: #C0392B"
-    assert app.status_css(PASS) == "background-color: #EAF6EF; color: #1E8449"
+    assert app.status_css(PASS) == "background-color: #EAF6EF; color: #1A7742"
     assert app.status_css(CANNOT_EVALUATE) == "background-color: #EDF0F3; color: #334155"
     for status in (TRIP, PASS, CANNOT_EVALUATE):
         fill, text = STATUS_COLORS[status]

@@ -34,7 +34,7 @@ LINE = "E2E8F0"         # borders and rules
 SURFACE = "F8FAFC"      # page background, table stripes, disabled buttons
 WHITE = "FFFFFF"        # cards, table rows, secondary buttons
 RED, RED_FILL = "C0392B", "FDE8E6"        # tripped
-GREEN, GREEN_FILL = "1E8449", "EAF6EF"    # passed
+GREEN, GREEN_FILL = "1A7742", "EAF6EF"    # passed (was 1E8449: 4.25 : 1 on its fill, under AA's 4.5)
 GRAY_FILL = "EDF0F3"                      # cannot evaluate / data missing
 
 # Status -> (fill, text): the deck, the memo and the web page.
@@ -55,6 +55,56 @@ EXCEL_STATUS_COLORS = {
 def css_color(value):
     """'0B2545' -> '#0B2545' (web pages and matplotlib want the #)."""
     return f"#{value}"
+
+
+# ---------------------------------------------------------------------------
+# Contrast (WCAG 2, level AA): tests/test_contrast.py checks every pair below and every pair the code makes
+# ---------------------------------------------------------------------------
+
+AA_TEXT_RATIO = 4.5       # text of any size we use (the 3 : 1 for large text isn't relied on)
+AA_NON_TEXT_RATIO = 3.0   # a control or chart mark you need to see: a checkbox, a bar
+
+# (text, background, where): every text color on every background it's drawn on.
+TEXT_PAIRS = [
+    (SLATE, SURFACE, "web: body text on the page"),
+    (SLATE, WHITE, "web, deck, memo: body and table text on white"),
+    (NAVY, SURFACE, "web: headings, links, a company's name on the page"),
+    (NAVY, WHITE, "web, deck, memo: titles, headings, secondary buttons"),
+    (NAVY_DARK, SURFACE, "web: a secondary button under the mouse"),
+    (WHITE, NAVY, "web, deck: primary buttons, table headers, the cover title"),
+    (WHITE, NAVY_DARK, "web: a primary button under the mouse"),
+    (SURFACE, NAVY, "deck: the cover subtitle and footer"),
+    (MID_GRAY, SURFACE, "web: captions and disabled buttons on the page"),
+    (MID_GRAY, WHITE, "web, deck, charts, memo: captions, footers, notes, gap labels"),
+    (SLATE, GRAY_FILL, "status: cannot evaluate"),
+    (RED, RED_FILL, "status: tripped"),
+    (GREEN, GREEN_FILL, "status: passed"),
+]
+
+# (mark, background, where): shapes that carry meaning without words.
+NON_TEXT_PAIRS = [
+    (NAVY, SURFACE, "web: Streamlit's checkbox tick and progress bar"),
+    (NAVY, WHITE, "charts: bars and the ARR line"),
+    (RED, WHITE, "charts: a tripped flag's bar"),
+]
+
+
+def relative_luminance(hex_color):
+    """How bright a color looks, from 0 (black) to 1 (white), by WCAG 2's formula.
+
+    Each of red, green and blue goes 0-255 -> 0-1, is undone from the screen's gamma curve (a
+    straight line for very dark values, a power of 2.4 above), then weighted by how bright the eye
+    finds it: green counts most, blue least.
+    """
+    channels = [int(hex_color[start:start + 2], 16) / 255 for start in (0, 2, 4)]
+    linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def contrast_ratio(first, second):
+    """(lighter + 0.05) / (darker + 0.05): 1 for a color on itself, 21 for black on white."""
+    lighter, darker = sorted((relative_luminance(first), relative_luminance(second)), reverse=True)
+    return (lighter + 0.05) / (darker + 0.05)
 
 
 # ---------------------------------------------------------------------------

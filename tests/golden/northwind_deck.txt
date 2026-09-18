@@ -7,12 +7,12 @@
     row 3: 'ARR growth YoY' 14 pt 334155 fill F8FAFC | '42.8%' 14 pt 334155 fill F8FAFC | 'data missing' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC
     row 4: 'Gross margin' 14 pt 334155 fill FFFFFF | '75.1%' 14 pt 334155 fill FFFFFF | '75.0%' 14 pt 334155 fill FFFFFF | '-' 14 pt 334155 fill FFFFFF | '-' 14 pt 334155 fill FFFFFF
     row 5: 'NRR (annualized)' 14 pt 334155 fill F8FAFC | '97.1%' 14 pt 334155 fill F8FAFC | '102.0%' 14 pt 334155 fill F8FAFC | 'trips below 100.0%' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
-    row 6: 'GRR (annualized)' 14 pt 334155 fill FFFFFF | '88.1%' 14 pt 334155 fill FFFFFF | '90.1%' 14 pt 334155 fill FFFFFF | 'trips below 85.0%' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 6: 'GRR (annualized)' 14 pt 334155 fill FFFFFF | '88.1%' 14 pt 334155 fill FFFFFF | '90.1%' 14 pt 334155 fill FFFFFF | 'trips below 85.0%' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1A7742 fill EAF6EF
     row 7: 'Burn multiple' 14 pt 334155 fill F8FAFC | '2.35x' 14 pt 334155 fill F8FAFC | '1.81x' 14 pt 334155 fill F8FAFC | 'trips above 2.00x' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
     row 8: 'Net burn vs budget' 14 pt 334155 fill FFFFFF | '20.0%' 14 pt 334155 fill FFFFFF | '17.0%' 14 pt 334155 fill FFFFFF | 'trips above 15.0%' 14 pt 334155 fill FFFFFF | 'Tripped' 14 pt C0392B fill FDE8E6
     row 9: 'Runway at current burn' 14 pt 334155 fill F8FAFC | '11.0 mo' 14 pt 334155 fill F8FAFC | '15.0 mo' 14 pt 334155 fill F8FAFC | 'trips below 12.0 mo' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
-    row 10: 'CAC payback' 14 pt 334155 fill FFFFFF | '20.7 mo' 14 pt 334155 fill FFFFFF | '19.8 mo' 14 pt 334155 fill FFFFFF | 'trips above 24.0 mo' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1E8449 fill EAF6EF
-    row 11: 'Net new ARR vs budget' 14 pt 334155 fill F8FAFC | '-19.0%' 14 pt 334155 fill F8FAFC | '-1.5%' 14 pt 334155 fill F8FAFC | 'trips below -20.0%' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 10: 'CAC payback' 14 pt 334155 fill FFFFFF | '20.7 mo' 14 pt 334155 fill FFFFFF | '19.8 mo' 14 pt 334155 fill FFFFFF | 'trips above 24.0 mo' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1A7742 fill EAF6EF
+    row 11: 'Net new ARR vs budget' 14 pt 334155 fill F8FAFC | '-19.0%' 14 pt 334155 fill F8FAFC | '-1.5%' 14 pt 334155 fill F8FAFC | 'trips below -20.0%' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1A7742 fill EAF6EF
     row 12: 'Rule of 40' 14 pt 334155 fill FFFFFF | '-12.2%' 14 pt 334155 fill FFFFFF | 'data missing' 14 pt 334155 fill FFFFFF | 'trips below 40.0%' 14 pt 334155 fill FFFFFF | 'Tripped' 14 pt C0392B fill FDE8E6
     row 13: 'NRR falling while pipeline rising' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | 'rule on Risks and flags slide' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in

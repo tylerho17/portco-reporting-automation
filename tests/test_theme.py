@@ -28,12 +28,12 @@ def test_the_palette_is_the_brief_s_colors():
     assert (theme.NAVY, theme.NAVY_DARK, theme.SLATE, theme.MID_GRAY) == ("0B2545", "08192F", "334155", "64748B")
     assert (theme.LINE, theme.SURFACE, theme.WHITE) == ("E2E8F0", "F8FAFC", "FFFFFF")
     assert (theme.RED, theme.RED_FILL) == ("C0392B", "FDE8E6")
-    assert (theme.GREEN, theme.GREEN_FILL) == ("1E8449", "EAF6EF")
+    assert (theme.GREEN, theme.GREEN_FILL) == ("1A7742", "EAF6EF")   # Task 18: was 1E8449, 4.25 : 1 on its fill
     assert theme.GRAY_FILL == "EDF0F3"
 
 
 def test_status_colors_are_red_green_and_gray_on_their_fills():
-    assert theme.STATUS_COLORS == {TRIP: ("FDE8E6", "C0392B"), PASS: ("EAF6EF", "1E8449"),
+    assert theme.STATUS_COLORS == {TRIP: ("FDE8E6", "C0392B"), PASS: ("EAF6EF", "1A7742"),
                                    CANNOT_EVALUATE: ("EDF0F3", "334155")}
 
 

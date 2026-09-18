@@ -14,7 +14,7 @@
     row 10: 'CAC payback' 14 pt 334155 fill FFFFFF | '134.4 mo' 14 pt 334155 fill FFFFFF | '96.2 mo' 14 pt 334155 fill FFFFFF | 'trips above 24.0 mo' 14 pt 334155 fill FFFFFF | 'Tripped' 14 pt C0392B fill FDE8E6
     row 11: 'Net new ARR vs budget' 14 pt 334155 fill F8FAFC | '-150.0%' 14 pt 334155 fill F8FAFC | '-122.9%' 14 pt 334155 fill F8FAFC | 'trips below -20.0%' 14 pt 334155 fill F8FAFC | 'Tripped' 14 pt C0392B fill FDE8E6
     row 12: 'Rule of 40' 14 pt 334155 fill FFFFFF | 'data missing' 14 pt 334155 fill FFFFFF | '-78.0%' 14 pt 334155 fill FFFFFF | 'trips below 40.0%' 14 pt 334155 fill FFFFFF | 'Cannot evaluate: missing input' 14 pt 334155 fill EDF0F3
-    row 13: 'NRR falling while pipeline rising' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | 'rule on Risks and flags slide' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 13: 'NRR falling while pipeline rising' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | 'rule on Risks and flags slide' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1A7742 fill EAF6EF
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
     'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 2 of 4 (layout: Title and Content) ==
