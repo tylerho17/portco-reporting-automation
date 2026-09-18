@@ -1,120 +1,130 @@
 # Loom script: Board Pack Generator (2 minutes)
 
-About 285 spoken words, at roughly 150 words a minute. **Say** is what you say; **Show** is what's on screen. Practise with a timer: if a section runs long, cut words, not the timestamps.
+About 293 spoken words at 150 words a minute. **Show** is what's on screen; **Say** is what you say. The whole recording happens on the web page, the downloaded deck and memo, and two docs: no terminal on camera. Practise with a timer: if a section runs long, cut words, not the timestamps.
 
-The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 11.0 mo, and so on). Those are the same on every run. Claude's wording changes from run to run, so no AI sentence is quoted word for word.
+The script quotes only numbers Python computes, plus the model scores and the counts in the docs (table at the end). Claude's wording can change between runs, so no AI sentence is quoted word for word.
 
 ---
 
 ## Before you record
 
-1. **Put the AI text back on the decks (no API call):** `python demo_reset.py` (it must end "Ready for the demo."), or for one deck `python build_deck.py data/northwind.xlsx`. It's needed if `check_main.py` has run since, because that script leaves "AI summary unavailable" decks behind. Open slide 4 and check you see the headline, not the placeholder.
-   - **Build without `--draft`**, so there's no watermark over the numbers. The footer does the job instead: check it ends "AI-drafted | reviewed by Tyler Ho on ...". `demo_reset.py` clears every approval (a demo starts "not reviewed"), so after it run `python approve.py northwind`, then `python build_deck.py data/northwind.xlsx`.
-2. **Choose how to show the run** (0:35):
-   - **Option A (free, no risk; recommended for now):** don't run the AI again. Show the terminal output of today's real live run of `python main.py --all`, saved in `output/day_logs/task4_live_run.txt` (e.g. open it in the VS Code terminal with `cat`). The narration doesn't say "live", so it's accurate either way.
-   - **Option B (live, about $0.09 and 70 s for one company):** run `python main.py data/northwind.xlsx` on camera and trim the wait in Loom.
-   - **Why A for now:** today's Northwind risks only just fit slide 4 (at the 12 pt floor). A slightly longer answer gets one retry and then the "AI summary unavailable" placeholder (DAY_REPORT.md, Review, finding 1; POLISH_REPORT.md, Task 2). A live run could hit that on camera.
-3. **Open these windows in this order:**
-   1. `data/northwind.xlsx` in Excel, on the KPI Tracker tab
-   2. VS Code with `CLAUDE.md` open and the Claude Code panel beside it
-   3. a terminal in the project folder, with the final line of `python -m pytest -q` already showing
-   4. `output/northwind_board_pack.pptx` in PowerPoint, on slide 1
-   5. the web page: double-click `run_app.command` (it starts `app.py` and opens the browser), then click Northwind in the portfolio table, AI box unticked, so its flags and metrics are already showing
-4. **Don't show Alderpeak's or Fernhollow's slide 4:** Claude's text there has claims that passed validation but are misleading (LEARNINGS.md, Task 4 live run). The walk-through uses Northwind only.
+1. **Reset the output folder, with no API call:** `python demo_reset.py`. It must end "Ready for the demo." It rebuilds every deck and memo from the saved analysis JSONs (the AI text is reused, nothing is sent to Claude), and builds last quarter's run first, so the memo has "what changed" to show.
+   - One warning is expected: Fernhollow has no saved analysis of today's numbers, so its deck says "AI summary unavailable". The recording opens Northwind only, so it never shows.
+   - If it ends "Not ready for the demo", fix each line marked ✗ (each says how) and run it again.
+2. **Commit first.** `git status` must be clean, or every footer shows the commit with a `*` ("built from code that wasn't committed"). If you commit, run `python demo_reset.py` again.
+3. **Don't approve Northwind before recording.** The footer should read "AI-drafted | not reviewed" on camera: that is the point of the approval gate. `demo_reset.py` clears approvals, so this is the state it leaves.
+4. **No watermark:** don't build with `--draft`. It stamps a diagonal DRAFT across every slide, over the numbers you point at. The footer carries the review status instead.
+5. **Open the web page:** double-click `run_app.command` in Finder (it sets up and starts `app.py`, then opens the browser). Leave its Terminal window open but behind the browser. Browser full screen, zoom 100%, portfolio page at the top, not scrolled.
+6. **Leave the AI box unticked.** Ticked, Generate could call Claude (about $0.09 and 70 s). Unticked, it reuses Northwind's saved analysis for free, in about a second. Click Generate on Northwind once before recording to see the green line that says the files are ready, then go back to the portfolio page.
+7. **Clear old downloads.** Delete any older `northwind_board_pack.pptx` and `northwind_board_memo.pdf` from Downloads, so the files you open on camera are the ones you just downloaded. PowerPoint and a PDF viewer open in the background.
+8. **Open these tabs, in this order, for 1:03 onward:**
+   1. README.md at **Key design decisions** (decision 1 at the top)
+   2. README.md at **Model comparison**, with the Results table in view
+   3. LEARNINGS.md at "v3 → v4: false direction and good-news claims (Task 7)"
+   4. README.md at **Next steps**, "Still to do"
+9. **Notifications off** (Focus mode), mouse cursor large enough to follow.
 
 ---
 
-## 0:00 – 0:15 The problem (~35 words)
+## 0:00 to 0:11 The problem (27 words)
 
-**Show:** PowerPoint on slide 1, or your face.
-
-**Say:**
-> "A PE fund with 275 portfolio companies gets a KPI spreadsheet from each one every quarter, each in its own format. Someone re-keys them, checks the metrics and writes the board update by hand. I automated that."
-
-## 0:15 – 0:35 The messy input, and how I built it (~55 words)
-
-**Show, 0:15 – 0:22:** Excel, `data/northwind.xlsx`. Point at " Churned ARR " and "Cash - End of Qtr", the "$14.3M" typed as text, and the empty Q1 2025 row.
+**Show:** the portfolio page, not scrolled.
 
 **Say:**
-> "Here's a fictional company's workbook: odd headers, money typed as text, and a quarter that's blank."
+> "Every quarter, each portfolio company sends a KPI spreadsheet, each in its own format. Someone re-keys it and writes the board update by hand. I automated that."
 
-**Show, 0:22 – 0:35:** VS Code. Scroll `CLAUDE.md` to **Rules** and **Metric definitions**, then the Claude Code panel, then the terminal's test line (`841 passed`).
+## 0:11 to 0:29 The portfolio page (44 words)
 
-**Say:**
-> "I build it in VS Code with Claude Code. CLAUDE.md holds the spec: every metric definition and the rules. I work in small steps: plan, tests first, then code. Each step ends with over 500 tests passing."
-
-## 0:35 – 1:20 Run it, and walk the Northwind deck (~105 words)
-
-**Show, 0:35 – 0:45:** the terminal: the ✓ lines, then the summary table.
+**Show:** the table. Run the cursor along the column headers (Latest quarter, Flags tripped, Data gaps), then down **Flags tripped** row by row, then Northwind's **Data gaps** cell ("19 metrics/flags (blank: Q1 2025)").
 
 **Say:**
-> "One command runs the batch. Same code, three stories: healthy Alderpeak trips 0 of 9 flags, distressed Fernhollow 7, and Northwind 6."
+> "This is the portfolio page. Three fictional companies, one row each: latest quarter, flags tripped, data gaps. Same code, three stories: Alderpeak trips 0 of 9 flags, Fernhollow 7, Northwind 6. Northwind left a quarter blank, and the tool says so instead of guessing."
 
-**Show, 0:45 – 0:57:** slide 1, Key metrics. Point at NRR 97.1%, runway 11.0 mo, then "data missing" in the Q1 2026 column of the ARR growth YoY row (it compares with the blank Q1 2025).
+## 0:29 to 0:39 Pick a company and generate (24 words)
 
-**Say:**
-> "Every number here is from Python. NRR is 97.1%, below 100%, and runway is 11 months against a 12-month floor. Where a number needs the blank quarter, it says data missing. It never guesses."
-
-**Show, 0:57 – 1:04:** slide 2, the charts. Point at the gap at Q1 2025.
+**Show:** click **Northwind** in the first column. On its page, click the navy **Generate** button (AI box unticked) and let the green line appear.
 
 **Say:**
-> "The blank quarter stays a visible gap in the charts."
+> "I click Northwind, then Generate. It cleans the messy workbook, computes every metric, checks nine thresholds and builds the deck and memo in seconds."
 
-**Show, 1:04 – 1:12:** slide 3 ("6 of 9 flags tripped" at the top left, the Combo rule under the flags, Data gaps on the right).
+## 0:39 to 1:03 The deck and the memo (56 words)
 
-**Say:**
-> "Each tripped flag against its threshold, plus a combo rule: NRR falling while pipeline rises points to retention, not sales."
-
-**Show, 1:12 – 1:20:** slide 4, AI commentary. Point at the gray line under the title, then the end of the footer ("AI-drafted | reviewed by ...").
+**Show, 0:39 to 0:53:** click **Download deck**, open it in PowerPoint. Slide 1: point at NRR 97.1% and runway 11.0 mo with their thresholds. Slide 2: the gap at Q1 2025. Slide 3: "6 of 9 flags tripped". Slide 4: the gray "AI-drafted from computed metrics - review before use" line.
 
 **Say:**
-> "Only the last slide is Claude's, marked AI-drafted. Every footer says whether a person has reviewed the deck."
+> "The deck: four slides. Key metrics: NRR 97.1%, below 100; runway 11 months against a 12 month floor. Charts with the blank quarter left as a gap. Every tripped flag against its threshold. Then Claude's commentary, marked AI-drafted."
 
-## 1:20 – 1:45 Design choices (~60 words)
-
-**Show:** README.md, **Key design decisions**, then scroll to the **Model comparison** table.
+**Show, 0:53 to 1:03:** back in the browser, click **Download memo (PDF)** and open it. Point at **What changed since the last run** and its five "Flags that flipped" lines.
 
 **Say:**
-> "Four choices. Python does all the math; Claude only interprets. Claude's answer is validated in code: the right shape, and every number it writes must appear in the data, sign included. If it fails twice, the deck still builds with a placeholder. And I picked the model with a blind test: Haiku scored 2 of 5, so Sonnet stays."
+> "The memo says the same in two pages, plus what changed since last quarter's run: five flags flipped."
 
-## 1:45 – 2:00 The web page, and next steps (~30 words)
+## 1:03 to 1:43 Design decisions (102 words)
 
-**Show, 1:45 – 1:52:** the web page's portfolio table (three companies, their flags and deck status), then Northwind's page with its flags and download buttons.
-
-**Say:**
-> "Colleagues who don't use a terminal get a web page: every company in one table, click Generate, download the deck."
-
-**Show, 1:52 – 2:00:** README.md, **Next steps**.
+**Show, 1:03 to 1:20:** README.md, **Key design decisions**: decision 1, then decision 2.
 
 **Say:**
-> "Next: a SharePoint trigger, and a portfolio rollup across all companies."
+> "Five decisions. One: Python computes every number; Claude only interprets. Two: its answer is checked in code: the right shape, it fits the slide, and every number must appear in the data, sign included."
+
+**Show, 1:20 to 1:27:** README.md, **Model comparison**, the Results table (Avg score column).
+
+**Say:**
+> "Three: I picked the model by blind test. Haiku scored 2 of 5, Sonnet 4, so Sonnet stays."
+
+**Show, 1:27 to 1:35:** LEARNINGS.md, the "v3 → v4" entry: point at "persistent gentle decline".
+
+**Say:**
+> "Four: passing checks isn't the same as right. Reading the output, I caught three false claims, like a trend that moved both ways called persistent, and wrote rules against them."
+
+**Show, 1:35 to 1:43:** PowerPoint, slide 4's footer ("... | claude-sonnet-5 | AI-drafted | not reviewed"), then the browser: scroll Northwind's page to the **Approve** box.
+
+**Say:**
+> "Five: every deck records its input hashes, code version and model, and says not reviewed until a person approves it."
+
+## 1:43 to 2:00 Next steps (40 words)
+
+**Show:** README.md, **Next steps**, "Still to do".
+
+**Say:**
+> "Next: any file format in, with each number cited to its source and a person confirming it. A SharePoint trigger, so a dropped workbook starts the run. And the portfolio rollup, built for three companies today, run across all 275."
 
 ---
 
-## Where each number in the script comes from
+## Where every number said on camera comes from
 
-| Said on camera | Where it comes from | Computed by |
+| Said on camera | Where it's shown | Computed or recorded by |
 |---|---|---|
-| 275 portfolio companies | The demo's premise (README cost section) | Not computed |
-| 0 of 9, 7 of 9, 6 of 9 flags | Summary table from `main.py` | `metrics.evaluate_flags` |
-| NRR 97.1%, below 100% | Slide 1, NRR row; threshold from `config.yaml` (`nrr_min`) | `metrics.nrr` |
-| Runway 11 months vs 12-month floor | Slide 1, Runway row; `config.yaml` (`runway_min_months`) | `metrics.runway_months` |
-| Q1 2025 blank | Northwind's blank quarter | `make_data.py` (`BLANK_QUARTER`) |
-| Over 500 tests | `python -m pytest -q` (1252 today) | pytest counts them |
-| 12 of 12 edge cases | `python eval/run_eval.py` | each eval company's answer key in `eval/make_eval_data.py` |
-| Portfolio rollup: Fernhollow 7, Northwind 6, Alderpeak 0; worst flag runway | `python rollup.py` or the web page's Download rollup (`output/portfolio_rollup.pptx`) | `rollup.py` from `metrics.evaluate_flags`; proved by `python check_rollup.py` |
-| Northwind Q1 to Q2: 5 flags flipped, 8 metrics moved, 1 data gap closed | The memo's "What changed since the last run", the company page's card, or `python diff_runs.py data/northwind.xlsx` (needs a run a quarter earlier: `python demo_reset.py` makes one) | `diff_runs.py` from the saved results in the manifest; proved by `python check_diff.py` |
-| Metrics and flags as CSV and JSON, and a table for email | `python export.py data/northwind.xlsx`, or the company page's Export | `export.py` from the same numbers as the metrics workbook; proved by `python check_export.py` |
-| Each deck, memo and workbook matches its approved copy | `python golden.py` ("9 of 9 match their goldens") | the approved text copies in `tests/golden/` |
-| Haiku scored 2 of 5 | README model comparison (needed 4.0) | `compare_models.py` |
+| Three fictional companies | The portfolio page's rows, one per workbook in `data/` | `make_data.py`, `make_data_alderpeak.py`, `make_data_fernhollow.py` |
+| 0 of 9, 7 of 9, 6 of 9 flags | Portfolio page, **Flags tripped**; each deck's slide 3 (Fernhollow's also says "1 cannot evaluate") | `metrics.evaluate_flags`, thresholds in `config.yaml`; proved by `python check_companies.py` |
+| A quarter blank (Q1 2025) | Portfolio page, **Data gaps**; slide 3's Data gaps line; the gap in slide 2's charts | `make_data.py` (`BLANK_QUARTER`); spread by `metrics.metric_reasons` |
+| Nine thresholds | The nine flags on slide 3 and in the memo | `metrics.evaluate_flags` with `config.yaml` |
+| In seconds | The green line after Generate | `python benchmark.py`: 1.11 s for Northwind with no AI call (FINAL_REPORT.md, Task 17) |
+| Four slides | The deck | `build_deck.py` (the appendix slide is off unless `--appendix`) |
+| NRR 97.1%, below 100 | Slide 1, NRR (annualized) row; threshold `nrr_min` in `config.yaml` | `metrics.nrr` |
+| Runway 11 months, 12 month floor | Slide 1, Runway at current burn row; `runway_min_months` in `config.yaml` | `metrics.runway_months` |
+| Two pages | `northwind_board_memo.pdf` has 2 pages | `memo.py` |
+| Five flags flipped | The memo's "What changed since the last run": NRR, burn multiple, runway, Rule of 40 and the combo rule | `diff_runs.py`, against last quarter's run that `demo_reset.py` builds; proved by `python check_diff.py` |
+| Five decisions | The order of this script (README decisions 1, 2, 10, 11 and 12, plus LEARNINGS.md) | Not computed |
+| Haiku 2 of 5, Sonnet 4 | README, **Model comparison**, Avg score (Haiku needed 4.0 to replace Sonnet) | `compare_models.py`, scored blind by hand |
+| Three false claims | LEARNINGS.md, "v3 → v4: false direction and good-news claims (Task 7)": growth "well above prior-period levels" while it fell, an up-and-down NRR called a "persistent gentle decline", a flag that passed for a bad reason called a win | Found by reading the Task 4 live run; the direction part is now also checked in code (`analyze.claim_problems`) |
+| 275 companies | The demo's premise (README, Cost and Model comparison) | Not computed |
+
+## Honesty notes for the next steps
+
+- **Any file format in, with citations and a confirm:** not built. What exists is the confirm step for workbooks: `mapping.py` proposes what an unknown header means, and nothing runs until a person confirms it. Today a number's source is named only when `clean.py` stops (sheet, row and cell).
+- **SharePoint trigger:** not built (README, Next steps).
+- **Portfolio rollup:** built and proved for three companies (`rollup.py`, `python check_rollup.py`). A batch of 275 has not been run; the time and cost for it are estimates (README, Cost).
 
 ## Timing check
 
-| Section | Seconds | Words (approx.) |
+| Section | Seconds | Words |
 |---|---|---|
-| Problem | 15 | 35 |
-| Input and workflow | 20 | 55 |
-| Run and deck | 45 | 105 |
-| Design choices | 25 | 60 |
-| Web page and next steps | 15 | 30 |
-| **Total** | **120** | **~285** |
+| The problem | 11 | 27 |
+| The portfolio page | 18 | 44 |
+| Pick a company and generate | 10 | 24 |
+| The deck and the memo | 24 | 56 |
+| Design decisions | 40 | 102 |
+| Next steps | 17 | 40 |
+| **Total** | **120** | **293** |
+
+Numbers read aloud ("97.1%", "275") take longer than their word count, which is why the total sits under 300.
