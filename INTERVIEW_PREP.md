@@ -19,9 +19,9 @@ whether it would survive real use, then how you work.
 4. [What broke](#what-broke): Q26–Q31
 5. [Scale and risk](#scale-and-risk): Q32–Q36
 6. [Working method](#working-method): Q37–Q39
-7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q60, the follow-ups an
+7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q68, the follow-ups an
    interviewer asks after the first answer (column mapping, the eval set, batch resilience, cost
-   ceilings, golden files, the approval gate)
+   ceilings, golden files, the approval gate, the run diff, the rollup, exports)
 8. [When you can't recall a detail](#when-you-cant-recall-a-detail)
 
 ---
@@ -897,6 +897,91 @@ that wasn't there. The web page's Approve button only appears for files built fr
 And the `--draft` watermark follows the same judge: once a deck is approved, a `--draft` rebuild no
 longer stamps it.
 *Point to:* `approve.reviewed_documents`, `memo.memo_approval`; `tests/test_approve.py::test_approving_a_run_that_built_a_memo_covers_the_memo_too`.
+
+### The run diff
+
+**Q61. Why "more than 5 points or 10%"? Aren't those numbers arbitrary?**
+The sizes are judgments, and I'd say so. What isn't arbitrary is that there are two. Percentages move
+by points, everything else by percent of its old value, because one number can't mean both: NRR going
+from 102% to 96.9% is 5.1 points but only 5% of itself, and a runway can't move "5 points". "More
+than" means a move of exactly the setting isn't listed, the same rule as "exactly at a threshold
+passes". config.yaml can override both (`diff_min_points`, `diff_min_relative`); I didn't add those
+keys myself, because a new key changes config.yaml's hash and would have sent every approved deck back
+to "not reviewed". And a flag that flips is always listed, whatever the size: Northwind's NRR moved 4.9
+points, so it isn't listed as a move, but it's there as a flip.
+*Point to:* `diff_runs.DEFAULT_MIN_POINTS`, `diff_runs.move_settings`; `tests/test_diff_runs.py::test_a_percentage_moves_by_points_and_exactly_the_setting_is_not_more_than_it`.
+
+**Q62. What can't the diff tell you?**
+Three limits. It keeps one step of history: this run and the one it was compared with, so "since two
+quarters ago" would need a history file per company. It compares metrics only for each run's latest
+quarter (data gaps are compared in every quarter), so if a company restates last year's numbers, the
+diff won't list it unless a gap opens or closes. And a move's size comes from the exact values, not
+the rounded ones shown, so someone checking by hand can be 0.1 out: net new ARR vs budget "down 17.6
+pts", where subtracting the numbers on the page gives 17.5. It's the true move, but I'd warn a reader.
+*Point to:* `diff_runs.move_text`; FINAL_REPORT.md Task 10, "Decisions you didn't specify" and "Unresolved".
+
+**Q63. How did you test it without waiting a quarter for real data?**
+`check_diff.py` rebuilds each company's workbook as it stood a quarter ago, from the answer key: the
+latest quarter left off, and that quarter's budget turned into the budget-only row in the company's
+own wording. It runs that, then today's workbook, into the same temporary folder, and compares every
+line of the memo's section, in Word and in the PDF, with lists I worked out by hand, the formula
+beside each line: burn multiple 3650/2020 = 1.81x becomes 3900/1660 = 2.35x. It also checks that the
+page and the command line say the same, and that approving and rebuilding still compares with Q1, not
+with a run ten seconds old. 25 planted bugs, all caught after one fix.
+*Point to:* `check_diff.py`; `tests/test_diff_runs.py::test_a_rebuild_with_the_same_results_keeps_the_comparison_it_already_had`.
+
+### The rollup
+
+**Q64. Why doesn't the rollup have an AI summary of the whole portfolio?**
+Because a portfolio page is where unreviewed text would do the most damage. The company decks carry AI
+text with a label and a review gate. The rollup is a partner's one view of every company, and nobody
+checks a portfolio summary line by line against 275 workbooks. So it's computed metrics only, and the
+footer says so: "computed metrics only, no AI text". Every number is worked out from the workbooks at
+the moment it's built, never read from last run's files, so it can't be stale; the only thing it reads
+from output/ is each company's review status. If I added AI to it later, it would follow the decks'
+pattern: numbers checked against the data, labelled, and reviewed.
+*Point to:* `rollup.NO_AI_TEXT`, `rollup.company_entry`; `check_rollup.py`.
+
+**Q65. What does the rollup do with a broken workbook, or two companies tied?**
+A broken workbook doesn't stop it: that company is listed last, unranked, "Workbook can't be read" in
+every output, with clean.py's reason in the workbook's Note column, and the others still rank. A tie
+on flags tripped goes to the company whose worst flag is higher in the fixed order, then by name, so
+the order never depends on which file happened to be read first. And it's sized for a real portfolio:
+7 companies per ranking slide, running on to as many slides as needed, and at most 3 names per status
+on the slide ("and 7 more"; the workbook lists them all), all measured with a 40-character name, the
+longest the web page accepts. check_rollup.py builds a 12-company portfolio to prove it fits.
+*Point to:* `rollup.rank_key`, `rollup.ROWS_PER_SLIDE`; `tests/test_rollup.py::test_an_unreadable_workbook_goes_last_with_no_rank_and_the_others_still_rank`, `tests/test_rollup.py::test_a_tie_on_flags_tripped_puts_the_worse_worst_flag_first_then_the_name`.
+
+### Exports
+
+**Q66. A data engineer loads your CSV. How do they know which version of the numbers they have?**
+The JSON carries the SHA-256 hashes of the workbook, config.yaml and the column mapping it was built
+from, the same hashes the manifest records, so a tool can check whether an export matches the inputs
+it has. There's no run time in any export file, on purpose: the same workbook and thresholds give
+byte-for-byte the same files, so a tool can tell a real change from a re-run. The JSON also has a
+format version, raised whenever a field is renamed or removed, so a loader breaks loudly instead of
+reading the wrong field. And the CSV is long, one row per quarter and metric, so two companies' files
+stack without reshaping.
+*Point to:* `export.export_record`, `export.FORMAT_VERSION`; `tests/test_export.py::test_the_same_numbers_always_give_the_same_files`, `tests/test_export.py::test_the_json_names_its_sources_and_has_no_nan_or_infinity`.
+
+**Q67. Why is there no AI text in the email?**
+Because an email is the easiest place for unreviewed text to escape. On the deck the AI commentary is
+labelled "review before use", and the footer says whether anyone did. Paste a paragraph into an email
+and forward it, and that label is gone. So the email is slide 1's table in the status colors, the flag
+count, runway at budget and the data gaps, all computed, with a line saying so. And honestly: it
+follows every rule I know Outlook breaks (inline styles only, a font on every cell or it falls back to
+Times New Roman, fills repeated as bgcolor, 640 pixels wide), and check_export.py tests each one, but I
+haven't pasted it into real Outlook. That's one paste I'd do before telling anyone it works.
+*Point to:* `export.email_html`, `check_export.outlook_problems`; `tests/test_export.py::test_the_email_says_what_it_is_and_that_it_has_no_ai_text`.
+
+**Q68. Why are exports made on demand instead of by every batch run?**
+Four more files per company on every run would touch `--resume`'s list of expected files, the
+manifests and the goldens, for files most runs don't need. So it's `python export.py` with a workbook
+or `--all`, or the company page's Export button, which builds from today's workbook when clicked and
+never writes into output/. Because the JSON carries its input hashes, a tool can always check which
+inputs a file reflects, whenever it was made. Wiring exports into main.py is a small change if a data
+team wants them after every run: that's a choice about their workflow, not a technical limit.
+*Point to:* `export.save_exports`; FINAL_REPORT.md Task 11, "Decisions you didn't specify".
 
 ---
 
