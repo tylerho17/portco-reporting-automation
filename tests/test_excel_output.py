@@ -98,9 +98,9 @@ def test_metrics_sheet_words_and_fill_for_each_reason():
 def test_flags_sheet_status_says_why_a_flag_cannot_be_evaluated():
     sheet = reason_workbook()["Flags"]
     statuses = {sheet.cell(row=r, column=1).value: sheet.cell(row=r, column=6).value for r in range(2, 11)}
-    assert statuses["CAC payback"] == "Cannot evaluate — missing input"
-    assert statuses["Net burn vs budget"] == "Cannot evaluate — not meaningful"
-    assert statuses["NRR falling while pipeline rising"] == "Cannot evaluate — no prior period"  # 2 quarters < 3
+    assert statuses["CAC payback"] == "Cannot evaluate: missing input"
+    assert statuses["Net burn vs budget"] == "Cannot evaluate: not meaningful"
+    assert statuses["NRR falling while pipeline rising"] == "Cannot evaluate: no prior period"  # 2 quarters < 3
 
 
 def test_data_gaps_sheet_lists_only_missing_input():

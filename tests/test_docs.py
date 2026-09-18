@@ -8,10 +8,13 @@
   heading names (a removed function would otherwise stay in the guide as if it were real).
 - INTERVIEW_PREP.md: every file it names exists, every `module.function` and
   `tests/file.py::test_name` it points to exists, and its sections come in interview order.
+- No em dashes: none in any .md file, in any string of the project's .py files, in the AI system
+  prompt, the metric and input labels, or a "cannot evaluate" flag status.
 
 Run from the project folder:  pytest
 """
 
+import ast
 import re
 from pathlib import Path
 
@@ -194,3 +197,57 @@ def test_study_guide_names_only_functions_that_exist():
     missing = [f"{name} ({', '.join(sorted(files))})" for files, names in study_guide_tables()
                for name in sorted(names) if not defined_in(files, name)]
     assert missing == []
+
+
+# ---------------------------------------------------------------------------
+# No em dashes (Final Task 4): a comma, colon or full stop instead, in every doc and every
+# string the code can show. Written by its Unicode number, so this file shows none either.
+# ---------------------------------------------------------------------------
+
+EM_DASH = chr(0x2014)
+
+
+def em_dash_lines(text):
+    """The first 60 characters of every line with an em dash, so a failure says where to look."""
+    return [line.strip()[:60] for line in text.splitlines() if EM_DASH in line]
+
+
+def test_no_markdown_file_has_an_em_dash():
+    # Every .md file in the project folder and below; the venv and generated output don't count.
+    skipped = {".venv", "output", ".git", ".pytest_cache"}
+    docs = [path for path in PROJECT_DIR.rglob("*.md") if not skipped & set(path.relative_to(PROJECT_DIR).parts)]
+    assert README in docs and CLAUDE_MD in docs  # the search found the docs
+    found = {path.name: em_dash_lines(path.read_text()) for path in docs}
+    assert {name: lines for name, lines in found.items() if lines} == {}
+
+
+def code_strings(path):
+    """Every piece of text written in quotes in a .py file: strings, f-string parts and docstrings.
+
+    Comments aren't strings, so they aren't included; nothing a user sees comes from a comment.
+    """
+    tree = ast.parse(path.read_text())
+    return [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+
+
+def test_no_string_in_the_project_code_has_an_em_dash():
+    # Every .py file in the project folder: app.py, build_deck.py, memo.py, main.py, analyze.py and
+    # metrics.py (the task's list) and every other file whose text reaches a user (Excel, the check
+    # scripts' messages, clean.py's stop messages). tests/ is left out: tests may hold one to look for it.
+    code = sorted(PROJECT_DIR.glob("*.py"))
+    assert {"app.py", "build_deck.py", "memo.py", "main.py", "analyze.py", "metrics.py"} <= {p.name for p in code}
+    found = {path.name: [s.strip()[:60] for s in code_strings(path) if EM_DASH in s] for path in code}
+    assert {name: strings for name, strings in found.items() if strings} == {}
+
+
+def test_the_prompt_the_labels_and_the_flag_statuses_have_no_em_dash():
+    # The same rule on the values the code builds when it runs, in case one is put together from
+    # pieces (a chr() or a join) the string check above can't see.
+    import analyze
+    import metrics
+    shown = [analyze.SYSTEM_PROMPT, *metrics.METRIC_LABELS.values(), *metrics.INPUT_LABELS.values()]
+    for reason in (metrics.MISSING_INPUT, metrics.NO_PRIOR_PERIOD, metrics.NOT_MEANINGFUL):
+        shown.append(metrics.flag_status_text({"status": metrics.CANNOT_EVALUATE, "reason": reason}))
+    assert [text[:60] for text in shown if EM_DASH in text] == []
+    assert metrics.flag_status_text({"status": metrics.CANNOT_EVALUATE, "reason": metrics.MISSING_INPUT}) == \
+        "cannot evaluate: missing input"

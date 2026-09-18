@@ -80,7 +80,7 @@ def metric_trend(actuals, metrics, reasons, column):
 
 
 def flag_status(flag):
-    """'TRIPPED', 'passed', or 'cannot evaluate — <reason>'."""
+    """'TRIPPED', 'passed', or 'cannot evaluate: <reason>'."""
     return flag_status_text(flag) if flag["status"] == CANNOT_EVALUATE else STATUS_LABELS[flag["status"]]
 
 

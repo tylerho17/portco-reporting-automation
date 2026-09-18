@@ -145,7 +145,7 @@ def check_kpi_table(tables, table, flags, name):
                 f"{table[(LATEST, label)]!r}, {table[(PRIOR, label)]!r}"
         if label in flags:
             flag = flags[label]
-            assert status == flag["Status"].replace(f" {EM_DASH} ", ": "), \
+            assert status == flag["Status"], \
                 f"{name}: {label} status {status!r}, Flags sheet {flag['Status']!r}"
             if label != COMBO_FLAG_NAME:
                 assert budget.endswith(flag["Threshold"]), f"{name}: {label} threshold {budget!r} vs {flag['Threshold']!r}"

@@ -49,8 +49,8 @@ RED, GRAY = STATUS_FILL[TRIP], STATUS_FILL[CANNOT_EVALUATE]
 
 
 def status_text(status, reason):
-    """'Tripped', 'Passed', or 'Cannot evaluate — <reason>'."""
-    return f"Cannot evaluate — {reason}" if status == CANNOT_EVALUATE else STATUS_TEXT[status]
+    """'Tripped', 'Passed', or 'Cannot evaluate: <reason>'."""
+    return f"Cannot evaluate: {reason}" if status == CANNOT_EVALUATE else STATUS_TEXT[status]
 
 
 # ---------------------------------------------------------------------------

@@ -13,12 +13,12 @@ whether it would survive real use, then how you work.
 
 ## Contents
 
-1. [The project](#the-project) — Q1–Q4
-2. [Design decisions](#design-decisions) — Q5–Q16
-3. [The AI layer](#the-ai-layer) — Q17–Q25
-4. [What broke](#what-broke) — Q26–Q31
-5. [Scale and risk](#scale-and-risk) — Q32–Q36
-6. [Working method](#working-method) — Q37–Q39
+1. [The project](#the-project): Q1–Q4
+2. [Design decisions](#design-decisions): Q5–Q16
+3. [The AI layer](#the-ai-layer): Q17–Q25
+4. [What broke](#what-broke): Q26–Q31
+5. [Scale and risk](#scale-and-risk): Q32–Q36
+6. [Working method](#working-method): Q37–Q39
 7. [When you can't recall a detail](#when-you-cant-recall-a-detail)
 
 ---
@@ -82,7 +82,7 @@ is wrong, it's the AI layer. In an audit, "the model did the math" is not an ans
 A blank cell stays blank (NaN), never 0 and never an estimate: an imputed number could reach a
 board as if it were real. Because any math with NaN gives NaN, a blank quarter automatically spreads
 to every metric that uses it: QoQ metrics for that quarter and the next, YoY for that quarter and the
-one 4 later. Flags that depend on a missing value say "cannot evaluate — missing input" instead of
+one 4 later. Flags that depend on a missing value say "cannot evaluate: missing input" instead of
 pass or fail, and every affected metric and flag is listed as a data gap. Edge-case rules (∞, 0)
 only apply when every input is present, so a blank cell can never become a red flag.
 *Point to:* `metrics.data_gaps`; CLAUDE.md "Messy data rules".

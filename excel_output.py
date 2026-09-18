@@ -48,7 +48,7 @@ FLAG_KINDS = {name: kind for name, _, _, kind in FLAG_RULES}      # flag name ->
 STATUS_COLORS = EXCEL_STATUS_COLORS
 
 RUNWAY_CONTEXT_LABEL = "Runway at next quarter's budgeted burn (context, not a flag)"
-NO_GAPS_LABEL = "None — every metric and flag has the data it needs"
+NO_GAPS_LABEL = "None: every metric and flag has the data it needs"
 
 
 # ---------------------------------------------------------------------------
@@ -87,9 +87,9 @@ def runway_context_value(runway, has_budget_row):
 
 
 def status_label(flag):
-    """'Tripped', 'Passed', or 'Cannot evaluate — <reason>'."""
+    """'Tripped', 'Passed', or 'Cannot evaluate: <reason>'."""
     if flag["status"] == CANNOT_EVALUATE:
-        return f"Cannot evaluate — {flag['reason']}"
+        return f"Cannot evaluate: {flag['reason']}"
     return STATUS_LABELS[flag["status"]]
 
 

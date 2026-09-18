@@ -42,13 +42,14 @@ Demo project for a PE AI automation role. Must be clean, explainable, and reliab
 - output/                generated files (git-ignored)
 
 ## Rules
-- Python computes every number. Claude only interprets computed metrics — never does math.
+- Python computes every number. Claude only interprets computed metrics. It never does math.
 - All ratios are stored as decimals; formatting to % happens only at output.
 - API key lives in .env (never committed). Load with python-dotenv.
 - Fictional data only. No real company names or numbers.
 - Keep functions small and commented. I need to explain every line.
 - Log anything that breaks in LEARNINGS.md.
 - One label set: metric and input display names live only in metrics.py. Flag names ARE the metric labels, so every output (printout, Excel, Claude's payload, deck) uses the same words.
+- No em dashes in any .md file or user-facing text: use a comma, colon or full stop. tests/test_docs.py fails on one in any doc, any string in the project's .py files, the AI system prompt or the metric labels.
 
 ## Input columns (per quarter, $K)
 starting_arr, new_arr, expansion_arr, contraction_arr, churned_arr, revenue, gross_profit, net_burn, ending_cash, sm_spend, new_customers, headcount, pipeline, budget_new_arr, budget_arr, budget_net_burn
@@ -84,12 +85,12 @@ starting_arr, new_arr, expansion_arr, contraction_arr, churned_arr, revenue, gro
   - no prior period: it needs an earlier quarter the workbook doesn't have -> "n/a (no prior period)"
   - not meaningful: every input is there but the math is undefined (0 / 0, the budget rules above) -> "n/m ..."
   - A blank input wins: a blank quarter's own YoY is "missing input", not "no prior period".
-- Flags: trip / pass / cannot evaluate. "Cannot evaluate" always carries its reason ("cannot evaluate — missing input").
+- Flags: trip / pass / cannot evaluate. "Cannot evaluate" always carries its reason ("cannot evaluate: missing input").
 - Combo rule (retention problem) = NRR falling AND pipeline rising over the last `combo_lookback_quarters` quarters (config.yaml)
   - Window = the last N quarters, including the latest (N=3 means 2 quarter-over-quarter comparisons). N must be at least 2, or config loading stops.
   - Falling = NRR fell by at least `combo_min_nrr_drop` (0.01 = 1 point) in every comparison in the window: a 0.1-point dip is noise
   - Rising = pipeline increased in every quarter-over-quarter comparison in the window
-  - Not enough history -> "cannot evaluate — no prior period"; a blank NRR or pipeline input -> "cannot evaluate — missing input"; never False
+  - Not enough history -> "cannot evaluate: no prior period"; a blank NRR or pipeline input -> "cannot evaluate: missing input"; never False
 
 ## Messy data rules
 - Parse "$1.2M" / "850K" text to numbers; normalize header names
@@ -98,7 +99,7 @@ starting_arr, new_arr, expansion_arr, contraction_arr, churned_arr, revenue, gro
   - QoQ (and net new ARR vs budget): the blank quarter and the next quarter
   - YoY: the blank quarter and the quarter 4 quarters later
 - Only missing input counts: a metric is a data gap only when one of ITS inputs is blank. A partly blank quarter doesn't make unrelated metrics gaps.
-- Any flag or combo rule that depends on a missing value returns "cannot evaluate — missing input" instead of pass/fail
+- Any flag or combo rule that depends on a missing value returns "cannot evaluate: missing input" instead of pass/fail
 - The Risks/Flags slide gets a "Data gaps" line listing every metric and flag affected (missing input only; "no prior period" and "not meaningful" are not gaps)
 - Stop, don't guess (clean.py):
   - The budget-only row must be labelled with the quarter right after the last actual quarter
@@ -114,13 +115,13 @@ starting_arr, new_arr, expansion_arr, contraction_arr, churned_arr, revenue, gro
 ARR grows ~47% a year; NRR holds ~110%, GRR ~95%. Burn shrinks every quarter and stays under budget, so runway is long. Rule of 40 stays above 40% once a year of history exists. NRR moves up and down (never falls at every step) while pipeline rises, so the combo passes. No blank quarter (zero data gaps). Mess differs from Northwind: other header spellings, the Notes tab comes BEFORE the KPI tab, budget row "Q3 2026 Plan".
 
 ### Fernhollow story (make_data_fernhollow.py): distressed, 7 of 9 flags trip
-ARR stalls then shrinks (net new ARR negative from Q1 2026, so burn multiple is ∞ "ARR shrank"). Churn and contraction climb: NRR ~78%, GRR ~75%. Burn rises ~20% over budget; runway 6 months. New sales dry up, so CAC payback is over 10 years. Pipeline FALLS too, so the combo passes (a sales AND retention problem). Q2 2025 is blank, exactly 4 quarters before Q2 2026, so Rule of 40 is "cannot evaluate — missing input" in the latest quarter. Mess: a title line and empty row above the header, budget columns next to their actuals, budget row "Q3 2026 - Bud".
+ARR stalls then shrinks (net new ARR negative from Q1 2026, so burn multiple is ∞ "ARR shrank"). Churn and contraction climb: NRR ~78%, GRR ~75%. Burn rises ~20% over budget; runway 6 months. New sales dry up, so CAC payback is over 10 years. Pipeline FALLS too, so the combo passes (a sales AND retention problem). Q2 2025 is blank, exactly 4 quarters before Q2 2026, so Rule of 40 is "cannot evaluate: missing input" in the latest quarter. Mess: a title line and empty row above the header, budget columns next to their actuals, budget row "Q3 2026 - Bud".
 
 The three companies together prove flags aren't hard-coded.
 
 ## Build order
 1. make_data.py: generate fake messy workbook for "Northwind Software" (8 quarters: ARR, new ARR, churned ARR, NRR, gross margin, burn, cash, headcount, pipeline + budget columns; inconsistent headers, "$1.2M" text, one blank quarter, junk notes tab)
-2. clean.py + metrics.py — verify outputs against manual Excel math
+2. clean.py + metrics.py: verify outputs against manual Excel math
 3. analyze.py
 4. build_deck.py + charts
 5. main.py batch mode + 2 more fake companies

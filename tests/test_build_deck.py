@@ -16,7 +16,7 @@ from pptx import Presentation
 from pptx.util import Emu
 
 from analyze import build_payload
-from build_deck import (AI_DRAFTED_LINE, FICTIONAL_NOTE, NO_AI_MODEL, PLACEHOLDER_NOTE, PLACEHOLDER_TEXT,
+from build_deck import (AI_DRAFTED_LINE, FICTIONAL_NOTE, NO_AI_MODEL, NOT_APPLICABLE, PLACEHOLDER_NOTE, PLACEHOLDER_TEXT,
                         build_presentation, collect_deck_data, deck_path, flag_count_text, gaps_text, load_analysis,
                         save_deck, shorten_middle, threshold_text)
 from clean import STANDARD_COLUMNS
@@ -94,7 +94,7 @@ def test_threshold_text_says_which_way_the_flag_trips():
 
 
 def test_gaps_text_none():
-    assert gaps_text({}) == "None — every metric and flag has the data it needs"
+    assert gaps_text({}) == "None: every metric and flag has the data it needs"
 
 
 def test_gaps_text_groups_metrics_by_the_quarters_they_miss():
@@ -209,8 +209,8 @@ def build(tmp_path, summary=None, approval=None, model=None, draft=False, **data
 def test_four_slides_in_order(tmp_path):
     slides = build(tmp_path).slides
     assert [slide.shapes.title.text for slide in slides] == [
-        "Testco: key metrics — Q2 2026 vs Q1 2026", "ARR and cash — Q4 2025 to Q2 2026",
-        "Risks and flags — Q2 2026", "AI commentary — Q2 2026"]
+        "Testco: key metrics, Q2 2026 vs Q1 2026", "ARR and cash, Q4 2025 to Q2 2026",
+        "Risks and flags, Q2 2026", "AI commentary, Q2 2026"]
 
 
 def test_placeholder_on_slide_4_when_there_is_no_analysis(tmp_path):
@@ -262,7 +262,7 @@ def status_fills(table):
     fills = {}
     for row in list(table.rows)[1:]:
         cell = row.cells[len(row.cells) - 1]
-        if cell.fill.type is not None and cell.text != "—":
+        if cell.fill.type is not None and cell.text != NOT_APPLICABLE:
             fills[row.cells[0].text] = str(cell.fill.fore_color.rgb)
     return fills
 
@@ -283,7 +283,7 @@ def status_text_colors(table):
     """{row label: status cell text color} for rows that are flags."""
     last = len(table.columns) - 1
     return {row.cells[0].text: str(row.cells[last].text_frame.paragraphs[0].runs[0].font.color.rgb)
-            for row in list(table.rows)[1:] if row.cells[last].text != "—"}
+            for row in list(table.rows)[1:] if row.cells[last].text != NOT_APPLICABLE}
 
 
 def test_status_text_is_red_green_or_slate_and_the_table_is_navy_over_white_and_surface(tmp_path):
@@ -320,14 +320,14 @@ def test_kpi_table_shows_why_a_value_is_missing(tmp_path):
     assert rows["NRR (annualized)"][2] == "data missing"
     assert rows["Rule of 40"][1] == "n/a (no prior period)"
     assert rows["Burn multiple"][1] == "∞ (ARR shrank)"
-    assert rows["Rule of 40"][4] == "Cannot evaluate — no prior period"
+    assert rows["Rule of 40"][4] == "Cannot evaluate: no prior period"
 
 
 def test_risks_slide_lists_tripped_flags_combo_and_data_gaps(tmp_path):
     slide = build(tmp_path, blank="Q1 2026").slides[2]
     text = shape(slide, "Risks and flags").text_frame.text
     assert "NRR (annualized): -300.0% (trips below 100.0%)" in text
-    assert "NRR falling while pipeline rising: Cannot evaluate — missing input" in text
+    assert "NRR falling while pipeline rising: Cannot evaluate: missing input" in text
     gaps = shape(slide, "Data gaps").text_frame.text
     assert gaps.startswith("Data gaps") and "Q1 2026 + Q2 2026: ARR growth QoQ" in gaps
 

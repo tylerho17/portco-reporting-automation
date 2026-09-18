@@ -460,9 +460,9 @@ def evaluate_flags(metrics, reasons, config, quarter=None):
 
 
 def flag_status_text(flag):
-    """'trip', 'pass', or 'cannot evaluate — missing input' (the reason is part of the status)."""
+    """'trip', 'pass', or 'cannot evaluate: missing input' (the reason is part of the status)."""
     if flag["status"] == CANNOT_EVALUATE:
-        return f"{CANNOT_EVALUATE} — {flag['reason']}"
+        return f"{CANNOT_EVALUATE}: {flag['reason']}"
     return flag["status"]
 
 

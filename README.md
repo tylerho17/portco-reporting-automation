@@ -165,7 +165,7 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 2. **Claude's answer is checked by code before anyone sees it.** It must match a fixed JSON shape (headline, exactly 3 wins, 3 risks, 3 questions), fit length limits, and every number in it must appear in the data it was given, sign included ("missed by 19.0%" fails when the data says −19.0%). If a check fails, Claude gets one retry with the problems listed. The deck re-runs the same check against today's numbers, so a stale or edited analysis can't reach a slide.
 3. **The deck is always built, even if the AI fails.** Its numbers come from Python, so they're valid either way. Slide 4 (AI commentary) says "AI summary unavailable" and the batch result reads `OK (AI failed)`.
 4. **Stop, don't guess.** `clean.py` stops with the sheet, row and cell whenever it can't read something with certainty: text like "TBD" in a number cell, two tabs that both look like the KPI table, footnote rows under the table, or a budget row labelled for the wrong quarter.
-5. **Never fill in a missing number.** A blank quarter stays blank, spreads to every metric that uses it, and is listed on the Risks and flags slide as a data gap. A flag that depends on it says "cannot evaluate — missing input", never pass or fail.
+5. **Never fill in a missing number.** A blank quarter stays blank, spreads to every metric that uses it, and is listed on the Risks and flags slide as a data gap. A flag that depends on it says "cannot evaluate: missing input", never pass or fail.
 6. **Three reasons a value has no number, and they never look alike:** "data missing" (a blank input, the only kind that counts as a data gap), "n/a (no prior period)" (e.g. YoY growth in year 1), and "n/m" (not meaningful, e.g. burn vs a budget of zero, which shows the $K figures instead).
 7. **Thresholds live in `config.yaml`, each with the investor reason beside it** (NRR below 100% means the base shrinks without new sales). Changing a threshold needs no code change.
 8. **One label set.** Metric and input names are defined once in `metrics.py`, so the printout, Excel, Claude's data and the deck all use the same words.
@@ -255,7 +255,7 @@ Placeholders: capture each one and replace the line with the image. Before captu
 
 **Same code, different stories**
 - 📸 **Alderpeak slide 3** (`output/alderpeak_board_pack.pptx`): "0 of 9 flags tripped".
-- 📸 **Fernhollow slide 3** (`output/fernhollow_board_pack.pptx`): 7 tripped flags and Rule of 40 "cannot evaluate — missing input".
+- 📸 **Fernhollow slide 3** (`output/fernhollow_board_pack.pptx`): 7 tripped flags and Rule of 40 "cannot evaluate: missing input".
 
 ---
 

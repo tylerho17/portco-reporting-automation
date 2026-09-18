@@ -133,8 +133,8 @@ def table_rows(slide):
 # ---------------------------------------------------------------------------
 
 def check_titles(slides, company):
-    expected = [f"{company}: key metrics — {LATEST} vs {PRIOR}", f"ARR and cash — {FIRST} to {LATEST}",
-                f"Risks and flags — {LATEST}", f"AI commentary — {LATEST}"]
+    expected = [f"{company}: key metrics, {LATEST} vs {PRIOR}", f"ARR and cash, {FIRST} to {LATEST}",
+                f"Risks and flags, {LATEST}", f"AI commentary, {LATEST}"]
     assert len(slides) == 4, f"{company}: {len(slides)} slides, expected 4"
     titles = [slide.shapes.title.text for slide in slides]
     assert titles == expected, f"{company}: titles\nExpected: {expected}\nGot:      {titles}"
@@ -209,7 +209,7 @@ def check_kpi_rows(slide, table, flags, name):
             if label != COMBO_FLAG_NAME:
                 assert budget.endswith(flag["Threshold"]), f"{name}: {label} threshold {budget!r} vs {flag['Threshold']!r}"
             fill = str(kpi_table.cell(row_number, 4).fill.fore_color.rgb)
-            expected_fill = STATUS_FILLS[status.split(" — ")[0]]
+            expected_fill = STATUS_FILLS[status.split(": ")[0]]
             assert fill == expected_fill, f"{name}: {label} status cell is {fill}, expected {expected_fill}"
     flag_rows = [cells[0] for cells in rows[1:] if cells[0] in flags]
     assert len(flag_rows) == len(flags), f"{name}: table shows {len(flag_rows)} of {len(flags)} flags"
@@ -247,7 +247,7 @@ def check_risks_slide(slide, company, table_flags, gap_labels):
     for label in gap_labels:
         assert label in text, f"{company['name']}: data gap {label!r} missing from slide 3"
     if not gap_labels:
-        assert "None — every metric and flag has the data it needs" in text, f"{company['name']}: gaps should say None"
+        assert "None: every metric and flag has the data it needs" in text, f"{company['name']}: gaps should say None"
 
 
 def expected_review(workbook, output_dir):

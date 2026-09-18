@@ -21,8 +21,8 @@ Rules (the same as build_deck.py):
 - The AI text is used only if it passes everything the deck checks (build_deck.load_analysis),
   AND every number in the headline and questions is one the metrics workbook shows. Otherwise the
   memo says "AI commentary unavailable" and every computed number still appears.
-- No em dashes: two labels shared with the deck and Excel have one (the "Cannot evaluate" status
-  and the "None" data gaps line); the memo shows a colon instead.
+- No em dashes: the labels shared with the deck and Excel have none ("Cannot evaluate: missing
+  input"); no_em_dash still turns any that arrive (in Claude's text, say) into a colon.
 
 Run: python memo.py data/northwind.xlsx                  (uses output/northwind_analysis.json if it exists)
      python memo.py data/northwind.xlsx --no-analysis    (AI commentary unavailable)
@@ -162,7 +162,11 @@ def memo_analysis(analysis_file, payload, data):
 # ---------------------------------------------------------------------------
 
 def no_em_dash(text):
-    """The memo's words for a label with an em dash (EM_DASH): a colon, e.g. 'Cannot evaluate: missing input'."""
+    """A spaced em dash (EM_DASH) becomes a colon, a lone one a hyphen: 'Cannot evaluate: missing input'.
+
+    A safety net: since Final Task 4 the project's own labels have none (tests/test_docs.py), but
+    Claude's text and error messages from other libraries still might, and the web page shows both.
+    """
     return text.replace(f" {EM_DASH} ", ": ").replace(EM_DASH, "-")
 
 

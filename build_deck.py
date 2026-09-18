@@ -75,7 +75,7 @@ NOT_REVIEWED_TEXT = "not reviewed"
 LOCAL_CHANGES = "*"                   # after the commit: the code had uncommitted edits when this ran
                                       # (spelled out in the manifest; the footer has room for one line only)
 UNKNOWN_PROMPT_VERSION = "unknown (saved before prompt versions)"
-NOT_APPLICABLE = "—"
+NOT_APPLICABLE = "-"
 COMBO_TABLE_TEXT = "rule on Risks and flags slide"
 QUESTIONS_HEADING = "Questions for management"
 
@@ -533,7 +533,7 @@ def kpi_slide(slide, deck):
     """Latest quarter, prior quarter, budget or threshold, status for each key metric and flag."""
     data = deck["data"]
     prior_words = f" vs {data['prior']}" if data["prior"] else ""
-    set_title(slide, f"{data['company']}: key metrics — {data['latest']}{prior_words}", deck)
+    set_title(slide, f"{data['company']}: key metrics, {data['latest']}{prior_words}", deck)
     left, top, width, height = deck["area"]
     header, rows = kpi_header(data), kpi_rows(data)
     widths = column_widths(width)
@@ -562,7 +562,7 @@ def charts_slide(slide, deck):
     """ARR (with net new ARR) on the left, ending cash (with runway) on the right."""
     data = deck["data"]
     quarters = list(data["metrics"].index)
-    set_title(slide, f"ARR and cash — {quarters[0]} to {quarters[-1]}", deck)
+    set_title(slide, f"ARR and cash, {quarters[0]} to {quarters[-1]}", deck)
     left, top, width, height = deck["area"]
     chart_width = (width - COLUMN_GAP) // 2
     size_inches = (Emu(chart_width).inches, Emu(height).inches)  # drawn at slide size: 12 pt stays 12 pt
@@ -613,7 +613,7 @@ def flags_paragraphs(data):
 def risks_slide(slide, deck):
     """Flags on the left; the Data gaps line (one bullet per set of quarters) on the right."""
     data = deck["data"]
-    set_title(slide, f"Risks and flags — {data['latest']}", deck)
+    set_title(slide, f"Risks and flags, {data['latest']}", deck)
     _, top, _, height = deck["area"]
     add_columns(slide, [("Risks and flags", flags_paragraphs(data)),
                         ("Data gaps", section("Data gaps (data missing)", gaps_lines(data["gaps"])))], top, height, deck)
@@ -672,7 +672,7 @@ def commentary_columns(summary):
 def commentary_slide(slide, deck):
     """The AI-drafted line, the headline, then risks and questions side by side (or the placeholder)."""
     data, summary = deck["data"], deck["summary"]
-    set_title(slide, f"AI commentary — {data['latest']}", deck)
+    set_title(slide, f"AI commentary, {data['latest']}", deck)
     line_box, headline_box, columns_box = commentary_boxes(deck["area"])
 
     if summary is None:  # nothing here is AI-drafted, so the AI-drafted line is left off
