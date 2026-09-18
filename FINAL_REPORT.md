@@ -1432,7 +1432,19 @@ check to check_export.py; both, planted again, are caught.
 
 ### How it's proved
 
-PLANTED_TABLE
+28 bugs planted one at a time in a temporary copy of the project (`output/task12_plant_bugs.py`),
+each checked two ways: tests/test_demo_reset.py, and `python demo_reset.py` itself on a copy of
+`output/` holding only the saved analyses. This table was filled in during Task 13 (see its section).
+
+| Result | Bugs |
+|---|---|
+| Caught by the tests from the start (22) | the saved analysis deleted as a built file; a changed analysis not put back, or not reported; the staging folder, or any folder, not removed; the left-alone list including the analyses; deleting everything but the analyses; companies read only from data/; approvals not listed; no last-quarter run; the rebuild ticking the AI box; the refusing client letting calls through; a demo company without AI text only a note; a failed build not a problem; exit 0 when not ready; always printing Ready; uncommitted code never noted; DEMO.md clicking a button the page doesn't have; DEMO.md timings with a gap, or past 5:00; the page's status line reworded |
+| Passed the tests at first, caught after Task 13's new tests (6) | the rebuild using the real client; files not built from today's workbook not a problem; no earlier run not a problem; an added company not noted; DEMO.md quoting a wrong flag count; the page's Approve button renamed |
+| Control (nothing changed) | every test passes, "Ready for the demo." |
+
+The reset itself also caught three (the saved analysis deleted, no last-quarter run, the AI box
+ticked): it is a safety net, the tests are the proof. Logs: `output/task12_plant_bugs_rerun_first_pass.log`
+(all 28, before the new tests) and `output/task12_plant_bugs_final.log` (the six, after).
 
 ### Decisions you didn't specify
 
@@ -1488,3 +1500,107 @@ PLANTED_TABLE
   back to a known good state before a demo (built files deleted by name, saved analyses kept and
   hash-checked, last quarter then today rebuilt as Generate all does with no API call; Ready or what
   to fix)".
+
+## Task 13: config validation (config_schema.py)
+
+### What I built
+
+- **`config_schema.py`**: one table, `SETTINGS`, of the 13 settings the tool reads (the 8 flag
+  thresholds, the combo switch, `combo_lookback_quarters`, `combo_min_nrr_drop`, and the two optional
+  `diff_min_*` settings from Task 10). Each has a kind (decimal, multiple, months, whole number,
+  true/false), a range, whether it's required, an example and a meaning. Every problem message says
+  the key, what is wrong and an example line to copy:
+  - **missing key:** "config.yaml: grr_min is missing (the lowest GRR that passes; GRR can't pass
+    100%). Add it as its own line. Example: grr_min: 0.85"
+  - **wrong type:** text, "15%", nothing after the colon, true/false where a number goes, a list,
+    NaN or infinity; "yes" or 1 for the combo switch; a fraction for the lookback (3.0 is fine).
+  - **out of range:** both ends of every setting; the lookback's minimum of 2 says why ("the combo rule
+    needs at least one quarter-to-quarter step"); a percent typed as a whole number gets the decimal it
+    meant ("40% is written 0.4").
+  - **unknown key:** "nrr_minimum is not a setting this tool reads. Did you mean nrr_min?", or the
+    list of settings when nothing is close.
+  - **the file itself:** a YAML syntax error by line, an empty file, not key: value lines, a key
+    written twice.
+  Every problem is listed at once, one per line, so fixing the file takes one pass.
+- **`metrics.load_config`** reads through it (the whole schema); **`metrics.validate_config`**, which
+  `evaluate_flags` and `check_combo` already ran, now checks every setting the flags use, for configs
+  built in code. `load_config` reads `CONFIG_PATH` when called, not when Python starts, so a test can
+  point it at a file of its own.
+- **`main.py`** loads the config first: a problem is printed and exits 1 before any company runs,
+  never a traceback. **The web page** already showed a config error in plain words (`page_config`);
+  a test now proves the message reaches the page.
+- **Tests (written first):** `tests/test_config_schema.py`, 143 tests: a missing key (each required
+  one), a wrong type (every number setting times five bad values, plus NaN, infinity and the switch),
+  an out of range value (both ends of every setting, and the ends themselves pass), an unknown key,
+  several at once, the file cases, `main.py` and the web page. Two existing tests in test_metrics.py
+  now expect `combo_min_nrr_drop`'s new wording. 1160 tests pass (with Task 12's 4 new ones).
+- **Docs:** README (file list, decision 23, done list), STUDY_GUIDE (config.yaml section with the
+  missing `combo_min_nrr_drop` row, a `config_schema.py` section, metrics and main rows, tests table),
+  INTERVIEW_PREP Q34j, LOOM_SCRIPT test count, LEARNINGS (6 rows).
+- **Task 12's proof, finished:** its section had a placeholder where the planted-bug table belongs.
+  Re-run in full, 6 of its 28 bugs passed the tests; `tests/test_demo_reset.py` now has 4 more tests and 3
+  sharper ones, and the table is filled in (Task 12, How it's proved).
+
+### How it's proved
+
+`output/task13_plant_bugs.py` copies the project into a temporary folder, breaks one thing, and runs
+tests/test_config_schema.py and tests/test_metrics.py (the project itself is never edited). 30 bugs,
+and a control run with nothing changed that passes:
+
+TASK13_TABLE
+
+### Decisions you didn't specify
+
+1. **The ranges** (please check them): NRR 0 to 2, GRR 0 to 1, burn over budget 0 to 1, net new ARR
+   vs budget and Rule of 40 -1 to 1, combo minimum drop 0 to 1, burn multiple 0 to 10x, runway 1 to 60
+   months, CAC payback 1 to 120 months, lookback at least 2 with no maximum, the diff settings 0 to 1.
+   They are wide on purpose: they catch a percent typed as a whole number or a wrong unit, not a
+   threshold a partner chose. Ends are allowed.
+2. **An unknown key stops the run** rather than warning. A misspelt `nrr_minimum` is otherwise ignored
+   while the real threshold silently stays at its old value, which is the worse failure.
+3. **A key written twice stops.** YAML keeps the last one without a word, so the value a reader sees
+   first may not be the one used.
+4. **No new package.** jsonschema or pydantic would do the checking, but their messages are written
+   for programmers, and 13 settings don't need one. The checks are plain Python; "Did you mean" is
+   `difflib` from the standard library.
+5. **Two levels of check.** The file gets everything; a config built in code (the tests', such as
+   test_portfolio.py's, which adds a bad `diff_min_points` to see its plain-words message) gets only
+   the settings the flags use, so the diff settings keep their own Task 10 message there.
+6. **The `diff_min_*` settings are in the schema as optional.** Task 10 said they may be added to
+   config.yaml; now a typo in one is caught at load too.
+7. **`ConfigError` is a kind of ValueError**, so every existing caller that catches ValueError (the
+   batch, the web page) still does.
+8. **config.yaml was not edited**, so its hash is unchanged and no approval is voided.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **Before this task,** only the two combo settings were checked: `rule_of_40_min: 40` tripped Rule
+   of 40 for every company, `nrr_min: "100%"` and a missing `grr_min` crashed inside a flag check with
+   a Python error, and `nrr_minimum` was silently ignored.
+2. **Two planted bugs passed at first:** `is_number` accepting NaN and infinity (today's range checks
+   also reject them, so no test reached that check alone; my test comment said otherwise and was
+   wrong), and every problem run together on one line (the tests looked for pieces of text). A test
+   now calls `is_number` directly and one compares the error's lines with the problem list; both are
+   caught.
+3. **Two existing tests** expected the old `combo_min_nrr_drop` wording; it now has an upper limit and
+   says "a decimal from 0 to 1".
+4. **The docs test failed** on `SETTINGS` and `Setting` in the STUDY_GUIDE's function table (it
+   accepts only a `def` or `class`); they are described above the table instead.
+5. **Refused commands:** a one-line `python -c` script and a piped `sed`; a scratch script in
+   `output/` and the Read tool instead.
+6. **Found on the way: Task 12's section above had a `PLANTED_TABLE` placeholder** where its planted-bug
+   results belong, and the saved log stopped after 7 of its 28 bugs. Re-run in full, 6 of 28
+   passed the tests (listed in Task 12's table). Each got a direct test in tests/test_demo_reset.py,
+   and all six planted again are caught. The table is filled in now.
+
+### Unresolved
+
+- **The other command-line scripts** (`build_deck.py`, `memo.py`, `export.py`, `rollup.py`,
+  `diff_runs.py`, `metrics.py`, `analyze.py`, `demo_reset.py` and the check scripts) show the same
+  message, but at the end of a Python traceback. `main.py` and the web page, the two a non-technical
+  user runs, show it cleanly. Catching it in each would be ten small edits; say if you want them.
+- **The ranges are my judgement** (decision 1). A partner who really wants runway over 60 months
+  gets a clear message saying the limit, and the fix is one number in `config_schema.SETTINGS`.
+- **CLAUDE.md doesn't list `config_schema.py`.** Suggested Architecture line: "config_schema.py:
+  every config.yaml setting's kind, range and example; loading stops with each problem (missing key,
+  wrong type, out of range, unknown key) naming the key, the problem and a line to copy".

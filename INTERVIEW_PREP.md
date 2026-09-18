@@ -479,6 +479,17 @@ builds last quarter first so "what changed" has something to show. Then it check
 clicks through the real page after a reset, and fails if a button it names is renamed.
 *Point to:* `demo_reset.remove_built`, `demo_reset.readiness`, `demo_reset.NoApiClient`; `tests/test_demo_reset.py::test_demo_md_walkthrough_runs_on_the_page_after_a_reset`.
 
+**Q34j. A partner edits a threshold and makes a typo. What happens?** (new, Task 13)
+It stops before anything is built, and says exactly what to fix. config.yaml is checked against a
+schema every time it is read: every setting has a kind, a range and an example. The dangerous typo is
+a percent typed as a whole number: `rule_of_40_min: 40` is 4,000%, so every company would trip and
+nobody would know why. The message says "rule_of_40_min must be a decimal from -1 to 1 (got 40). 40% is
+written 0.4. Example: rule_of_40_min: 0.40". A misspelt key gets "Did you mean nrr_min?", because
+otherwise it would be ignored and the old threshold would quietly stay. Every problem is listed at
+once, and `main.py` prints them and exits 1; the web page shows them instead of the portfolio. I
+proved the tests catch what they claim by breaking the checker 30 ways in a temporary copy.
+*Point to:* `config_schema.SETTINGS`, `config_schema.config_problems`; `tests/test_config_schema.py::test_a_percent_typed_as_a_whole_number_gets_the_decimal_it_meant`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs

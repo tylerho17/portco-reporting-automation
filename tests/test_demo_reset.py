@@ -8,6 +8,7 @@ Run from the project folder:  pytest
 """
 
 import hashlib
+import json
 import re
 import shutil
 from pathlib import Path
@@ -235,9 +236,42 @@ def test_a_workbook_that_cannot_be_read_is_a_problem(broken):
 
 def test_a_company_added_in_practice_is_noted_and_built_without_history(broken):
     answer = demo_reset.reset(*broken)
-    assert any("Blue River" in line and "data/" in line for line in answer["notes"])
+    # Its own words: the no-AI-text note also names data/blue river.xlsx (found by a planted bug).
+    assert any("Blue River" in line and "isn't a demo company" in line for line in answer["notes"])
     data_dir, output_dir = broken
     assert read_manifest(manifest_path(data_dir / "blue river.xlsx", output_dir))["previous_run"] is None
+
+
+@pytest.fixture
+def reset_copy(reset_twice, tmp_path):
+    """(data folder, output folder): copies of a finished reset's, so a test can spoil one thing."""
+    data_dir, output_dir = tmp_path / "data", tmp_path / "output"
+    shutil.copytree(reset_twice["data_dir"], data_dir)
+    shutil.copytree(reset_twice["output_dir"], output_dir)
+    return data_dir, output_dir
+
+
+def test_a_ready_company_has_no_problems(reset_copy):
+    data_dir, output_dir = reset_copy
+    assert demo_reset.company_readiness(data_dir / "northwind.xlsx", output_dir)[0] == []
+
+
+def test_files_not_built_from_todays_workbook_are_a_problem(reset_copy):
+    # A correct reset never leaves this, so only a direct check reaches it (found by a planted bug).
+    data_dir, output_dir = reset_copy
+    shutil.copy(PROJECT_DIR / "data" / "alderpeak.xlsx", data_dir / "northwind.xlsx")   # today's workbook changed
+    problems, _ = demo_reset.company_readiness(data_dir / "northwind.xlsx", output_dir)
+    assert any("aren't a fresh, unreviewed build" in line for line in problems)
+
+
+def test_no_earlier_run_to_compare_with_is_a_problem(reset_copy):
+    data_dir, output_dir = reset_copy
+    path = manifest_path(data_dir / "northwind.xlsx", output_dir)
+    saved = read_manifest(path)
+    del saved["previous_run"]
+    path.write_text(json.dumps(saved))
+    problems, _ = demo_reset.company_readiness(data_dir / "northwind.xlsx", output_dir)
+    assert any("no earlier run to compare with" in line for line in problems)
 
 
 def test_main_exits_1_when_not_ready_and_prints_why(broken, capsys):
@@ -256,6 +290,20 @@ def test_main_exits_0_and_says_ready(reset_twice, capsys, monkeypatch):
 def test_the_refusing_client_fails_any_use():
     with pytest.raises(RuntimeError, match="never calls the API"):
         demo_reset.NoApiClient().messages.parse()
+
+
+def test_every_build_is_handed_the_refusing_client(monkeypatch):
+    # With the AI box unticked no client is used today, so only this test notices if the refusing
+    # client is dropped (found by a Task 12 planted bug re-run in Task 13).
+    calls = []
+    record = lambda *args, **kwargs: calls.append((args, kwargs))   # noqa: E731 - a one-line stand-in
+    monkeypatch.setattr(demo_reset, "generate_all", record)
+    monkeypatch.setattr(demo_reset, "run_company", record)
+    demo_reset.rebuild({}, Path("data"), Path("output"))
+    demo_reset.last_quarter_run("northwind", {}, Path("output"))
+    assert len(calls) == 2
+    assert all(isinstance(kwargs.get("client"), demo_reset.NoApiClient) for _, kwargs in calls)
+    assert calls[0][0][1] is False   # generate_all's ask_claude: the AI box unticked
 
 
 def test_a_saved_analysis_the_rebuild_deletes_or_changes_is_put_back_and_reported(tmp_path, monkeypatch):
@@ -308,10 +356,15 @@ def test_every_button_demo_md_clicks_is_on_the_page():
 def test_demo_md_quotes_each_companys_flag_count_as_the_page_shows_it():
     config = load_config()
     words = " ".join(demo_text().split())   # a line break reads as a space, as Markdown shows it
+    todays = set()
     for stem in COMPANIES:
         data, problem = portfolio.load_company(PROJECT_DIR / "data" / f"{stem}.xlsx", config)
         assert problem is None
         assert flag_count_text(data["flags"]) in words, stem
+        todays.add(re.match(r"\d+ of \d+", flag_count_text(data["flags"])).group())
+    # And every count it quotes is one of today's: a wrong one beside a right one is still wrong
+    # (found by a planted bug re-run in Task 13).
+    assert set(re.findall(r"\d+ of \d+(?= flags)", words)) <= todays
 
 
 def test_demo_md_timings_add_up_to_five_minutes():
@@ -340,6 +393,10 @@ def test_demo_md_walkthrough_runs_on_the_page_after_a_reset(reset_twice, tmp_pat
     assert not deck_button.proto.disabled                                # step 4
 
     test.text_input(key="reviewer_northwind").set_value("Demo Viewer").run()   # step 5
+    # Clicked by key, so check the label DEMO.md names too ("Approve" is also the card's heading, so
+    # a renamed button would otherwise pass: found by a planted bug re-run in Task 13).
+    assert test.button(key="approve").label == "Approve"
+    assert test.button(key="generate_page").label == "Generate"
     test.button(key="approve").click().run()
     test.button(key="generate_page").click().run()
     assert not test.exception
