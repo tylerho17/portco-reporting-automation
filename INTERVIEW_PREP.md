@@ -530,6 +530,20 @@ each message's "what to do next", and I undid each fix one at a time in a copy t
 notice.
 *Point to:* `run_log.error_text`, `analyze.api_error_text`, `clean.check_is_workbook`; `tests/test_error_messages.py::test_api_errors_say_what_happened_and_what_to_do`.
 
+**Q34n. You added a cache. How do you know it can't put an old number on a board deck?** (new, Task 17)
+First, why: each output was built to stand on its own, so one run read the same workbook five times
+and worked out the same metrics up to eight. I measured before touching anything: 1.1 to 1.4 seconds
+per company. The cache sits inside the three functions that do the work, so nothing that calls them
+changed. It can't serve a stale number for three reasons. The key is a hash of the file's contents
+and of its column mapping, never the file name, so an edited workbook is a new key. Errors are never
+kept, so a problem is found again every time. And every answer is copied on the way in and out, so
+one step changing its table can't change the next step's. The proof is two layers: the goldens (every
+deck, memo and workbook, word for word) still match, and tests for each of those rules, each of which
+I checked by planting that exact bug in a copy of the project and watching the test fail. One test
+passed a bug the first time: it only changed an answer the cache had never handed out, so I made it
+go three rounds. Result: 1 read instead of 5, runs 23 to 26% faster.
+*Point to:* `cache.ResultCache.get`, `clean.clean_workbook`, `metrics.table_key`; `tests/test_cache.py::test_an_edited_workbook_is_read_again`; `python benchmark.py`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs

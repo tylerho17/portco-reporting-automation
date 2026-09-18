@@ -1886,3 +1886,113 @@ test_error_messages.py, test_bad_inputs.py, test_run_log.py and the page's Gener
   means the message knowing where it will be read; say if you want it.
 - **CLAUDE.md's Architecture list** doesn't mention `run_log.error_text`. Suggested addition to the
   run_log line (once it has one): "; error_text: every failure in plain words, a bug keeps its Python name".
+
+## Task 17: performance, read each workbook once
+
+### What I built
+
+**Measured first.** Before changing any code I wrote `benchmark.py` and counted what one company's run
+(`main.run_company`: Excel, AI reuse check, deck, memo, manifest) actually does. It didn't read each
+workbook three times, it read it **five** times: the summary table (`company_facts`), the Excel file,
+the check for a saved AI analysis, the deck and the memo each called `clean_workbook` on their own. It
+also worked out the metric table 7 or 8 times and the reasons table 12 times.
+
+- **`cache.py`** (new): `ResultCache`, which keeps up to 32 answers by key, drops the one used longest
+  ago, copies every answer in and out, and has a lock for `--workers` threads.
+- **`clean.py`**: `clean_workbook` checks the file is a workbook, then looks up the SHA-256 of the
+  workbook and of its mapping file. On a miss, `read_workbook` (the old body, unchanged) does the work.
+  `clear_cache()` empties it.
+- **`metrics.py`**: `compute_metrics` and `metric_reasons` are cached under `table_key`, a hash of the
+  table's values, quarter labels, column names and types. The old bodies are now `metrics_table` and
+  `reasons_table`, unchanged. `clear_cache()` empties both.
+- **`benchmark.py`** (new): for each company, a warm-up, then the median of 5 runs into a temporary
+  folder, each from empty caches, with the saved analysis from tests/golden/analysis reused (no API
+  call); then one run counting workbook reads (`clean.find_kpi_sheet`) and metric tables (`metrics.nrr`).
+  It measured the code before and after with no change to the script.
+- **`tests/test_cache.py`** (12 tests, written before the code, all failing at first).
+- **Docs:** README decision 26 and the `benchmark.py` command, STUDY_GUIDE (the new functions in
+  clean.py's and metrics.py's tables, a cache.py and benchmark.py section with the numbers, the tests
+  table and count), INTERVIEW_PREP Q34n, LEARNINGS (2 rows).
+
+### The numbers
+
+`python benchmark.py`, median of 5 runs per company, run twice each side with nothing else running
+(the two runs agreed within 0.02 s):
+
+| Company | Before | After | Faster | Workbook reads | Metric tables |
+|---|---|---|---|---|---|
+| Alderpeak | 1.28 s | 0.96 s | 25% | 5 → 1 | 8 → 1 |
+| Fernhollow | 1.11 s | 0.82 s | 26% | 5 → 1 | 7 → 1 |
+| Northwind | 1.44 s | 1.11 s | 23% | 5 → 1 | 8 → 1 |
+
+A cache hit costs 0.2 ms for a clean (a real read is 11 to 14 ms) and 1 ms for the metrics (about
+20 ms worked out). The rest of each run is building the files: the deck, the Word and PDF memo, the
+charts. The AI call, when there is one, dwarfs all of it (about 70 s).
+
+### How it's proved
+
+- **No behavior change:** `python golden.py` says 9 of 9 match (every deck, memo and metrics workbook,
+  word for word); **1301 tests pass** (1289 before, plus 12); all 9 `check_*.py` scripts pass (run
+  with output/ backed up first and put back after).
+- **The new tests catch what they claim:** 8 bugs planted one at a time in a temporary copy of the
+  project (`output/task17_plant_bugs.py`), each ending in failed tests, not an import error:
+
+| Planted bug | Caught by |
+|---|---|
+| Key on the file name, not its contents | `test_an_edited_workbook_is_read_again` |
+| Mapping file left out of the key | `test_a_deleted_mapping_file_is_noticed` |
+| Clean cache not used | `test_a_company_run_reads_its_workbook_once` (x3), `test_a_second_clean_of_the_same_workbook_is_not_read_again` |
+| Metrics cache not used | `test_a_company_run_reads_its_workbook_once` (x3) |
+| Metrics key ignores the numbers | `test_changed_numbers_get_new_metrics`, `test_a_blanked_input_gets_new_reasons` |
+| Cached answer handed out, not a copy | both "changing a table" tests (after the fix below) |
+| Answer saved without copying | both "changing a table" tests |
+| Newest answer dropped instead of the oldest | `test_the_cache_keeps_at_most_max_entries` |
+
+### Decisions you didn't specify
+
+1. **A cache, not passing the table from step to step.** Passing it along would change the signature of
+   `save_metrics_workbook`, `save_deck`, `save_memo` and their command lines, which each work on their
+   own from a path. The cache sits in the three functions that do the work, so no caller changed.
+2. **Keyed on contents, not name or modified time.** A file copied over another keeps a plausible time
+   stamp; the SHA-256 of the bytes can't be fooled. Hashing a workbook takes 0.03 ms.
+3. **The mapping file is part of the key.** It changes what a header means, so confirming or deleting
+   one must re-read the workbook.
+4. **The metrics are keyed on the table, not the workbook's hash.** Tests and callers change tables in
+   memory (blank a cell, change a number); a key on the table's own values is right for all of them.
+   `metric_reasons` is cached too: at 12 calls a run, it was the other big cost.
+5. **Errors are never cached.** A stop is found again every time, with today's words.
+6. **Deep copies in and out,** so no step can change another step's numbers. It costs about 1 ms.
+7. **At most 32 answers, oldest dropped.** A batch needs 3 per cache; the web page runs for days and
+   every upload is a new key, so without a limit it would keep growing.
+8. **A new module, not Python's `functools.lru_cache`:** that can't take a table as a key and hands
+   every caller the same object, so one caller's change would reach the next.
+9. **`benchmark.py` is a script, not a test.** Seconds depend on the machine and what else is running,
+   so a timing test would fail at random. The tests pin the counts (1 read, 1 metric table) instead,
+   which is what made it faster and doesn't vary.
+
+### What failed and how I fixed it (logged in LEARNINGS.md)
+
+1. **A planted bug passed my tests, twice.** "Hand out the cached answer, not a copy" slipped past the
+   copy tests: first they changed only the first answer (never the cached one), then two rounds changed
+   the cached answer but nothing asked a third time. Both tests now go three rounds; 8 of 8 caught.
+2. **My first "after" measurement ran while the full test suite was running**, and read Northwind at
+   1.22 s. I measured again twice with nothing else running (1.11 s both times); the table uses those.
+3. **The benchmark outlasted the 2-minute command limit** and moved to the background; it finished
+   and nothing was lost.
+4. **Refused commands:** `source .venv/bin/activate`, a Python script typed into the command,
+   `cd /tmp && ...` and copying from /tmp. I used `.venv/bin/python` directly, scratch scripts in /tmp
+   run from the project folder, and the Write tool to keep them in output/.
+
+### Unresolved
+
+- **"Read once" means opened and parsed once.** Each later call still reads the file's bytes to hash
+  them (0.03 ms), which is how it notices an edit. A cache that trusted the name would be faster and
+  wrong.
+- **`table_key` uses pandas' 64-bit hash per row.** Two different rows with the same hash would share
+  a key; the chance is about 1 in 18 billion billion per row. The quarter labels, column names and
+  types are compared exactly. An exact key (the raw bytes) would work only for all-number tables.
+- **One-off commands gain nothing** (`python build_deck.py`, `excel_output.py`, `analyze.py`): each
+  cleans once per process anyway. The gain is in main.py runs and the web page.
+- **CLAUDE.md's Architecture list** doesn't name the new files. Suggested lines: "cache.py  ResultCache:
+  clean and metrics results kept by a hash of their inputs, copied in and out, at most 32" and
+  "benchmark.py  seconds per company run and workbook reads, from empty caches (no API call)".

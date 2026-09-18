@@ -280,7 +280,7 @@ page shows them in a red box instead of the portfolio.
 - `QUARTER_PATTERN`: what a quarter label must look like ("Q2 2026").
 - `NUMBER_TEXT`: the only number text it accepts: optional minus, digits (commas only between groups of 3), optional decimals, optional K or M.
 
-**The call order inside `clean_workbook`:** `find_kpi_sheet` → `check_no_error_cells` → `clean_sheet`. Inside `clean_sheet`: `map_columns` → `check_no_headerless_values` → for each row (`parse_row` → `is_budget_only_row` → duplicate check) → build the table → `check_quarters_in_order`.
+**The call order inside `clean_workbook`:** `check_is_workbook` → the cache key (the workbook's and the mapping file's SHA-256) → if the cache has it, a copy of the answer; if not, `read_workbook`: `find_kpi_sheet` → `check_no_error_cells` → `clean_sheet`. Inside `clean_sheet`: `map_columns` → `check_no_headerless_values` → for each row (`parse_row` → `is_budget_only_row` → duplicate check) → build the table → `check_quarters_in_order`.
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
@@ -307,7 +307,9 @@ page shows them in a red box instead of the portfolio.
 | `is_budget_label(label)` | True if a row label contains budget, bud or plan. | Shared with `mapping.py`, which needs to know which row is the budget-only row. |
 | `is_budget_only_row(label, row_index, row, column_map)` | True if the label contains budget/bud/plan. Stops if that row also has actual values. | `"Q3 2026 (Budget)"` → True. A budget row with revenue filled in is a mistake, so it stops. |
 | `clean_sheet(sheet, header_row, confirmed)` | The main loop. Maps the columns, then goes row by row: skips empty rows, parses each labelled row, separates the budget-only row, stops on a repeated quarter or a second budget row, builds the table and checks the quarter order. | The blank Q1 2025 row is kept as a row of NaN, so later look-backs still line up. The duplicate-quarter stop was a bug fix (Task 4). |
-| `clean_workbook(path, mappings_dir)` | **The entry point.** Finds the KPI tab, reads the company's confirmed mapping, checks for error cells, runs `clean_sheet`, and puts the tab name (e.g. `Sheet 'KPI Tracker', `) in front of any error from that tab. Unknown headers become `UnconfirmedMappingError`, with `mapping.py`'s proposals. The "no tab has a 'Quarter' header" error names the file instead, because no tab qualified. | Every other file calls this one function to read a workbook, so every one of them (main.py, the deck, the memo, the web page) uses a confirmed mapping with no change of its own. `mappings_dir` is for tests and the web page's try-before-saving. |
+| `clean_workbook(path, mappings_dir)` | **The entry point.** Checks the file is a workbook, then looks in the cache (`cache.py`) under the SHA-256 hash of the workbook and of its mapping file: the same file with the same mapping is read once, and every later call gets a copy of that answer. Otherwise `read_workbook` does the work. | Every other file calls this one function to read a workbook, so every one of them (main.py, the deck, the memo, the web page) uses a confirmed mapping with no change of its own, and since Task 17 a run reads each workbook once instead of five times. `mappings_dir` is for tests and the web page's try-before-saving. |
+| `read_workbook(path, mappings_dir)` | `clean_workbook`'s work without the cache: finds the KPI tab, reads the company's confirmed mapping, checks for error cells, runs `clean_sheet`, and puts the tab name (e.g. `Sheet 'KPI Tracker', `) in front of any error from that tab. Unknown headers become `UnconfirmedMappingError`, with `mapping.py`'s proposals. The "no tab has a 'Quarter' header" error names the file instead, because no tab qualified. | A stop is never cached, so it is found again every time, with today's message. |
+| `clear_cache()` | Forgets every cleaned workbook. | benchmark.py and tests/test_cache.py start each run from nothing. |
 | `if __name__ == "__main__":` block | `python clean.py data/northwind.xlsx` prints the clean table sideways (quarters across) and the budget row. | For looking at the data yourself. |
 
 ---
@@ -386,14 +388,18 @@ page shows them in a red box instead of the portfolio.
 | `cac_payback_months(df)` | sm_spend / (new_arr × gross margin) × 12. Edge case: new_arr × margin ≤ 0 → ∞. | 2400 / (1850 × 0.751) × 12 = **20.7 mo** |
 | `runway_months(df)` | ending_cash / (net_burn / 3). Edge case: not burning → ∞. | 14300 / 1300 = **11.0 mo** |
 | `runway_at_next_budget(actuals, next_budget)` | latest cash / (next quarter's budgeted burn / 3). NaN if there's no budget row or latest cash / budgeted burn is blank (checked first), ∞ if the budget has no burn. Shown as context, never flagged. | 14300 / 1100 = **13.0 mo** |
-| `compute_metrics(actuals)` | Calls every metric function above except `runway_at_next_budget` (a single number, which callers compute separately) and puts the results in one table: a row per quarter, 19 metric columns. `pipeline` is copied in for the combo rule. | The table `python metrics.py` prints. |
+| `compute_metrics(actuals)` | `metrics_table(actuals)`, worked out once per set of numbers: the answer is kept in a cache (`cache.py`) under `table_key(actuals)`, and every call gets a copy. | Task 17. The summary table, the Excel file, the deck and the memo each ask for the same table; it used to be worked out up to 8 times a run. |
+| `metrics_table(actuals)` | Calls every metric function above except `runway_at_next_budget` (a single number, which callers compute separately) and puts the results in one table: a row per quarter, 19 metric columns. `pipeline` is copied in for the combo rule. | The table `python metrics.py` prints. |
+| `table_key(*tables)` | A key that changes whenever any number, quarter label, column name or type in the tables changes: pandas' hash of each row, plus the names and types as they are. | Change one cell and the cache misses, so a changed number is never answered with an old table. |
+| `clear_cache()` | Forgets every cached metric and reason table. | benchmark.py and tests/test_cache.py. |
 
 **Flags and gaps.**
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
 | `input_reason(actuals, metric, position)` | Looks at the metric's inputs (`METRIC_INPUTS`) for one quarter: any blank → missing input; an earlier quarter that doesn't exist → no prior period; else None. A blank wins. | A blank quarter's own YoY is "missing input", not "no prior period". |
-| `metric_reasons(actuals, metrics)` | A table shaped like the metrics table: each value's reason, or None. A NaN with every input present is "not meaningful". | Gross margin with revenue 0 and gross profit 0 → not meaningful, not a gap. |
+| `metric_reasons(actuals, metrics)` | `reasons_table(actuals, metrics)`, cached like `compute_metrics` (the key covers both tables). | Task 17: it was worked out 12 times a run. |
+| `reasons_table(actuals, metrics)` | A table shaped like the metrics table: each value's reason, or None. A NaN with every input present is "not meaningful". | Gross margin with revenue 0 and gross profit 0 → not meaningful, not a gap. |
 | `not_meaningful_text(actuals, metric, quarter)` | What to show instead of an n/m value: the $K figures for the two budget metrics, else "n/m (not meaningful)". | "n/m: net burn 900 vs budget 0 ($K)". |
 | `validate_config(config)` | For a config built in code: stops if a setting the flags use is missing, the wrong type or out of range (`config_schema.check_config` without the file-only rules). `evaluate_flags` and `check_combo` run it. | A combo lookback of 1 has no steps, and `all()` of nothing is True, so the combo would always trip. |
 | `load_config(path)` | Reads config.yaml (or `path`) with `config_schema.read_config`: the whole schema, unknown keys included. | `config["nrr_min"]` → 1.0. |
@@ -1284,6 +1290,43 @@ company whose case covers them; a comment edit passed.
 
 ---
 
+### `cache.py` and `benchmark.py`: read each workbook once (final Task 17)
+
+**What it's for:** one company's run used to clean its workbook five times (the summary table, the
+Excel file, the check for a saved AI analysis, the deck and the memo) and work out its metric table
+seven or eight times, because each output was written to stand on its own. Rather than rewire every
+step to pass the table along, `clean_workbook`, `compute_metrics` and `metric_reasons` keep what they
+worked out in a `ResultCache`, keyed on a hash of their inputs. The finance analogy: pasting a model's
+output as values once, then pointing every tab at that sheet, instead of re-running the model per tab,
+with a check that re-runs it the moment any input changes.
+
+**The three rules that keep an output from ever changing:**
+- **The key is a hash of the inputs, never a file name.** An edited workbook, a new mapping file or one
+  changed number is a new key, so it's worked out again.
+- **Only answers are kept, never errors.** A stop is found again every time.
+- **Copies in and out.** A caller that changes a table it was given can't change what the next caller gets.
+
+| Function | What it does, in plain English | Example / why it exists |
+|---|---|---|
+| `ResultCache(max_entries)` | Holds up to `MAX_ENTRIES` (32) answers, dropping the one used longest ago. A lock lets `main.py --workers` share it between threads. | The web page runs for days, and every upload is a new key, so it can't grow without limit. |
+| `ResultCache.get(key, work_out)` | A copy of the answer saved for `key`; or runs `work_out()`, saves a copy and returns the answer. | Two threads may both work out the same answer at once: harmless, and simpler than making one wait. |
+| `ResultCache.clear()` | Forgets everything. | |
+| `benchmark.py`: `one_run(company, config)` | Builds one company's outputs into a temporary folder from empty caches, reusing the saved analysis in tests/golden/analysis (no API call). Returns the seconds. | Clearing first means no run borrows work an earlier one did. |
+| `benchmark.py`: `counted_run(company, config)` / `measure(company, config)` | Counts the workbook reads (`clean.find_kpi_sheet`) and metric tables (`metrics.nrr`) of one run; the median of 5 timed runs after a warm-up. | Counting by those two names works on the code before and after Task 17, so the same script measured both. |
+
+**The numbers** (MacBook, `python benchmark.py`, median of 5 runs each):
+
+| Company | Before | After | Reads | Metric tables |
+|---|---|---|---|---|
+| Alderpeak | 1.28 s | 0.96 s (−25%) | 5 → 1 | 8 → 1 |
+| Fernhollow | 1.11 s | 0.82 s (−26%) | 5 → 1 | 7 → 1 |
+| Northwind | 1.44 s | 1.11 s (−23%) | 5 → 1 | 8 → 1 |
+
+The rest of the run is building the files themselves (the deck, the Word and PDF memo, the charts),
+which the cache doesn't touch.
+
+---
+
 ### `golden.py`: approved copies of every output (final Task 8)
 
 **What it's for:** the check scripts prove every *number* is right. Nothing proved the rest of what a
@@ -1560,7 +1603,7 @@ to fix, with exit code 1.
 
 ### `tests/`: unit tests (pytest)
 
-Run with `python -m pytest -q` (1289 tests, about five minutes). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
+Run with `python -m pytest -q` (1301 tests, about four minutes). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
@@ -1568,6 +1611,7 @@ Run with `python -m pytest -q` (1289 tests, about five minutes). Expected values
 | `test_metrics.py` (163) | `table(**columns)`: a small table with only the needed columns. `values(series)`: compare with NaN allowed. `burn_table`, `cac_table`: tables for one metric. `full_actuals(blank, blank_cells)`: 8 realistic quarters with optional blanks. `combo_metrics`, `reasons_for`, `combo`, `flags_for`, `gaps_for`, `reasons_of`: shortcuts for combo, flag, gap and reason tests. `TEST_CONFIG`: thresholds typed into the test file, so editing config.yaml never breaks a test. | Every metric against hand math; every CLAUDE.md edge case (∞, 0, −0.0); a missing input never becomes 0 or ∞; `check_threshold` exactly at the threshold, float noise, real misses, NaN, ∞; `check_combo` trip/pass/cannot evaluate with its reason and the 1-point minimum; config validation; the three reasons (every input blanked one at a time must say missing input); not-meaningful budgets; `data_gaps` following the QoQ/YoY rules; the printout's words. |
 | `test_mapping.py` (55) | `RENAMES`: new headers for each company (Northwind all 16, Alderpeak 6, Fernhollow 7). `renamed_copy(company, folder)`: the company's workbook with those headers written in. `mappings_dir`: a temporary mappings/ folder for every test. `copies`, `confirm_all`, `answers(...)` (a fake keyboard for `--confirm`). | **Proposal:** every renamed header is proposed as the column it came from, with a confidence, a reason and the values as written; known headers are never asked about; choices are only columns still without a header, and a column the budget row rules out isn't one; an extra column gets no proposal. The heuristics one at a time (words, typo, budget row, both roll-forwards, gross profit, a blank quarter). **Required confirmation:** an unconfirmed header stops naming it and its proposal; nothing is saved on the way; a partial confirmation still stops; a 99% proposal still needs confirming. **Identical metrics:** after confirming, the numbers, metrics and flags equal the original's for all three; next quarter runs unasked; Change saves the person's column. The file, its hash, and the command line. |
 | `test_bad_inputs.py` (63) | `good_table()`: a valid table. `set_cell`, `drop_column`, `add_column`: break one thing. `write_workbook(path, rows, empty_columns_left)`: Notes tab, title, empty row, table from row 3. `error_from`, `assert_stops_with`: run `clean_workbook` and check how the error message starts. `reorder_quarters(labels)`: quarter rows in a given order. | Broken workbooks stop with the sheet name and Excel address: missing columns, two headers with one meaning, unknown headers, quarters out of order, a budget row with actuals, a budget row for the wrong quarter or with no quarter, two KPI tabs, footnote rows, unreadable text, Excel error cells. `test_good_workbook_cleans` proves the starting workbook is valid, so each failure comes from the one thing that was broken. |
+| `test_cache.py` (12) | `empty_caches`: every test starts with nothing cached and a temporary mappings/ folder. `counting(monkeypatch, module, name)`: wraps a function so its calls are counted. `rename_header(path, old, new)`. | **Task 17.** A whole company run (all three) reads its workbook once and works out its metric table once; a second clean isn't read again. An edited workbook with the same name, a deleted mapping file and a changed or blanked number are all worked out again; a stop isn't remembered; changing a table the cache handed out (three rounds, so a changed *cached* answer would show) doesn't change the next; at most `max_entries` kept, oldest dropped. |
 | `test_analyze.py` (46) | `summary_saying(text)`: an answer with one piece of text. `northwind`: the real Northwind payload, built once. | Minus signs in the number check; the payload's words for each reason and its flag names; `save_analysis` output that `build_deck.load_analysis` accepts (passed) or rejects (failed). |
 | `test_excel_output.py` (9) | `two_quarters`, `budget_row`, `runway_context_cell`, `fill`, `metrics_cell`, `reason_workbook`. | Runway-at-budget labels (a blank wins over ∞), the words and gray fill for each reason, the Flags status text, the Data gaps sheet. |
 | `test_compare_models.py` (6) | none | Blind letters never drop a run; a letter scored twice stops. |
