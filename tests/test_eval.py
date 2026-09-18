@@ -78,6 +78,13 @@ def test_the_threshold_company_sits_exactly_on_every_threshold():
         assert math.isclose(expected[column], config[key], rel_tol=1e-12), column
 
 
+def test_the_healthy_answer_key_covers_every_metric_not_just_the_flags():
+    # Otherwise a wrong formula for a metric no flag uses (revenue YoY, ARR vs budget) would pass.
+    from metrics import METRIC_LABELS
+    assert set(company("Larkspur")["expected_latest"]) == set(METRIC_LABELS)
+    assert set(company("Copperlane")["expected_latest"]) == set(METRIC_LABELS)
+
+
 def test_the_saved_workbooks_are_what_make_eval_data_writes(tmp_path):
     # A stale eval/data file would test old numbers, so regenerate and compare every cell.
     make_eval_data.write_all(tmp_path)

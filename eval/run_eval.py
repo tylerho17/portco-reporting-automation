@@ -6,7 +6,8 @@ saved in eval/data/, so this is only needed after changing make_eval_data.py). N
 For each company, four checks, each giving a list of mismatches (empty = matches the answer key):
 - Clean:   clean.py reads back every answer-key value exactly (the blank quarter all empty) and the
            budget-only row; for a workbook that must stop, it stops with the expected message.
-- Metrics: the 8 flag metrics in the latest quarter equal the hand formulas; runway at next quarter's
+- Metrics: the latest quarter's metrics equal the answer key's hand formulas (all 19 on Larkspur's
+           numbers, the 8 flag metrics elsewhere); runway at next quarter's
            budgeted burn too; and every value with no number has the reason the rules predict
            (missing input, no prior period, or not meaningful where the answer key lists it).
 - Flags:   every flag's status and reason in the latest quarter; for a company that must never trip,

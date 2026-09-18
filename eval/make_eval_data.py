@@ -27,7 +27,8 @@ is the one thing each tests.
 
 The answer key, per company (worked out by hand from the numbers, never by running metrics.py):
 - true_data, blank_quarter, next_quarter_budget: what clean.py must read back
-- expected_latest: the 8 flag metrics in the latest quarter, as hand formulas (NaN = no number)
+- expected_latest: the latest quarter's metrics as hand formulas (NaN = no number): all 19 on
+  Larkspur's numbers (so every formula is checked), the 8 flag metrics for the others
 - expected_runway_at_budget: runway at next quarter's budgeted burn
 - expected_flags: every flag's status in the latest quarter ("cannot evaluate: <reason>" says why)
 - not_meaningful: {metric: [quarters]} where every input is there but the math is undefined.
@@ -103,8 +104,21 @@ LARKSPUR_DATA = {
 }
 LARKSPUR_NEXT_BUDGET = {"budget_new_arr": 1380, "budget_arr": 24100, "budget_net_burn": 120}
 
-# Q2 2026 by hand. Net new ARR = 1350 + 770 - 100 - 150 = 1870; a year earlier (Q2 2025) revenue was 3690.
+# Q2 2026 by hand, every metric (the other companies list the 8 flag metrics). Net new ARR =
+# 1350 + 770 - 100 - 150 = 1870. Last quarter's ending ARR is this quarter's starting ARR (20520);
+# a year earlier (Q2 2025) it was Q3 2025's starting ARR (15500) and revenue was 3690.
 LARKSPUR_LATEST = {
+    "ending_arr": 20520 + 1870,
+    "net_new_arr": 1870,
+    "gross_margin": 4180 / 5360,
+    "arr_qoq": 22390 / 20520 - 1,
+    "arr_yoy": 22390 / 15500 - 1,
+    "revenue_qoq": 5360 / 4910 - 1,
+    "revenue_yoy": 5360 / 3690 - 1,
+    "pipeline": 6100,
+    "pipeline_qoq": 6100 / 5800 - 1,
+    "fcf_margin": -150 / 5360,
+    "arr_vs_budget": 22390 / 22150 - 1,
     "nrr": 1 + 4 * (770 - 100 - 150) / 20520,
     "grr": 1 - 4 * (100 + 150) / 20520,
     "burn_multiple": 150 / 1870,
@@ -271,8 +285,9 @@ COPPERLANE = {
     "header_names": alderpeak.HEADER_NAMES,
     "text_cells": {("ending_cash", "Q4 2025"): "M", ("new_arr", "Q2 2026"): "K"},
     "notes": notes("Copperlane Cloud", "Q1 2026 numbers held back by the auditors"),
-    # Net new ARR vs budget needs Q1 2026's budget ARR; the rest use Q2 2026 (or Q2 2025) only.
-    "expected_latest": {**LARKSPUR_LATEST, "net_new_arr_vs_budget": NAN},
+    # The QoQ metrics and net new ARR vs budget need Q1 2026; the rest use Q2 2026 (or Q2 2025) only.
+    "expected_latest": {**LARKSPUR_LATEST, "arr_qoq": NAN, "revenue_qoq": NAN, "pipeline_qoq": NAN,
+                        "net_new_arr_vs_budget": NAN},
     "expected_runway_at_budget": LARKSPUR_RUNWAY_AT_BUDGET,
     "expected_flags": {**ALL_PASS, "Net new ARR vs budget": "cannot evaluate: missing input",
                        "NRR falling while pipeline rising": "cannot evaluate: missing input"},
