@@ -57,7 +57,7 @@ from clean import clean_workbook
 from excel_output import STATUS_COLORS, flag_row, runway_context_value, status_label
 from make_template import DARK_GRAY, FONT, LIGHT_GRAY, MID_GRAY, NAVY, WHITE
 from metrics import CANNOT_EVALUATE, CONFIG_PATH, METRIC_LABELS, TRIP, format_value, load_config
-from provenance import approval_status, file_sha256, git_commit, manifest_path, read_manifest
+from provenance import approval_status, file_sha256, git_commit, manifest_path, read_manifest, save_manifest
 
 MEMO_UNAVAILABLE = "AI commentary unavailable"
 MEMO_UNAVAILABLE_NOTE = ("The headline and questions are written by Claude, and no validated version is "
@@ -520,7 +520,22 @@ def save_memo(workbook_path, config, analysis_file=None, run_date=None, output_d
     blocks = memo_blocks(data, summary)
     write_docx(blocks, footer, docx_path)
     write_pdf(blocks, footer, pdf_path)
+    record_memo_status(workbook_path, output_dir, [docx_path.name, pdf_path.name], ai_text=summary is not None)
     return {"docx": docx_path, "pdf": pdf_path, "why_unavailable": why_unavailable}
+
+
+def record_memo_status(workbook_path, output_dir, files, ai_text):
+    """Update the manifest to describe the memo just written: its files, and AI text or not.
+
+    Only if a manifest is already there (main.py writes the full one), so a memo rebuilt on its own
+    never leaves the manifest describing the last one. The same rule as build_deck.record_deck_status.
+    """
+    path = manifest_path(workbook_path, output_dir)
+    manifest = read_manifest(path)
+    if manifest is None:
+        return None
+    manifest["memo"] = {"files": files, "ai_text": ai_text}
+    return save_manifest(path, manifest)
 
 
 def main(argv=None, output_dir=OUTPUT_DIR):

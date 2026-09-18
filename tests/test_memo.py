@@ -14,11 +14,12 @@ import pytest
 from docx import Document
 from pypdf import PdfReader
 
-from analyze import build_payload
+from analyze import BoardSummary, build_payload
 from build_deck import collect_deck_data
 from clean import STANDARD_COLUMNS
 from memo import (AI_DRAFTED_LINE, MEMO_UNAVAILABLE, block_texts, memo_analysis, memo_blocks, memo_footer,
                   memo_paths, save_memo, unlisted_numbers, workbook_numbers, write_docx, write_pdf)
+from provenance import manifest_path, read_manifest, save_manifest
 
 NAN = math.nan
 RUN_DATE = datetime.date(2026, 9, 17)
@@ -51,6 +52,10 @@ def summary_dict(headline="Retention is the main question for the board.", quest
     return {"headline": headline, "wins": [{"title": "Win title", "detail": "A win detail."}] * 3,
             "risks": [{"title": "Risk title", "detail": "A risk detail."}] * 3,
             "questions": [question, "Where is pipeline coming from?", "How is hiring going?"]}
+
+
+def summary_from(summary):
+    return BoardSummary.model_validate(summary)
 
 
 def write_analysis(tmp_path, summary, quarter="Q2 2026"):
@@ -150,11 +155,6 @@ def test_questions_are_bullets_not_numbers():
     blocks = memo_blocks(memo_data(), summary_from(summary_dict()))
     questions = next(block for block in blocks if block["kind"] == "bullets" and block.get("ai"))
     assert questions["items"] == ["What drives churn?", "Where is pipeline coming from?", "How is hiring going?"]
-
-
-def summary_from(summary):
-    from analyze import BoardSummary
-    return BoardSummary.model_validate(summary)
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +316,19 @@ def test_save_memo_writes_both_files_beside_the_deck(tmp_path, monkeypatch):
     assert result["pdf"] == tmp_path / "testco_board_memo.pdf" and result["pdf"].exists()
     assert result["why_unavailable"] == "no analysis requested"
     assert MEMO_UNAVAILABLE in docx_text(result["docx"])
+
+
+def test_a_memo_rebuilt_on_its_own_updates_an_existing_manifest(tmp_path, monkeypatch):
+    workbook = tmp_path / "testco.xlsx"
+    workbook.write_bytes(b"not read: clean_workbook is replaced")
+    monkeypatch.setattr("memo.clean_workbook", lambda path: (three_quarters(), None))
+    save_memo(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert not manifest_path(workbook, tmp_path).exists()   # no manifest: none is made (main.py writes it)
+
+    save_manifest(manifest_path(workbook, tmp_path), {"company": "Testco", "memo": {"ai_text": True}})
+    save_memo(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert read_manifest(manifest_path(workbook, tmp_path))["memo"] == {
+        "files": ["testco_board_memo.docx", "testco_board_memo.pdf"], "ai_text": False}
 
 
 def test_memo_paths():

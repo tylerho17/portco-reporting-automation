@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import anthropic
 import pytest
+from docx import Document
 from pptx import Presentation
 
 import analyze
@@ -229,6 +230,55 @@ def test_skip_ai_builds_the_placeholder_deck_and_never_calls_claude(tmp_path, mo
     assert result["error"] is None and main.result_text(result) == "OK (AI skipped)"
     assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
     assert old.read_text() == "an analysis from an earlier run"  # --skip-ai leaves an earlier analysis alone
+
+
+# ---------------------------------------------------------------------------
+# The memo (final Task 1): built beside the deck, from the same analysis
+# ---------------------------------------------------------------------------
+
+def memo_text(tmp_path):
+    """Every paragraph of the saved Word memo."""
+    return "\n".join(item.text for item in Document(tmp_path / "northwind_board_memo.docx").paragraphs)
+
+
+def test_a_run_writes_the_memo_beside_the_deck_with_the_ai_text(tmp_path, capsys):
+    result = run_northwind(tmp_path, client=FakeClient(summary()))
+    assert result["error"] is None and main.result_text(result) == "OK"
+    assert (tmp_path / "northwind_board_memo.docx").exists() and (tmp_path / "northwind_board_memo.pdf").exists()
+    assert "Retention is the main question for the board." in memo_text(tmp_path)
+    assert "✓ Memo: " in capsys.readouterr().out
+
+
+def test_skip_ai_builds_the_memo_with_ai_commentary_unavailable(tmp_path):
+    run_northwind(tmp_path, skip_ai=True)
+    text = memo_text(tmp_path)
+    assert "AI commentary unavailable" in text and "Key metrics" in text
+
+
+def test_ai_failed_builds_the_memo_with_ai_commentary_unavailable(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(error=anthropic.AnthropicError("simulated outage")))
+    assert "AI commentary unavailable" in memo_text(tmp_path)
+
+
+def test_ai_text_quoting_a_number_the_metrics_workbook_lacks_stays_off_the_memo_only(tmp_path, capsys):
+    # 14,300 is Northwind's latest ending cash: in Claude's payload (so analyze.py and the deck accept it),
+    # but not in the metrics workbook, and every number in the memo must be.
+    answer = summary()
+    answer.questions[0] = "How long will the ending cash of $14,300K last at the current burn?"
+    result = run_northwind(tmp_path, client=FakeClient(answer))
+    assert main.result_text(result) == "OK"   # the deck has the AI text
+    assert headline_on_deck(tmp_path) == "Retention is the main question for the board."
+    assert "AI commentary unavailable" in memo_text(tmp_path)
+    printed = capsys.readouterr().out
+    assert "AI commentary unavailable" in printed and "14,300" in printed
+
+
+def test_the_manifest_records_the_memo(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary()))
+    assert northwind_manifest(tmp_path)["memo"] == {
+        "files": ["northwind_board_memo.docx", "northwind_board_memo.pdf"], "ai_text": True}
+    run_northwind(tmp_path, skip_ai=True)
+    assert northwind_manifest(tmp_path)["memo"]["ai_text"] is False
 
 
 # ---------------------------------------------------------------------------

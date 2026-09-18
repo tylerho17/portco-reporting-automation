@@ -6,8 +6,10 @@ Steps for each company:
 3. Save output/<company>_metrics.xlsx (excel_output.py)
 4. AI commentary (analyze.py): output/<company>_analysis.json, saved whether it passed or failed
 5. Deck (build_deck.py): output/<company>_board_pack.pptx
+6. Memo (memo.py): output/<company>_board_memo.docx and .pdf, from the same numbers and analysis
+7. Manifest (provenance.py): output/<company>_manifest.json
 
-The deck is always built, because its numbers come from Python (CLAUDE.md decisions K and L):
+The deck and the memo are always built, because their numbers come from Python (CLAUDE.md decisions K and L):
 - AI passed validation      -> the AI text is on slide 4 (AI commentary), result "OK"
 - AI failed (validation failed after the retry, or an API error)
                             -> "AI summary unavailable" on slide 4, result "OK (AI failed)"
@@ -44,6 +46,7 @@ from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, comme
 from clean import clean_workbook
 from compare_models import run_cost
 from excel_output import save_metrics_workbook
+from memo import MEMO_UNAVAILABLE, save_memo
 from metrics import (CANNOT_EVALUATE, CONFIG_PATH, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config,
                      metric_reasons)
 from provenance import build_manifest, manifest_path, read_manifest, save_manifest
@@ -141,6 +144,21 @@ def deck_step(workbook_path, config, analysis_file, output_dir, draft=False):
     return why_unavailable
 
 
+def memo_step(workbook_path, config, analysis_file, output_dir):
+    """Build and save the memo (Word and PDF) from the same analysis as the deck. Returns memo.save_memo's result.
+
+    The memo can reject AI text the deck accepted: every number in it must be in the metrics
+    workbook, and Claude may quote a raw input (net burn, ending cash) that isn't. The reason is
+    printed, as for the deck.
+    """
+    result = save_memo(workbook_path, config, analysis_file, output_dir=output_dir)
+    ai = "AI text" if result["why_unavailable"] is None else MEMO_UNAVAILABLE
+    print(f"  ✓ Memo: {shown_path(result['docx'])} + {result['pdf'].name} ({ai})")
+    if analysis_file is not None and result["why_unavailable"] is not None:
+        print(f"      {MEMO_UNAVAILABLE}: {result['why_unavailable']}")
+    return result
+
+
 def ai_record(ai, analysis_file):
     """What the manifest says about the AI step: model, prompt wording, tokens, cost, result.
 
@@ -162,12 +180,13 @@ def ai_record(ai, analysis_file):
     }
 
 
-def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable):
+def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo=None):
     """Write output/<company>_manifest.json: where this deck came from, and who has approved it.
 
     Any approval already recorded is carried over. Whether it still counts is decided by
     provenance.approval_status, which checks it against today's workbook and thresholds - so a deck
-    goes back to DRAFT on its own once either changes.
+    goes back to DRAFT on its own once either changes. memo = memo_step's result: the memo's files,
+    and whether it carries the AI text (it can differ from the deck).
     """
     path = manifest_path(workbook_path, output_dir)
     previous = read_manifest(path)
@@ -175,6 +194,8 @@ def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable)
         company_name(workbook_path), workbook_path, CONFIG_PATH,
         deck_path(workbook_path, output_dir).name, ai_record(ai, analysis_file),
         ai_text=why_unavailable is None, approval=(previous or {}).get("approval"))
+    if memo is not None:
+        manifest["memo"] = {"files": [memo["docx"].name, memo["pdf"].name], "ai_text": memo["why_unavailable"] is None}
     save_manifest(path, manifest)
     print(f"  ✓ Manifest: {shown_path(path)} (deck status: {manifest['deck']['status']})")
     return manifest
@@ -232,7 +253,8 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
         ai = ai_step(workbook_path, actuals, next_budget, config, output_dir, client)
         analysis_file = ai["analysis_file"]
     why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir, draft)
-    manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable)
+    memo = memo_step(workbook_path, config, analysis_file, output_dir)
+    manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo)
     result["ai"] = ai_status(skip_ai, why_unavailable)
     result["deck_status"] = manifest["deck"]["status"]
     return result
