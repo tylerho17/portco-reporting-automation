@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
+import build_deck
 import main
 from analyze import DEFAULT_MODEL, PROMPT_VERSION
-from build_deck import commit_text
 from config_schema import ConfigError
 from metrics import load_config
 
@@ -49,9 +49,11 @@ def files_in(folder):
 
 def test_version_names_the_code_the_model_and_the_prompt(monkeypatch, capsys):
     no_batch(monkeypatch)
+    # A made-up commit, so the test can't pass on "unknown" in a folder with no git (found by a planted bug).
+    monkeypatch.setattr(build_deck, "git_commit", lambda: {"commit": "abc1234", "uncommitted_changes": True})
     assert main.main(["--version"]) == main.EXIT_OK
     printed = capsys.readouterr().out
-    assert commit_text() in printed          # the same commit every deck footer shows
+    assert "code abc1234*" in printed       # the same words every deck footer shows (build_deck.commit_text)
     assert DEFAULT_MODEL in printed
     assert f"prompt {PROMPT_VERSION}" in printed
     assert f"Python {sys.version_info.major}.{sys.version_info.minor}" in printed
@@ -130,6 +132,13 @@ def test_list_companies_says_how_many_and_how_to_build_them(small_portfolio, cap
     assert "python main.py --all" in printed
 
 
+def test_one_company_is_1_company(tmp_path, capsys):
+    # Found by a planted bug: "1 companies" passed every other test.
+    shutil.copy(PROJECT_DIR / "data" / "northwind.xlsx", tmp_path)
+    main.list_companies(load_config(), tmp_path, tmp_path)
+    assert "1 company in" in capsys.readouterr().out
+
+
 def test_list_companies_writes_nothing(small_portfolio):
     data_dir, output_dir = small_portfolio
     before = files_in(data_dir.parent)
@@ -189,12 +198,14 @@ def test_help_lists_every_exit_code(capsys):
         assert f"{code} {meaning}" in text
 
 
-def test_help_shows_every_option(capsys):
-    text = help_text(capsys)
-    for option in ("--all", "--skip-ai", "--draft", "--resume", "--max-cost", "--timeout", "--workers",
-                   "--list-companies", "--version", "--help"):
-        assert option in text
-    assert "python main.py --list-companies | --version | --help" in text   # the usage line's second way
+def test_help_explains_every_option_on_its_own_line(capsys):
+    # On its own indented line in the option groups, not just named somewhere: the usage line and the
+    # examples name --version too, so a hidden help line would otherwise pass (found by a planted bug).
+    options_part = help_text(capsys).split("Examples:")[0]
+    for option in ("workbook", "--all", "--skip-ai", "--draft", "--resume", "--max-cost", "--timeout", "--workers",
+                   "--list-companies", "--version", "-h, --help"):
+        assert re.search(rf"^  {re.escape(option)}\b", options_part, flags=re.MULTILINE), option
+    assert "python main.py --list-companies | --version | --help" in options_part   # the usage line's second way
 
 
 def test_help_from_the_shell():
