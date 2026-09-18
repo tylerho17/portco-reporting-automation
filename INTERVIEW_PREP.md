@@ -387,6 +387,20 @@ heuristics, not a model, and I'd add a Claude call next, for headers like "Cash 
 fits two columns.
 *Point to:* `mapping.propose`, `clean.clean_workbook`, `app.review_mapping`; `tests/test_mapping.py`.
 
+**Q34c. Three demo companies can't cover every edge case. How do you know it handles the odd ones?** (new, Task 6)
+An evaluation set: 12 more fictional companies, each built for one case, each with its own answer
+key typed by hand. A company sitting exactly on every threshold (NRR 100%, runway 12 months, Rule
+of 40 at 40: all pass, because exactly at the line passes). A blank quarter first, second to last
+and last. A pre-launch company with zero revenue, where 0 divided by 0 must say "not meaningful"
+rather than a number. A plan with negative budgeted burn. Two quarters of history, where YoY must
+say "no prior period" and never count as missing data. And two workbooks that must stop: a row
+pasted twice and a row missing. `python eval/run_eval.py` runs clean, metrics, flags and gaps for
+all 12 and prints a scorecard that names any mismatch, like "Tidewell, Flags: Rule of 40: expected
+pass, got trip". To prove it works I planted 24 bugs, one at a time, in throwaway copies, and each
+failed the company built for it. It also found a hole in itself: at first only the flag metrics
+were value-checked, so a wrong revenue YoY slipped through. The healthy company now checks all 19.
+*Point to:* `eval/make_eval_data.py`, `eval/run_eval.py`; `tests/test_eval.py::test_every_company_matches_its_answer_key`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. The fix is running

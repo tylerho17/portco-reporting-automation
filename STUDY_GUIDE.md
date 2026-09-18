@@ -964,6 +964,75 @@ Every run uses `--skip-ai`. The `main.py` process also gets no API key and an AP
 
 ---
 
+### `eval/make_eval_data.py` and `eval/run_eval.py`: the evaluation set (final Task 6)
+
+**What it's for:** the three companies in `data/` tell stories; these 12 test edge cases. Each is a
+messy workbook in `eval/data/` with its own answer key, and `python eval/run_eval.py` runs clean,
+metrics, flags and gaps over all 12 and prints a scorecard. It ends "12 of 12 companies match their
+answer keys", or names every mismatch ("Tidewell, Flags: Rule of 40: expected pass, got trip") and
+exits 1. No API calls.
+
+| Company | The case | What must happen |
+|---|---|---|
+| Larkspur | healthy | no flag trips in any quarter; its answer key checks **all 19 metrics**, not just the 8 flags |
+| Quillmoor | distressed | all 9 flags trip, the combo too (NRR falling, pipeline rising); burn multiple 28x, finite |
+| Tidewell | exactly at every threshold | NRR 100%, GRR 85%, 2.0x, 15% over, 12 mo, 24 mo, -20%, 40: all pass; NRR falls exactly 1 point a quarter, so the combo trips |
+| Brackenfield | blank quarter first | its own YoY is missing input (a blank wins over no prior period) |
+| Copperlane | blank quarter second to last | the latest net new ARR vs budget and the combo: cannot evaluate, missing input |
+| Duskhaven | blank quarter last | all 9 flags: cannot evaluate, missing input |
+| Emberfall | zero revenue for a year | 0 / 0 and growth from zero are not meaningful (Rule of 40 cannot evaluate: not meaningful) |
+| Glenmarsh | negative budget | burn vs a budget of 0 or below and net new ARR vs a shrinking plan: not meaningful; runway at a budget of -150 is ∞ |
+| Hollowmere | NRR and pipeline both falling | the combo passes |
+| Ivywick | 2 quarters of history | YoY and the combo: no prior period, and no data gaps |
+| Kestrelwood | a row pasted twice | clean.py stops naming rows 8 and 7 |
+| Lanternreach | a row missing | clean.py stops: "After Q4 2025 expected Q1 2026, found Q2 2026" |
+
+The blank-quarter and stop companies use Larkspur's numbers, so each differs from it in one thing only.
+Northwind (blank in position 3) and Fernhollow (position 4) cover a blank in the middle.
+
+**The answer key** is typed by hand, like check_companies.py: the numbers, `expected_latest` (hand
+formulas such as `1 + 4 * (770 - 100 - 150) / 20520`), `expected_flags` in words ("cannot evaluate:
+no prior period"), and `not_meaningful` (which metric in which quarter has no number although every
+input is there). "Missing input" and "no prior period" aren't listed: `eval/run_eval.py` works them out
+from the blank quarter and the quarter's position, with the CLAUDE.md rules, and predicts the data
+gaps the same way.
+
+#### `eval/make_eval_data.py`
+
+| Function | What it does |
+|---|---|
+| `notes(title, line)` | A junk Notes tab: a title and one remark. |
+| `row_of(sheet, quarter)` | The Excel row whose first cell is this quarter label. |
+| `damage_row(path, edit)` | Repeats or deletes one quarter's row in a saved workbook (the two stop companies). |
+| `write_company(company, folder)` | `make_data_common.save_workbook` (which checks the answer key ties out first), then the damage if any. |
+| `write_all(folder)` | All 12 workbooks, into `eval/data/` by default. |
+
+#### `eval/run_eval.py`
+
+| Function | What it does |
+|---|---|
+| `clean_mismatches(company, actuals, next_budget)` | Every cleaned value vs the answer key; the blank quarter all empty; the budget-only row. |
+| `stop_mismatches(company)` | A workbook that must stop: it has to, and the message must hold the expected words. |
+| `lookback(metric)` | 1 for QoQ, 4 for YoY, 0 otherwise, from check_northwind.py's hand-typed lists. |
+| `predicted_reason(company, metric, position)` | Why a value should have no number: a blank input first, then no prior period, then the answer key's not-meaningful list. |
+| `reason_words(reason)` / `flag_words(flag)` | The words used in mismatch messages. |
+| `reason_mismatches(company, reasons)` | Every metric in every quarter has the predicted reason (or a number). |
+| `metric_mismatches(...)` | Latest-quarter values vs the hand formulas, runway at budget, then the reasons. |
+| `flag_mismatches(company, flags, metrics, reasons, config)` | Every flag's status and reason; for Larkspur, no trip in any quarter. |
+| `predicted_gaps(company, metric_columns)` | The gaps the rules predict: every missing-input value, and every flag expected to be "cannot evaluate: missing input". |
+| `gap_mismatches(company, gaps, metric_columns)` | `data_gaps()` vs the prediction, extra or missing. |
+| `evaluate(company, config)` | One company through clean, metrics, flags and gaps: {check: [mismatches]}. |
+| `cell(company, results, check)` / `scorecard_lines(companies, all_results)` | The table, the mismatches by name, the stops, the total. |
+| `main(companies)` | Runs the set, prints the scorecard, returns 0 or 1. |
+
+**Proof it catches what it claims:** 24 bugs planted one at a time in temporary copies of the project
+(exactly-at trips, no rounding, a 1-point drop not counting, the pipeline ignored, no prior period
+winning over a blank, growth from zero shown as ∞, a negative budget computed, YoY looking 3 back, a
+repeated or missing row let through, "$-0.2M" unreadable, a blank read as 0 ...): all 24 failed the
+company whose case covers them; a comment edit passed.
+
+---
+
 ### `compare_models.py`: Sonnet vs Haiku, scored blind (build step 3b)
 
 **What it's for:** runs the same Northwind payload through `claude-sonnet-5` and `claude-haiku-4-5` 3 times each, shuffles the answers, and lets you score them without knowing which model wrote which. `run` calls the API (costs money); `score` is free. **Already done; the results are in README.md.**
@@ -993,7 +1062,7 @@ Every run uses `--skip-ai`. The `main.py` process also gets no API key and an AP
 
 ### `tests/`: unit tests (pytest)
 
-Run with `python -m pytest -q` (728 tests, about two minutes). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
+Run with `python -m pytest -q` (764 tests, about two minutes). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
@@ -1014,7 +1083,8 @@ Run with `python -m pytest -q` (728 tests, about two minutes). Expected values a
 | `test_approve.py` (12) | `company`: a workbook, config and manifest in a temp folder. `approve_testco(...)`. | The reviewer and time are recorded and nothing else in the manifest changes; no manifest, a changed workbook, changed thresholds, a changed column mapping or no name each stop; the mapping's hash is recorded; the command line says to rebuild so the footer says reviewed (never "watermark": that needs `--draft`), or prints one line when it refuses. |
 | `test_app.py` (30) | `no_real_client` (as in test_main.py). `folders`: a temporary `data/` with copies of the three workbooks and an empty `output/`. `company_data(name)`. `render`, `page(folders, company)`: draw the page on those folders with Streamlit's `AppTest`. `downloads(test)`, `texts(test)`, `html_bodies(test)`, `tables(test)`, `primary_buttons(test)`. | The checkbox names the cost; the palette's status colors; HTML tables with escaped text and the metric names in the first column; `$` survives markdown; Northwind's 6 of 9 flags in red and green rows; Fernhollow's "Cannot evaluate: missing input" with no em dash; "data missing" gray and a tripped NRR red; both charts. **The pages:** every company listed with nothing to download yet; search narrows the table and a missing name says upload one; Generate on a row builds and enables its 3 downloads; Generate all builds 3 of 3; an unreadable workbook shows clean.py's message and Generate all still builds the other 3; clicking a name opens its page; the company page's flags, 2 tables, 2 charts, 4 downloads and a greyed-out Approve; a name with no workbook; Approve records the typed reviewer; saved commentary is shown; no em dash anywhere on either page (tables included); **Task 3:** both pages carry theme.py's style sheet, each page has exactly one primary button (Generate all; Generate) and Approve is secondary, the flags table's six tripped rows in the red fill; `run_app.command` is executable and starts app.py. **Task 5:** Review mapping shows each pair with its proposal preselected under Change, its confidence and values; Save mapping stays greyed out until every pair is confirmed; confirming all saves the file and the page shows the company's flags; Change clears that pair's tick and saves the new column; a company with known headers has no review step. |
 | `test_portfolio.py` (44) | `FakeClient`, `summary(headline)`, `no_real_client` (as in test_main.py). `folders` (as in test_app.py). `unreadable_workbook_bytes`: a real .xlsx clean.py stops on, and clean.py's own message. `rows_by_company`, `generate`, `save_northwind_analysis`, `headline_on_deck`, `add`, `approve`. | Em dashes, last run and company-name rules; each company's row matches its story (6 of 9, 7 of 9 with 1 cannot evaluate, 0 of 9 and no gaps); "never" and "Not generated yet" before a run; an unreadable workbook, a non-Excel file and a bug each give plain words while the other rows are unaffected; search and the "No KPI workbook found" message; `find_workbook` stays inside `data/`; Generate builds all four files and the row then reads the manifest; the AI note for not asked, **reused with no call even with the box unticked**, asked once, no key, and an API failure; clean.py's message from Generate; Generate all carries on past a failure, reports progress and writes batch_summary.csv; a changed workbook makes the row out of date and its downloads disappear; Add a company saves only a readable workbook, refuses a non-Excel file and a bad name, and replaces only when asked; Approve records the typed reviewer, needs a name, and refuses before Generate or after a change; saved commentary only for exactly these numbers. **Task 5:** headers to confirm show on the row in the page's words (no command line, no temp path); proposals for a workbook and for an upload; confirming saves the mapping and the company reads as the original; an unchosen header or a mapping the workbook can't be read with saves nothing; Generate records the mapping in the manifest; a changed mapping makes the row out of date; an upload with unknown headers is added only with confirmed columns, and then both are saved. |
-| `test_docs.py` (18) | `python_files_named(text)`, `study_guide_tables()`, `defined_in(files, name)`, `files_named`, `functions_named`, `watermark_lines(text)`, `em_dash_lines(text)`, `code_strings(path)`: every quoted string in a .py file (read with Python's `ast`, so comments don't count). | README keeps the model comparison markers, and rewriting that block leaves the rest alone; every `.py` file named in README, CLAUDE.md, this guide and LOOM_SCRIPT.md exists; **every function in this guide's tables exists** in the file its heading names; INTERVIEW_PREP.md's files, functions and group order; README, CLAUDE.md, this guide and LOOM_SCRIPT.md never describe the watermark without `--draft`, all name `--draft`, app.py and run_app.command, and count 4 slides. **Task 4: no em dash** in any .md file, in any string of the project's .py files, or in what the code builds when it runs (the AI system prompt, the metric and input labels, each "cannot evaluate" status). |
+| `test_eval.py` (35) | `company(name)`: a deep copy of one eval company, so a test can break its answer key without touching the real one. `run(companies, capsys)`: the scorecard's exit code and text. | The set: 12 companies, every case asked for, blanks first, second to last and last, the two stop companies; **every answer key ties out** (roll-forwards, money in 10s); Tidewell's hand formulas give each config.yaml threshold exactly; Larkspur's answer key covers all 19 metrics; **the saved eval/data workbooks are what eval/make_eval_data.py writes**. The run: 12 of 12 match, both stop companies stop. **A mismatch is named, never passed:** a wrong flag, a wrong cannot-evaluate reason, a wrong latest value, an unlisted not-meaningful cell, a wrong runway at budget, a wrong cleaned value, an unpredicted gap, a trip in a never-trips company, a workbook that should stop but reads, a stop with the wrong words, a missing workbook (with the command to make it). The gap rules for a blank first and last quarter, and no prior period never a gap. |
+| `test_docs.py` (19) | `python_files_named(text)`, `study_guide_tables()`, `defined_in(files, name)`, `files_named`, `functions_named`, `watermark_lines(text)`, `em_dash_lines(text)`, `code_strings(path)`: every quoted string in a .py file (read with Python's `ast`, so comments don't count). | README keeps the model comparison markers, and rewriting that block leaves the rest alone; every `.py` file named in README, CLAUDE.md, this guide and LOOM_SCRIPT.md exists; **every function in this guide's tables exists** in the file its heading names; INTERVIEW_PREP.md's files, functions and group order; README, CLAUDE.md, this guide and LOOM_SCRIPT.md never describe the watermark without `--draft`, all name `--draft`, app.py and run_app.command, and count 4 slides. README and this guide list `python eval/run_eval.py` with the other checks. **Task 4: no em dash** in any .md file, in any string of the project's .py files (and eval/'s), or in what the code builds when it runs (the AI system prompt, the metric and input labels, each "cannot evaluate" status). |
 | `test_theme.py` (22) | `code_files()`, `missing(*families)`: a findfont that can't find those fonts. `css_rules(css)`, `rule(css, *words, plain)`: read the style sheet back. | The palette typed from the brief; status colors; **the Excel workbook keeps its fills**; **no code file but theme.py types a color** (and the pattern finds colors written four ways); no code, config or template names another brand; Arial, then Helvetica, then DejaVu Sans, and the PDF's font is a single .ttf; the sizes and the 12 pt floor; primary buttons navy with white text (navy dark on hover, surface when greyed out), secondary white with a navy border, the Download popover styled as secondary, **no button rule red or green**; 1100 px column, white cards, navy table header, 40 px rows, wide tables scroll; Arial and the sizes on the page; `.streamlit/config.toml` matches `theme.streamlit_theme()`. |
 
 ---

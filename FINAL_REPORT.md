@@ -633,3 +633,169 @@ commentary.
   review then simply asks again; nothing wrong is used.
 - **The synonym list is hand-written** from ordinary FP&A vocabulary. It will need lines for real
   companies' spellings until a model call replaces it (above).
+
+---
+
+## Task 6: the evaluation set (eval/make_eval_data.py, eval/run_eval.py)
+
+### What I built
+
+- **`eval/make_eval_data.py`** writes 12 fictional companies to `eval/data/`, each a messy workbook
+  (the demo companies' header spellings, title rows, a Notes tab in front, money as "$1.2M", "850K",
+  "5,090", and now negative and zero text: "$-0.2M", "-100K", "$0M", "0"), each with an answer key
+  typed by hand:
+
+  | Company | Case | What the answer key says |
+  |---|---|---|
+  | Larkspur | healthy | 0 of 9 trip, in every quarter; all 19 metrics checked by hand formula |
+  | Quillmoor | distressed | 9 of 9 trip: burn multiple 28x (finite, unlike Fernhollow's ∞), and NRR falling while pipeline rises, so the combo trips too |
+  | Tidewell | exactly at every threshold | NRR 100%, GRR 85%, burn multiple 2.0x, 15% over budget, runway 12.0 mo, CAC 24.0 mo, net new ARR -20% vs budget, Rule of 40 at 40: all 8 pass. NRR goes 102%, 101%, 100%, a drop of exactly 1 point each quarter, so the combo trips |
+  | Brackenfield | blank quarter first (Q3 2024) | its own YoY is missing input, not no prior period; Q4 2024's QoQ and Q3 2025's YoY are gaps; the latest quarter is untouched |
+  | Copperlane | blank second to last (Q1 2026) | latest QoQ metrics and net new ARR vs budget: missing; that flag and the combo: cannot evaluate, missing input |
+  | Duskhaven | blank last (Q2 2026) | all 9 flags cannot evaluate: missing input; runway at next quarter's budget has no number either |
+  | Emberfall | zero revenue (a year before launch) | 0 / 0 margins, NRR on no starting ARR, ARR vs a budget of 0, and growth from a zero base: 49 values "not meaningful", every one listed by quarter; burn multiple ∞ while burning with no ARR; Rule of 40 cannot evaluate: not meaningful |
+  | Glenmarsh | negative budget | budgeted burn of 0, -100, -200 and a budget that plans ARR to shrink: both vs-budget flags cannot evaluate: not meaningful; next quarter's budgeted burn of -150 gives runway ∞ |
+  | Hollowmere | NRR and pipeline both falling | the combo passes; NRR and Rule of 40 trip |
+  | Ivywick | short history (2 quarters) | Rule of 40 and the combo: cannot evaluate, no prior period; **no data gaps** |
+  | Kestrelwood | Q4 2025's row pasted twice | clean.py stops: "row 8: quarter 'Q4 2025' appears twice (also in row 7)" |
+  | Lanternreach | Q1 2026's row missing | clean.py stops: "row 10: After Q4 2025 expected Q1 2026, found Q2 2026" |
+
+- **`eval/run_eval.py`** runs each company through clean, metrics, flags and gaps and prints a
+  scorecard: one row per company (Clean, Metrics, Flags, Gaps: ok, stopped, or MISMATCH (n)), then
+  every mismatch by name ("Tidewell, Flags: Rule of 40: expected pass, got trip"), then "12 of 12
+  companies match their answer keys". It exits 1 on any mismatch. Four checks:
+  - **Clean:** every value back exactly, the blank quarter all empty, the budget-only row; for the two
+    stop companies, the stop and its words (sheet, row and quarter).
+  - **Metrics:** the latest quarter's values vs the hand formulas, runway at next quarter's budget,
+    and **the reason for every missing value in every quarter** (19 metrics by 8 quarters each).
+  - **Flags:** every status with its reason; Larkspur trips nothing in any quarter.
+  - **Gaps:** `data_gaps()` equals the prediction, no more and no fewer.
+- **It passes:** 12 of 12. It's in the checks: `tests/test_eval.py` runs it inside
+  `python -m pytest`, README's "Prove it works" block and the study guide list it (a doc test fails
+  if they stop), and the no-em-dash test now covers `eval/`.
+- **Tests (36 new, 764 in all, written before the code):** 35 in `tests/test_eval.py`. They check
+  that the set is what was asked for, that every answer key ties out, that Tidewell's formulas give
+  each config.yaml threshold exactly, and that the saved workbooks are what `eval/make_eval_data.py` writes.
+  Then 12 of 12 match. **Eleven tests break a copy of an answer key and require the
+  scorecard to name it** (a wrong flag, reason, value, cleaned number, runway, gap, an unlisted
+  not-meaningful cell, a trip in a never-trips company, a workbook that should stop but reads, a stop
+  with the wrong words, a missing workbook). Plus 1 in `tests/test_docs.py`.
+- **Proof the eval catches what it claims:** `output/task6_mutations.py` planted 24 bugs, one at a
+  time, in temporary copies of the project, and ran `eval/run_eval.py` in each. **24 of 24** failed,
+  each on the company built for that case; the control (a comment edit) passed 12 of 12. The bugs:
+  exactly-at trips; no float rounding (Rule of 40 0.39999999999999997 < 0.40); a 1-point drop not
+  counting; the combo ignoring pipeline; no prior period winning over a blank; a blank's look-back
+  ignored; the combo's short-history check removed; no prior period counted as a gap; a flag losing
+  its reason; flags on the wrong quarter; growth from zero shown as ∞; zero revenue giving an FCF
+  margin of 0; burn vs a negative budget computed; net new ARR vs a shrinking plan computed; negative
+  budgeted burn giving negative runway; YoY looking 3 back; ARR vs last quarter's budget; GRR not
+  annualized; a repeated row, a missing row, "$-0.2M" unreadable, a blank read as 0, "$0M" read as
+  blank.
+- **Docs:** README (the command, design decision 16, next steps), STUDY_GUIDE (an eval section with
+  every function, the test table, counts), INTERVIEW_PREP (Q34c), LOOM_SCRIPT (count, a proof row).
+
+### How the same harness would score AI commentary offline
+
+The eval scores the numbers. The commentary could be scored the same way, with no API call, by
+replaying saved analyses (fixtures) through the checks. Nothing below is built.
+
+1. **Fixtures.** One file per eval company in `eval/fixtures/<company>_analysis.json`, in the shape
+   `analyze.save_analysis` already writes: the payload Claude saw, its answer, the model and
+   `PROMPT_VERSION`. They come from one recorded live run (about $0.09 a company, so about $0.91 for
+   the 10 that read; your call, since this task allowed no API calls) or are written by hand. Each
+   also gets **planted-error copies**, the same idea as the 24 bugs: an invented number, a dropped
+   minus sign, "fell" on a series that rose, "persistent" on one that zigzags, a tripped flag left out
+   of the risks, and a number quoted for a metric that has none (Duskhaven's Rule of 40).
+2. **Stale check first.** Rebuild the payload from the workbook with `analyze.build_payload` and
+   compare it with the fixture's, as `main.reusable_analysis` does. Different numbers mean the fixture
+   is stale and gets reported as stale. The same goes for a fixture recorded under an older
+   `PROMPT_VERSION`: "re-record", never a pass.
+3. **The checks that already exist, offline:** `analyze.validate_summary` (schema, every number in
+   the payload with its sign, slide fit, direction words), `build_deck.load_analysis` (what the deck
+   accepts) and the memo's stricter rule (`memo.unlisted_numbers`: only numbers the metrics workbook
+   shows).
+4. **New checks built from the answer keys that already exist:**
+   - every flag the key expects to trip is named among the risks, by its label, since flag names are
+     the metric labels;
+   - no number is quoted for a metric whose latest value has none (`predicted_reason` already knows
+     which, and why);
+   - a company with predicted gaps says "data missing" somewhere, and quotes no value for a blank quarter;
+   - Tidewell's "exactly at" values aren't called "below" or "above" their threshold;
+   - no flag the key expects to pass is presented as a risk that tripped.
+5. **An AI column on the same scorecard**, with mismatches by name ("Quillmoor, AI: CAC payback
+   tripped but is not among the risks"). Each planted-error copy must fail the rule it was built
+   for, and the clean fixture must pass: a mutation test for the text checks.
+6. **The retry path with a fake client.** `tests/test_main.py`'s `FakeClient` pattern, fed fixture
+   pairs: a bad answer then a good one must give one retry and the good text on the deck. Bad then
+   bad must give the placeholder and "OK (AI failed)".
+7. **What stays human:** whether the commentary is insightful. The 1 to 5 quality score stays a
+   blind human score, as in `compare_models.py`, stored beside each fixture. Code can prove the
+   commentary is grounded and complete, not that it is good.
+
+### Decisions you didn't specify
+
+1. **The twelve.** Your list has 11 items if "a blank quarter in each position" is one and
+   "duplicate or missing rows" is one. I read "each position" as the positions that behave
+   differently against the latest quarter: first (its own YoY), second to last (the latest QoQ and
+   the combo window), last (every flag). Northwind (position 3) and Fernhollow (position 4) already
+   cover the middle. I split "duplicate or missing" into one company each, because they stop in
+   different places in clean.py. That makes 12.
+2. **The blank-quarter and stop companies use Larkspur's numbers**, so the only thing that differs
+   is the one each tests, and the 19 hand formulas are shared.
+3. **The answer key is typed, the rules are applied.** Values, flag statuses and not-meaningful
+   cells are typed by hand. "Missing input", "no prior period" and the gaps are predicted from the
+   blank quarter's position, using the QoQ and YoY lists in check_northwind.py (typed by hand), not
+   metrics.py's `METRIC_INPUTS`, so the prediction doesn't share code with what it checks.
+4. **The not-meaningful list is complete, not sampled.** Any value with no number and no listed
+   reason is a mismatch, so a new n/m anywhere shows up.
+5. **Only Larkspur's numbers are checked for all 19 metrics** (Larkspur and the three blank-quarter
+   companies built on it); the other six that read check the 8 flag metrics. After the first
+   mutation round showed the gap (below), I covered every formula once rather than typing 19
+   formulas for every company.
+6. **No "one step past each threshold" company.** Quillmoor trips all nine, `test_metrics.py` covers
+   real misses, and a thirteenth company wasn't asked for.
+7. **The workbooks are committed** in `eval/data/`, like `data/`, so the eval needs no generating
+   step. A test regenerates them into a temporary folder and compares every cell, so they can't go
+   stale quietly.
+8. **The scorecard collects every mismatch** instead of stopping at the first like the check
+   scripts, because a scorecard is for seeing how many cases a change broke.
+9. **`eval/` is a folder, not a package.** pytest.ini adds it to the import path; the two scripts
+   add the project folder to theirs, so `python eval/run_eval.py` works from the project folder.
+10. **The eval companies are not in `data/`,** so `main.py --all` and the web page don't list them.
+11. **The mess reuses the demo companies' header spellings**, so no eval workbook stops for a column
+    mapping (test_mapping.py covers that).
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **The eval missed a planted bug.** Revenue YoY computed 3 quarters back passed 11 of 12, because
+   only the flag metrics were value-checked. Larkspur now checks all 19 (a test pins it). The bug
+   then failed 4 companies, and a new ARR-vs-budget bug failed 10.
+2. **One of my planted bugs changed nothing** (a "no prior period first" edit placed too late in
+   the loop to matter). I replaced it with the real bug, which Brackenfield caught. A surviving bug
+   isn't a hole until it's shown to change a result.
+3. **Designing exact numbers took several passes:** the healthy Rule of 40 at 39.3%, the threshold
+   company's ARR chain off, the distressed burn multiple infinite, an accidental 2.0x elsewhere. A
+   scratch script in `output/` tried the designs; the answer key was then typed by hand.
+4. **Refused commands,** including a refused edit that left the design file unchanged, so the next
+   run printed old numbers, and a long heredoc for this report. The doc test caught two file names
+   written without "eval/".
+
+### Unresolved
+
+- **CLAUDE.md doesn't list `eval/`.** You said not to edit it. Suggested Architecture line:
+  "eval/make_eval_data.py, eval/run_eval.py: 12 edge-case companies (thresholds, blank positions,
+  zero revenue, negative budget, short history, rows that must stop) with hand-typed answer keys;
+  run_eval.py scores clean, metrics, flags and gaps and names every mismatch (run by pytest)".
+- **Not covered by the eval** (covered by unit tests instead): a partly blank quarter, a workbook
+  with no budget-only row, a company ending on a different quarter, unknown headers, two KPI tabs,
+  footnote rows. Each would be one more company if you want them in the scorecard.
+- **Two guards the eval can't tell apart.** A budgeted burn of exactly 0 is caught twice: by the
+  "budget 0 or less" rule and by the "no infinity except the edge cases" rule. Removing either one
+  leaves that case's output unchanged, so no eval or user can see which one did the work. I worked this out from the code and didn't
+  plant it.
+- **The AI scoring is a design only** (above). Recording real fixtures needs one API run, which this
+  task didn't allow.
+- **Not rerun:** `check_deck.py`, `check_main.py`, `check_memo.py`, `check_excel_output.py`. No code
+  they use changed (only `eval/`, tests, `pytest.ini` and docs), and `check_main.py` would put the AI
+  placeholder on the real decks. `check_northwind.py`, `check_companies.py`, the eval and all 764
+  tests pass.
