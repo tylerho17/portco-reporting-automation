@@ -29,6 +29,8 @@ Demo project for a PE AI automation role. Must be clean, explainable, and reliab
 - provenance.py          run manifests: input/config SHA-256 hashes, git commit, model + prompt version, tokens, cost; and whether a human approved this deck (approval_status is the only judge)
 - approve.py             `python approve.py northwind [--reviewer NAME]`: records reviewer + time in the manifest, so rebuilding drops the DRAFT watermark. Never builds a deck
 - main.py                CLI: `python main.py data/northwind.xlsx` or `--all` [--skip-ai]; clean -> metrics -> Excel -> AI JSON -> deck per company; summary table + output/batch_summary.csv
+- app.py                 Streamlit web page: drag in an xlsx, see flags + metrics table in the Excel colors, download deck + metrics workbook; "Include AI commentary" checkbox labelled with the typical cost (reuses a saved analysis of the same numbers for free); errors in plain words, never a traceback; builds in a temp folder, never touches output/
+- run_app.command        double-click on a Mac: sets up .venv on first run, starts app.py, opens the browser (.streamlit/config.toml: headless, no tracebacks on the page)
 - config.yaml            flag thresholds with investor reasoning in comments (NRR < 100%, burn > 15% over budget, runway < 12 mo)
 - tests/ + pytest.ini    pytest unit tests (`python -m pytest -q`), expected values worked out by hand; tests/test_docs.py keeps README/CLAUDE.md file names real
 - check_northwind.py, check_companies.py, check_excel_output.py, check_deck.py, check_main.py   end-to-end proofs against each company's answer key (no API calls)

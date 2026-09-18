@@ -68,6 +68,16 @@ python metrics.py data/northwind.xlsx          # print every metric, flag and da
 python make_data.py                            # regenerate data/northwind.xlsx (also make_data_alderpeak.py, make_data_fernhollow.py)
 ```
 
+**Or use the web page (no command line).** On a Mac, double-click `run_app.command` in Finder. The first time, it sets up Python's packages (a few minutes, needs internet); then your browser opens the Board Pack Generator. The Terminal window that opens must stay open while you use it. (From a terminal: `streamlit run app.py`.)
+
+1. Drag a KPI workbook (.xlsx) onto the page.
+2. The flags and the metrics table appear in the metrics workbook's colors: red = tripped, green = passed, gray = data missing or cannot evaluate.
+3. Download the deck and the metrics workbook with the two buttons.
+
+- **"Include AI commentary"** is off by default; its label gives the typical cost (about $0.09 and 70 seconds per workbook, from the [Cost](#cost) table). Ticked, the page first looks in `output/` for a saved analysis made from exactly the same numbers and reuses it for free; only if there isn't one does it call Claude (this needs the key in `.env`).
+- **A workbook it can't read** shows `clean.py`'s own message (which sheet, row and cell, and what to fix), never a traceback.
+- **Nothing is written to `output/`**: the page builds in a temporary folder and hands you the files. The deck's footer says "not reviewed"; approvals (`approve.py`) belong to the command-line decks.
+
 **3. Review the deck, then approve it.** Every deck is stamped **DRAFT - NOT REVIEWED** across all
 4 slides until a person says otherwise. Open it, read it, then:
 

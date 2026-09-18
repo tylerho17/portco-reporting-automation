@@ -552,6 +552,31 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 ---
 
+### `app.py`: the web page for non-technical users (Streamlit)
+
+**What it's for:** the same steps as `main.py` for one workbook, but from a web page: drag in an .xlsx, see the flags and metrics, download the deck and the metrics workbook. Start it by double-clicking `run_app.command` (Mac) or with `streamlit run app.py`.
+
+**How Streamlit works, in one paragraph:** Streamlit runs `app.py` from top to bottom every time anything on the page changes (a file dropped in, a box ticked, a button clicked). `st.title`, `st.checkbox`, `st.dataframe` and so on each draw one thing on the page. So the page must not redo the expensive work on every rerun: `st.session_state` (a dictionary that survives reruns) remembers the result for this file and this checkbox choice.
+
+**What doesn't change:** no new math, no new wording. The page shows the same text the deck shows (`build_deck.value_text`, `threshold_text`, `flag_count_text`, `gaps_lines`) in the same colors as the Excel workbook (`excel_output.STATUS_COLORS`, `tripped_cells`).
+
+| Function | What it does, in plain English | Example / why it exists |
+|---|---|---|
+| `ai_checkbox_label()` | The checkbox text, with the typical cost. | "Include AI commentary (typically about $0.09 and 70 seconds per workbook)". The number is `TYPICAL_AI_COST_USD`, copied from README's Cost table: a label, not a calculation. |
+| `save_upload(file_name, data, folder)` | Writes the uploaded bytes to a file, keeping only the file's own name. | `clean_workbook` reads a file path, not bytes. "../x.xlsx" becomes "x.xlsx", so an odd name can't write outside the folder. |
+| `status_css(status)` | A status's Excel colors as a style for the on-screen table. | trip → "background-color: #FFC7CE; color: #9C0006" (light red). |
+| `metrics_table(data)` / `metrics_colors(data)` | The metrics as text, one row per metric and one column per quarter; and a same-shaped table of styles: gray = data missing, red = the flag tripped that quarter, else none. | Same rules as the Excel Metrics sheet. Rows are metrics (not quarters) so 8 quarters fit across a screen. |
+| `flag_row(data, flag)` / `flags_table(data)` / `flags_colors(data)` | The latest quarter's flags as Flag, Value, Threshold, Status; each whole row in its status color. `combo_rule_text(config)` describes the combo rule. | Same as the Excel Flags sheet. |
+| `reusable_analysis(workbook_path, saved_dir, config)` | The saved `output/<company>_analysis.json` if Claude saw **exactly** today's facts (the whole payload matches) and it still passes the deck's checks; else None. | Ticking the AI box for a workbook `main.py` already ran costs nothing. An edited workbook never gets an old analysis. |
+| `ai_commentary(...)` | Box not ticked → no analysis. Ticked → reuse a saved one, else check for a key, else ask Claude (`main.ai_step`). Returns the file for the deck and a note for the page. | The deck is always built: without AI text, slide 4 shows "AI summary unavailable" (CLAUDE.md decision K). |
+| `build_in_folder(...)` | Every step for one upload, in a temporary folder: check it's a real .xlsx → clean → metrics → Excel → AI → deck. Returns everything the page shows, files as bytes. | |
+| `build_outputs(file_name, file_bytes, include_ai, saved_dir, client)` | Runs `build_in_folder` and **never raises**: a bad workbook returns clean.py's message, a non-Excel file returns `NOT_A_WORKBOOK`, and a bug returns "Something unexpected went wrong ..." (its traceback goes to the Terminal window only). | "Input errors show as plain messages, never a traceback." |
+| `styled(table, colors)` | Puts the colors on the table for `st.dataframe`. | pandas' `Styler.apply`. |
+| `show_downloads(result)` / `show_result(result)` | Draws the page: the error, or the heading, the two download buttons, the AI note, the flags, the data gaps, the metrics. | |
+| `main()` | The page: title, checkbox, file drop. Builds once per file and checkbox choice. | Runs only when Streamlit runs the file, so the tests can import `app.py` without drawing anything. |
+
+---
+
 ### `make_data_common.py`, `make_data.py`, `make_data_alderpeak.py`, `make_data_fernhollow.py`: the fake inputs
 
 **What they're for:** each company script holds only its own numbers (`TRUE_DATA`, the answer key) and its mess settings, then calls `save_workbook` from the shared file. Three companies prove the flags aren't hard-coded:
@@ -728,6 +753,7 @@ Run with `python -m pytest -q` (415 tests, about 15 seconds). Expected values ar
 | `test_charts.py` (5) | `texts(axis)`, `bar_positions(axis)`. | No bar for a blank quarter and "data missing" written there; latest values labelled; the cash line keeps the NaN (so it breaks); runway text in the title and zero on the axis; figure drawn at slide size. |
 | `test_build_deck.py` (27) | `flag(...)`, `three_quarters(blank)`, `deck_data(company, blank)`: a tiny 3-quarter company. `summary_dict()`, `write_analysis(...)`, `payload`: analysis files. `build(tmp_path, summary)`, `shape`, `all_text`, `status_fills`, `run_sizes`: build and read a deck. | Flag count and threshold wording; data gaps grouped by quarter; **every way `load_analysis` must reject a file** (missing, not JSON, failed, wrong shape, other quarter, other company, a number not in today's data, 2 questions); 4 slides in order; placeholder vs AI text on slide 4, the AI-drafted line, no wins on the deck; footer on every slide; status colors; "data missing" in the table; slide 3 contents and flag count; matching column font sizes; 2 chart pictures; text too long fails loudly; **no digit typed in any text in build_deck.py or charts.py**. |
 | `test_main.py` (14) | `ok(...)`, `failed(...)`: result dicts. `FakeClient`: stands in for the Anthropic client, returns a fixed answer (or raises) and counts calls. `no_real_client`: runs before every test and makes creating a real client fail the test. `summary`, `run_northwind`, `headline_on_deck`, `saved_analysis`. | The CSV, both warnings and the result texts; a passing answer lands on the deck (1 call); an answer with an invented number is called exactly twice, then the placeholder and "OK (AI failed)"; an API error is "OK (AI failed)", not FAILED; a bug in the AI step fails the company and leaves no old analysis; `--skip-ai` never calls Claude or looks for a key; a missing key stops the run before any company. |
+| `test_app.py` (19) | `FakeClient`, `summary(headline)`, `no_real_client` (as in test_main.py). `build_northwind`: the Northwind workbook's bytes through `build_outputs`. `save_northwind_analysis`: a saved analysis of today's numbers. `headline_in(deck_bytes)`. `render_northwind`, `render_bad_file`: draw the results with Streamlit's `AppTest`. | The checkbox names the cost; an upload can't escape its folder; the Excel colors; clean.py's message word for word, a non-Excel file and a bug each give a plain message with no traceback; Northwind gives a 4-slide deck and a 3-sheet workbook, 6 of 9 flags in red and green rows, "data missing" gray and a tripped NRR red; a saved analysis of the same numbers is reused with **no** call, one of other numbers is not; no saved analysis → 1 call; no key or an API error still builds the placeholder deck; the page and the results draw with no error; `run_app.command` is executable and starts app.py. |
 | `test_docs.py` (7) | `python_files_named(text)`, `study_guide_tables()`, `defined_in(files, name)`. | README keeps the model comparison markers, and rewriting that block leaves the rest alone; every `.py` file named in README, CLAUDE.md, this guide and LOOM_SCRIPT.md exists; **every function in this guide's tables exists** in the file its heading names. |
 
 ---
@@ -736,9 +762,11 @@ Run with `python -m pytest -q` (415 tests, about 15 seconds). Expected values ar
 
 | File | What it is |
 |---|---|
-| `requirements.txt` | The packages: pandas (tables), openpyxl (Excel), python-pptx (the deck) and matplotlib (the charts, plus the font text_fit.py measures with), anthropic (Claude API), python-dotenv (.env), pyyaml (config.yaml), pydantic (answer shape), pytest (tests). Pillow, which text_fit.py imports, comes in with matplotlib and isn't listed. |
+| `requirements.txt` | The packages: pandas (tables), openpyxl (Excel), python-pptx (the deck) and matplotlib (the charts, plus the font text_fit.py measures with), anthropic (Claude API), python-dotenv (.env), pyyaml (config.yaml), pydantic (answer shape), pytest (tests), streamlit (the web page, app.py). Pillow, which text_fit.py imports, comes in with matplotlib and isn't listed. |
 | `pytest.ini` | Tells pytest to look only in `tests/`, and lets tests `import clean` from the project folder. |
 | `.env` / `.env.example` | `.env` holds `ANTHROPIC_API_KEY` and is never committed. `.env.example` shows the variable name with no key. |
+| `run_app.command` | Double-click it on a Mac to start the web page (app.py). The first time, it creates `.venv` and installs `requirements.txt`; then it starts Streamlit and opens the browser. The `.command` ending is what makes Finder run it in Terminal. |
+| `.streamlit/config.toml` | Streamlit's settings for app.py: headless (no first-run email question), no usage statistics, **no tracebacks on the page**, and a minimal toolbar. |
 | `.gitignore` | Keeps `.env`, `.venv/`, `__pycache__/`, `output/` and `.DS_Store` out of git. |
 | `CLAUDE.md` | The project spec: goal, rules, metric definitions, edge cases, build order. |
 | `LEARNINGS.md` | Everything that broke and how it was fixed, plus the prompt iterations and model comparison. **Interview gold.** |
