@@ -1,0 +1,292 @@
+== Sheet Metrics ==
+  column widths: A 10, B 17, C 18, D 18, E 18, F 14, G 16, H 16, I 20, J 20, K 15, L 21, M 14, N 14, O 15, P 20, Q 23, R 22, S 14, T 24
+  frozen at: B2
+  A1  'Quarter'  bold
+  B1  'Ending ARR ($K)'  bold
+  C1  'Net new ARR ($K)'  bold
+  D1  'NRR (annualized)'  bold
+  E1  'GRR (annualized)'  bold
+  F1  'Gross margin'  bold
+  G1  'ARR growth QoQ'  bold
+  H1  'ARR growth YoY'  bold
+  I1  'Revenue growth QoQ'  bold
+  J1  'Revenue growth YoY'  bold
+  K1  'Pipeline ($K)'  bold
+  L1  'Pipeline growth QoQ'  bold
+  M1  'FCF margin'  bold
+  N1  'Rule of 40'  bold
+  O1  'Burn multiple'  bold
+  P1  'Net burn vs budget'  bold
+  Q1  'Net new ARR vs budget'  bold
+  R1  'Ending ARR vs budget'  bold
+  S1  'CAC payback'  bold
+  T1  'Runway at current burn'  bold
+  A2  'Q3 2024'
+  B2  13580  [#,##0]
+  C2  1580  [#,##0]
+  D2  1.06  [0.0%]
+  E2  0.94  [0.0%]
+  F2  0.71875  [0.0%]
+  G2  'n/a (no prior period)'  [0.0%]
+  H2  'n/a (no prior period)'  [0.0%]
+  I2  'n/a (no prior period)'  [0.0%]
+  J2  'n/a (no prior period)'  [0.0%]
+  K2  6000  [#,##0]
+  L2  'n/a (no prior period)'  [0.0%]
+  M2  -0.75  [0.0%]
+  N2  'n/a (no prior period)'  [0.0%]
+  O2  1.51898734177  [0.00"x"]
+  P2  0  [0.0%]
+  Q2  'n/a (no prior period)'  [0.0%]
+  R2  0.00592592592593  [0.0%]
+  S2  20.2732919255  [0.0" mo"]
+  T2  46.0625  [0.0" mo"]
+  A3  'Q4 2024'
+  B3  15320  [#,##0]
+  C3  1740  [#,##0]
+  D3  1.0706921944  [0.0%]
+  E3  0.941089837997  [0.0%]
+  F3  0.720221606648  [0.0%]
+  G3  0.128129602356  [0.0%]
+  H3  'n/a (no prior period)'  [0.0%]
+  I3  0.128125  [0.0%]
+  J3  'n/a (no prior period)'  [0.0%]
+  K3  6800  [#,##0]
+  L3  0.133333333333  [0.0%]
+  M3  -0.720221606648  [0.0%]
+  N3  'n/a (no prior period)'  [0.0%]
+  O3  1.49425287356  [0.00"x"]
+  P3  0.031746031746  [0.0%]
+  Q3  0.0545454545455  [0.0%]
+  R3  0.0112211221122  [0.0%]
+  S3  19.9938461538  [0.0" mo"]
+  T3  39.5192307692  [0.0" mo"]
+  A4  'Q1 2025'
+  B4  'data missing'  [#,##0]  fill D9D9D9  text 404040
+  C4  'data missing'  [#,##0]  fill D9D9D9  text 404040
+  D4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  E4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  F4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  G4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  H4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  I4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  J4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  K4  'data missing'  [#,##0]  fill D9D9D9  text 404040
+  L4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  M4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  N4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  O4  'data missing'  [0.00"x"]  fill D9D9D9  text 404040
+  P4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  Q4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  R4  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  S4  'data missing'  [0.0" mo"]  fill D9D9D9  text 404040
+  T4  'data missing'  [0.0" mo"]  fill D9D9D9  text 404040
+  A5  'Q2 2025'
+  B5  19230  [#,##0]
+  C5  2040  [#,##0]
+  D5  1.07911576498  [0.0%]
+  E5  0.930191972077  [0.0%]
+  F5  0.72967032967  [0.0%]
+  G5  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  H5  'n/a (no prior period)'  [0.0%]
+  I5  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  J5  'n/a (no prior period)'  [0.0%]
+  K5  8300  [#,##0]
+  L5  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  M5  -0.659340659341  [0.0%]
+  N5  'n/a (no prior period)'  [0.0%]
+  O5  1.47058823529  [0.00"x"]
+  P5  0.0791366906475  [0.0%]
+  Q5  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  R5  0.0256  [0.0%]
+  S5  19.3479801559  [0.0" mo"]
+  T5  28.45  [0.0" mo"]
+  A6  'Q3 2025'
+  B6  21460  [#,##0]
+  C6  2230  [#,##0]
+  D6  1.08944357774  [0.0%]
+  E6  0.929277171087  [0.0%]
+  F6  0.740667976424  [0.0%]
+  G6  0.115964638586  [0.0%]
+  H6  0.580265095729  [0.0%]
+  I6  0.118681318681  [0.0%]
+  J6  0.590625  [0.0%]
+  K6  9200  [#,##0]
+  L6  0.10843373494  [0.0%]
+  M6  -0.628683693517  [0.0%]
+  N6  -0.0380586935167  [0.0%]  fill FFC7CE  text 9C0006
+  O6  1.43497757848  [0.00"x"]
+  P6  0.0996563573883  [0.0%]
+  Q6  0.14358974359  [0.0%]
+  R6  0.0367149758454  [0.0%]
+  S6  18.9018567639  [0.0" mo"]
+  T6  23.671875  [0.0" mo"]
+  A7  'Q4 2025'
+  B7  23790  [#,##0]
+  C7  2330  [#,##0]
+  D7  1.08014911463  [0.0%]
+  E7  0.919850885368  [0.0%]
+  F7  0.740282685512  [0.0%]
+  G7  0.108574091333  [0.0%]
+  H7  0.552872062663  [0.0%]
+  I7  0.111984282908  [0.0%]
+  J7  0.567867036011  [0.0%]
+  K7  10100  [#,##0]
+  L7  0.0978260869565  [0.0%]
+  M7  -0.600706713781  [0.0%]
+  N7  -0.0328396777698  [0.0%]  fill FFC7CE  text 9C0006
+  O7  1.45922746781  [0.00"x"]
+  P7  0.140939597315  [0.0%]
+  Q7  0.165  [0.0%]
+  R7  0.0480176211454  [0.0%]
+  S7  19.1960808944  [0.0" mo"]
+  T7  19.2794117647  [0.0" mo"]
+  A8  'Q1 2026'
+  B8  25810  [#,##0]
+  C8  2020  [#,##0]
+  D8  1.02017654477  [0.0%]
+  E8  0.900798654897  [0.0%]
+  F8  0.75  [0.0%]
+  G8  0.0849096258932  [0.0%]
+  H8  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  I8  0.095406360424  [0.0%]
+  J8  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  K8  11200  [#,##0]
+  L8  0.108910891089  [0.0%]
+  M8  -0.588709677419  [0.0%]
+  N8  'data missing'  [0.0%]  fill D9D9D9  text 404040
+  O8  1.80693069307  [0.00"x"]
+  P8  0.169871794872  [0.0%]  fill FFC7CE  text 9C0006
+  Q8  -0.0146341463415  [0.0%]
+  R8  0.0428282828283  [0.0%]
+  S8  19.7894736842  [0.0" mo"]
+  T8  14.9589041096  [0.0" mo"]
+  A9  'Q2 2026'
+  B9  27470  [#,##0]
+  C9  1660  [#,##0]
+  D9  0.970554048818  [0.0%]  fill FFC7CE  text 9C0006
+  E9  0.880666408369  [0.0%]
+  F9  0.750750750751  [0.0%]
+  G9  0.0643161565285  [0.0%]
+  H9  0.428497139886  [0.0%]
+  I9  0.0741935483871  [0.0%]
+  J9  0.463736263736  [0.0%]
+  K9  12500  [#,##0]
+  L9  0.116071428571  [0.0%]
+  M9  -0.585585585586  [0.0%]
+  N9  -0.121849321849  [0.0%]  fill FFC7CE  text 9C0006
+  O9  2.34939759036  [0.00"x"]  fill FFC7CE  text 9C0006
+  P9  0.2  [0.0%]  fill FFC7CE  text 9C0006
+  Q9  -0.190243902439  [0.0%]
+  R9  0.025  [0.0%]
+  S9  20.736  [0.0" mo"]
+  T9  11  [0.0" mo"]  fill FFC7CE  text 9C0006
+== Sheet Flags ==
+  column widths: A 56, B 10, C 36, D 18, E 42, F 32
+  frozen at: B2
+  A1  'Flag'  bold
+  B1  'Quarter'  bold
+  C1  'Value'  bold
+  D1  'Threshold'  bold
+  E1  'Trips when'  bold
+  F1  'Status'  bold
+  A2  'NRR (annualized)'  fill FFC7CE  text 9C0006
+  B2  'Q2 2026'  fill FFC7CE  text 9C0006
+  C2  0.970554048818  [0.0%]  fill FFC7CE  text 9C0006
+  D2  1  [0.0%]  fill FFC7CE  text 9C0006
+  E2  'below threshold'  fill FFC7CE  text 9C0006
+  F2  'Tripped'  fill FFC7CE  text 9C0006
+  A3  'GRR (annualized)'  fill C6EFCE  text 006100
+  B3  'Q2 2026'  fill C6EFCE  text 006100
+  C3  0.880666408369  [0.0%]  fill C6EFCE  text 006100
+  D3  0.85  [0.0%]  fill C6EFCE  text 006100
+  E3  'below threshold'  fill C6EFCE  text 006100
+  F3  'Passed'  fill C6EFCE  text 006100
+  A4  'Burn multiple'  fill FFC7CE  text 9C0006
+  B4  'Q2 2026'  fill FFC7CE  text 9C0006
+  C4  2.34939759036  [0.00"x"]  fill FFC7CE  text 9C0006
+  D4  2  [0.00"x"]  fill FFC7CE  text 9C0006
+  E4  'above threshold'  fill FFC7CE  text 9C0006
+  F4  'Tripped'  fill FFC7CE  text 9C0006
+  A5  'Net burn vs budget'  fill FFC7CE  text 9C0006
+  B5  'Q2 2026'  fill FFC7CE  text 9C0006
+  C5  0.2  [0.0%]  fill FFC7CE  text 9C0006
+  D5  0.15  [0.0%]  fill FFC7CE  text 9C0006
+  E5  'above threshold'  fill FFC7CE  text 9C0006
+  F5  'Tripped'  fill FFC7CE  text 9C0006
+  A6  'Runway at current burn'  fill FFC7CE  text 9C0006
+  B6  'Q2 2026'  fill FFC7CE  text 9C0006
+  C6  11  [0.0" mo"]  fill FFC7CE  text 9C0006
+  D6  12  [0.0" mo"]  fill FFC7CE  text 9C0006
+  E6  'below threshold'  fill FFC7CE  text 9C0006
+  F6  'Tripped'  fill FFC7CE  text 9C0006
+  A7  'CAC payback'  fill C6EFCE  text 006100
+  B7  'Q2 2026'  fill C6EFCE  text 006100
+  C7  20.736  [0.0" mo"]  fill C6EFCE  text 006100
+  D7  24  [0.0" mo"]  fill C6EFCE  text 006100
+  E7  'above threshold'  fill C6EFCE  text 006100
+  F7  'Passed'  fill C6EFCE  text 006100
+  A8  'Net new ARR vs budget'  fill C6EFCE  text 006100
+  B8  'Q2 2026'  fill C6EFCE  text 006100
+  C8  -0.190243902439  [0.0%]  fill C6EFCE  text 006100
+  D8  -0.2  [0.0%]  fill C6EFCE  text 006100
+  E8  'below threshold'  fill C6EFCE  text 006100
+  F8  'Passed'  fill C6EFCE  text 006100
+  A9  'Rule of 40'  fill FFC7CE  text 9C0006
+  B9  'Q2 2026'  fill FFC7CE  text 9C0006
+  C9  -0.121849321849  [0.0%]  fill FFC7CE  text 9C0006
+  D9  0.4  [0.0%]  fill FFC7CE  text 9C0006
+  E9  'below threshold'  fill FFC7CE  text 9C0006
+  F9  'Tripped'  fill FFC7CE  text 9C0006
+  A10  'NRR falling while pipeline rising'  fill FFC7CE  text 9C0006
+  B10  'Q2 2026'  fill FFC7CE  text 9C0006
+  C10  'see NRR and Pipeline on Metrics sheet'  fill FFC7CE  text 9C0006
+  D10  'last 3 quarters'  fill FFC7CE  text 9C0006
+  E10  'NRR falls at least 1 pt and pipeline rises at every step'  fill FFC7CE  text 9C0006
+  F10  'Tripped'  fill FFC7CE  text 9C0006
+  A12  "Runway at next quarter's budgeted burn (context, not a flag)"
+  B12  'Q2 2026'
+  C12  13  [0.0" mo"]
+== Sheet Data gaps ==
+  column widths: A 52, B 30
+  frozen at: B2
+  A1  'Metric or flag'  bold
+  B1  'Quarters with data missing'  bold
+  A2  'Ending ARR ($K)'
+  B2  'Q1 2025'
+  A3  'Net new ARR ($K)'
+  B3  'Q1 2025'
+  A4  'NRR (annualized)'
+  B4  'Q1 2025'
+  A5  'GRR (annualized)'
+  B5  'Q1 2025'
+  A6  'Gross margin'
+  B6  'Q1 2025'
+  A7  'ARR growth QoQ'
+  B7  'Q1 2025, Q2 2025'
+  A8  'ARR growth YoY'
+  B8  'Q1 2025, Q1 2026'
+  A9  'Revenue growth QoQ'
+  B9  'Q1 2025, Q2 2025'
+  A10  'Revenue growth YoY'
+  B10  'Q1 2025, Q1 2026'
+  A11  'Pipeline ($K)'
+  B11  'Q1 2025'
+  A12  'Pipeline growth QoQ'
+  B12  'Q1 2025, Q2 2025'
+  A13  'FCF margin'
+  B13  'Q1 2025'
+  A14  'Rule of 40'
+  B14  'Q1 2025, Q1 2026'
+  A15  'Burn multiple'
+  B15  'Q1 2025'
+  A16  'Net burn vs budget'
+  B16  'Q1 2025'
+  A17  'Net new ARR vs budget'
+  B17  'Q1 2025, Q2 2025'
+  A18  'Ending ARR vs budget'
+  B18  'Q1 2025'
+  A19  'CAC payback'
+  B19  'Q1 2025'
+  A20  'Runway at current burn'
+  B20  'Q1 2025'

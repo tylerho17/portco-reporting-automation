@@ -1,0 +1,61 @@
+== Slide 1 of 4 (layout: Title and Content) ==
+  [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
+    'Alderpeak: key metrics, Q2 2026 vs Q1 2026'  28 pt bold 0B2545
+  [KPI table] table at 0.50, 1.30 in, size 12.33 x 4.31 in
+    row 1: 'Metric' 14 pt bold FFFFFF fill 0B2545 | 'Q2 2026' 14 pt bold FFFFFF fill 0B2545 | 'Q1 2026' 14 pt bold FFFFFF fill 0B2545 | 'Budget or threshold' 14 pt bold FFFFFF fill 0B2545 | 'Status' 14 pt bold FFFFFF fill 0B2545
+    row 2: 'Ending ARR ($K)' 14 pt 334155 fill FFFFFF | '18,450' 14 pt 334155 fill FFFFFF | '16,820' 14 pt 334155 fill FFFFFF | 'vs budget: 2.6%' 14 pt 334155 fill FFFFFF | '-' 14 pt 334155 fill FFFFFF
+    row 3: 'ARR growth YoY' 14 pt 334155 fill F8FAFC | '47.5%' 14 pt 334155 fill F8FAFC | '49.5%' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC
+    row 4: 'Gross margin' 14 pt 334155 fill FFFFFF | '78.0%' 14 pt 334155 fill FFFFFF | '77.9%' 14 pt 334155 fill FFFFFF | '-' 14 pt 334155 fill FFFFFF | '-' 14 pt 334155 fill FFFFFF
+    row 5: 'NRR (annualized)' 14 pt 334155 fill F8FAFC | '109.8%' 14 pt 334155 fill F8FAFC | '109.7%' 14 pt 334155 fill F8FAFC | 'trips below 100.0%' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 6: 'GRR (annualized)' 14 pt 334155 fill FFFFFF | '96.0%' 14 pt 334155 fill FFFFFF | '96.1%' 14 pt 334155 fill FFFFFF | 'trips below 85.0%' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 7: 'Burn multiple' 14 pt 334155 fill F8FAFC | '0.12x' 14 pt 334155 fill F8FAFC | '0.16x' 14 pt 334155 fill F8FAFC | 'trips above 2.00x' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 8: 'Net burn vs budget' 14 pt 334155 fill FFFFFF | '-9.1%' 14 pt 334155 fill FFFFFF | '-7.4%' 14 pt 334155 fill FFFFFF | 'trips above 15.0%' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 9: 'Runway at current burn' 14 pt 334155 fill F8FAFC | '108.0 mo' 14 pt 334155 fill F8FAFC | '88.8 mo' 14 pt 334155 fill F8FAFC | 'trips below 12.0 mo' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 10: 'CAC payback' 14 pt 334155 fill FFFFFF | '17.7 mo' 14 pt 334155 fill FFFFFF | '17.7 mo' 14 pt 334155 fill FFFFFF | 'trips above 24.0 mo' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 11: 'Net new ARR vs budget' 14 pt 334155 fill F8FAFC | '5.8%' 14 pt 334155 fill F8FAFC | '4.8%' 14 pt 334155 fill F8FAFC | 'trips below -20.0%' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 12: 'Rule of 40' 14 pt 334155 fill FFFFFF | '42.7%' 14 pt 334155 fill FFFFFF | '42.7%' 14 pt 334155 fill FFFFFF | 'trips below 40.0%' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1E8449 fill EAF6EF
+    row 13: 'NRR falling while pipeline rising' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | 'rule on Risks and flags slide' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1E8449 fill EAF6EF
+  [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+== Slide 2 of 4 (layout: Title and Content) ==
+  [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
+    'ARR and cash, Q3 2024 to Q2 2026'  28 pt bold 0B2545
+  [ARR chart] picture at 0.50, 1.30 in, size 5.99 x 5.45 in
+  [Cash chart] picture at 6.84, 1.30 in, size 5.99 x 5.45 in
+  [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+== Slide 3 of 4 (layout: Title and Content) ==
+  [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
+    'Risks and flags, Q2 2026'  28 pt bold 0B2545
+  [Risks and flags] text at 0.50, 1.30 in, size 5.99 x 5.45 in
+    'Tripped flags (0 of 9 flags tripped)'  20 pt bold 0B2545
+    '• None'  15 pt 334155
+    'Combo rule'  20 pt bold 0B2545
+    '• NRR falling while pipeline rising: Passed (trips when NRR falls by at least 1.0 pts and pipeline rises at every step over the last 3 quarters)'  15 pt 334155
+  [Data gaps] text at 6.84, 1.30 in, size 5.99 x 5.45 in
+    'Data gaps (data missing)'  20 pt bold 0B2545
+    '• None: every metric and flag has the data it needs'  15 pt 334155
+  [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+== Slide 4 of 4 (layout: Title and Content) ==
+  [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
+    'AI commentary, Q2 2026'  28 pt bold 0B2545
+  [AI-drafted line] text at 0.50, 1.30 in, size 12.33 x 0.40 in
+    'AI-drafted from computed metrics - review before use'  13 pt 64748B
+  [Headline] text at 0.50, 1.85 in, size 12.33 x 1.05 in
+    'All 9 flags passed this quarter, but ARR growth YoY declined every quarter from 53.9% to 47.5%, signaling decelerating momentum despite strong scale.'  19 pt bold 0B2545
+  [Risks] text at 0.50, 3.05 in, size 5.99 x 3.70 in
+    'Risks'  18 pt bold 0B2545
+    'Decelerating ARR growth'  13 pt bold 334155
+    'ARR growth YoY fell every quarter from 53.9% in Q3 2025 to 47.5% in Q2 2026, and ARR growth QoQ fell every quarter from 12.1% to 9.7%, signaling slowing momentum.'  13 pt 334155
+    'Rule of 40 margin thinning'  13 pt bold 334155
+    'Rule of 40 passed at 42.7% versus a 40.0% threshold, but slipped from a peak of 43.1% in Q4 2025, leaving little cushion if growth keeps decelerating.'  13 pt 334155
+    'CAC payback creeping up'  13 pt bold 334155
+    'CAC payback passed at 17.7 mo (threshold 24.0 mo) but has moved from 17.3 mo in Q3 2024 to 17.7 mo in Q2 2026 without any quarter improving.'  13 pt 334155
+  [Questions] text at 6.84, 3.05 in, size 5.99 x 3.70 in
+    'Questions for management'  18 pt bold 0B2545
+    '1. What specific factors are driving the steady deceleration in ARR growth YoY from 53.9% to 47.5% over the past year?'  13 pt 334155
+    '2. What is causing CAC payback to lengthen gradually from 17.3 mo to 17.7 mo despite continued net new ARR growth?'  13 pt 334155
+    '3. What levers does management plan to pull to keep Rule of 40 above the 40.0% threshold if growth continues decelerating?'  13 pt 334155
+  [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B

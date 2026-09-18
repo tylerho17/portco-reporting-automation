@@ -1,0 +1,157 @@
+== Word file ==
+  page 8.50 x 11.00 in, margins 0.70 in
+  'Northwind board update: Q2 2026'  18 pt, bold, 0B2545
+  "Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI workbook; the headline and questions are drafted by AI."  9.5 pt, 64748B
+  'Headline'  12 pt, bold, 0B2545, keep with next
+  'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
+  "Northwind's burn is outpacing budget and eroding runway to 11.0 mo, while NRR fell to 97.1% and Rule of 40 hit -12.2%."  11 pt, bold, 0B2545
+  'Key metrics'  12 pt, bold, 0B2545, keep with next
+  row 1: 'Metric' fill 0B2545 | 'Q2 2026' fill 0B2545 | 'Q1 2026' fill 0B2545 | 'Budget or threshold' fill 0B2545 | 'Status' fill 0B2545
+  row 2: 'Ending ARR ($K)' fill FFFFFF | '27,470' fill FFFFFF | '25,810' fill FFFFFF | 'vs budget: 2.5%' fill FFFFFF | '-' fill FFFFFF
+  row 3: 'Net new ARR ($K)' fill F8FAFC | '1,660' fill F8FAFC | '2,020' fill F8FAFC | '-' fill F8FAFC | '-' fill F8FAFC
+  row 4: 'ARR growth YoY' fill FFFFFF | '42.8%' fill FFFFFF | 'data missing' fill FFFFFF | '-' fill FFFFFF | '-' fill FFFFFF
+  row 5: 'Gross margin' fill F8FAFC | '75.1%' fill F8FAFC | '75.0%' fill F8FAFC | '-' fill F8FAFC | '-' fill F8FAFC
+  row 6: 'NRR (annualized)' fill FFFFFF | '97.1%' fill FFFFFF | '102.0%' fill FFFFFF | 'trips below 100.0%' fill FFFFFF | 'Tripped' fill FDE8E6
+  row 7: 'GRR (annualized)' fill F8FAFC | '88.1%' fill F8FAFC | '90.1%' fill F8FAFC | 'trips below 85.0%' fill F8FAFC | 'Passed' fill EAF6EF
+  row 8: 'Burn multiple' fill FFFFFF | '2.35x' fill FFFFFF | '1.81x' fill FFFFFF | 'trips above 2.00x' fill FFFFFF | 'Tripped' fill FDE8E6
+  row 9: 'Net burn vs budget' fill F8FAFC | '20.0%' fill F8FAFC | '17.0%' fill F8FAFC | 'trips above 15.0%' fill F8FAFC | 'Tripped' fill FDE8E6
+  row 10: 'Runway at current burn' fill FFFFFF | '11.0 mo' fill FFFFFF | '15.0 mo' fill FFFFFF | 'trips below 12.0 mo' fill FFFFFF | 'Tripped' fill FDE8E6
+  row 11: 'CAC payback' fill F8FAFC | '20.7 mo' fill F8FAFC | '19.8 mo' fill F8FAFC | 'trips above 24.0 mo' fill F8FAFC | 'Passed' fill EAF6EF
+  row 12: 'Net new ARR vs budget' fill FFFFFF | '-19.0%' fill FFFFFF | '-1.5%' fill FFFFFF | 'trips below -20.0%' fill FFFFFF | 'Passed' fill EAF6EF
+  row 13: 'Rule of 40' fill F8FAFC | '-12.2%' fill F8FAFC | 'data missing' fill F8FAFC | 'trips below 40.0%' fill F8FAFC | 'Tripped' fill FDE8E6
+  row 14: 'NRR falling while pipeline rising' fill FFFFFF | '-' fill FFFFFF | '-' fill FFFFFF | 'see Flags below' fill FFFFFF | 'Tripped' fill FDE8E6
+  "Runway at next quarter's budgeted burn (context, not a flag): 13.0 mo"  9.5 pt, 64748B
+  'Flags: 6 of 9 flags tripped'  12 pt, bold, 0B2545, keep with next
+  'NRR (annualized): 97.1% (trips below 100.0%)'  List Bullet, 9.5 pt, 334155, keep with next
+  'Burn multiple: 2.35x (trips above 2.00x)'  List Bullet, 9.5 pt, 334155, keep with next
+  'Net burn vs budget: 20.0% (trips above 15.0%)'  List Bullet, 9.5 pt, 334155, keep with next
+  'Runway at current burn: 11.0 mo (trips below 12.0 mo)'  List Bullet, 9.5 pt, 334155, keep with next
+  'Rule of 40: -12.2% (trips below 40.0%)'  List Bullet, 9.5 pt, 334155, keep with next
+  'NRR falling while pipeline rising: Tripped (trips when NRR falls at least 1 pt and pipeline rises at every step, over the last 3 quarters)'  List Bullet, 9.5 pt, 334155
+  'Data gaps (data missing)'  12 pt, bold, 0B2545, keep with next
+  'Q1 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  List Bullet, 9.5 pt, 334155, keep with next
+  'Q1 2025 + Q2 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  List Bullet, 9.5 pt, 334155, keep with next
+  'Q1 2025 + Q1 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  List Bullet, 9.5 pt, 334155
+  'Questions for management'  12 pt, bold, 0B2545, keep with next
+  'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
+  'What specific cost actions are planned to bring net burn back toward budget and extend runway beyond 11.0 mo?'  List Bullet, 9.5 pt, 334155, keep with next
+  'What is driving the decline in NRR from 108.0% to 97.1% even as pipeline keeps growing - is it concentrated in particular segments or accounts?'  List Bullet, 9.5 pt, 334155, keep with next
+  'What is causing ARR growth QoQ to decelerate from 12.8% to 6.4%, and what levers does management see to reverse that trend?'  List Bullet, 9.5 pt, 334155
+-- Footer --
+  'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
+== PDF page 1 ==
+  Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Northwind board update: Q2 2026
+  Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI
+  workbook; the headline and questions are drafted by AI.
+  Headline
+  AI-drafted from computed metrics - review before use
+  Northwind's burn is outpacing budget and eroding runway to 11.0 mo, while NRR fell to 97.1%
+  and Rule of 40 hit -12.2%.
+  Key metrics
+  Metric
+  Q2 2026
+  Q1 2026
+  Budget or threshold
+  Status
+  Ending ARR ($K)
+  27,470
+  25,810
+  vs budget: 2.5%
+  -
+  Net new ARR ($K)
+  1,660
+  2,020
+  -
+  -
+  ARR growth YoY
+  42.8%
+  data missing
+  -
+  -
+  Gross margin
+  75.1%
+  75.0%
+  -
+  -
+  NRR (annualized)
+  97.1%
+  102.0%
+  trips below 100.0%
+  Tripped
+  GRR (annualized)
+  88.1%
+  90.1%
+  trips below 85.0%
+  Passed
+  Burn multiple
+  2.35x
+  1.81x
+  trips above 2.00x
+  Tripped
+  Net burn vs budget
+  20.0%
+  17.0%
+  trips above 15.0%
+  Tripped
+  Runway at current burn
+  11.0 mo
+  15.0 mo
+  trips below 12.0 mo
+  Tripped
+  CAC payback
+  20.7 mo
+  19.8 mo
+  trips above 24.0 mo
+  Passed
+  Net new ARR vs budget
+  -19.0%
+  -1.5%
+  trips below -20.0%
+  Passed
+  Rule of 40
+  -12.2%
+  data missing
+  trips below 40.0%
+  Tripped
+  NRR falling while pipeline rising
+  -
+  -
+  see Flags below
+  Tripped
+  Runway at next quarter's budgeted burn (context, not a flag): 13.0 mo
+  Flags: 6 of 9 flags tripped
+  •
+  NRR (annualized): 97.1% (trips below 100.0%)
+  •
+  Burn multiple: 2.35x (trips above 2.00x)
+  •
+  Net burn vs budget: 20.0% (trips above 15.0%)
+  •
+  Runway at current burn: 11.0 mo (trips below 12.0 mo)
+  •
+  Rule of 40: -12.2% (trips below 40.0%)
+  •
+  NRR falling while pipeline rising: Tripped (trips when NRR falls at least 1 pt and pipeline rises at every step, over
+  the last 3 quarters)
+  Data gaps (data missing)
+  •
+  Q1 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline
+  ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current
+  burn
+  •
+  Q1 2025 + Q2 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget
+  •
+  Q1 2025 + Q1 2026: ARR growth YoY, Revenue growth YoY, Rule of 40
+== PDF page 2 ==
+  Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Questions for management
+  AI-drafted from computed metrics - review before use
+  •
+  What specific cost actions are planned to bring net burn back toward budget and extend runway beyond 11.0 mo?
+  •
+  What is driving the decline in NRR from 108.0% to 97.1% even as pipeline keeps growing - is it concentrated in
+  particular segments or accounts?
+  •
+  What is causing ARR growth QoQ to decelerate from 12.8% to 6.4%, and what levers does management see to
+  reverse that trend?
