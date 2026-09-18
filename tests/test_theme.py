@@ -174,6 +174,16 @@ def test_secondary_buttons_are_white_with_a_navy_border():
         assert declaration in secondary
 
 
+def test_the_portfolio_s_download_button_looks_like_a_secondary_button():
+    # A popover's button isn't marked "secondary" by Streamlit, so the rule names it on its own.
+    selectors = [selector for selector in css_rules(theme.streamlit_css()) if "secondary" in selector and ":" not in selector]
+    assert len(selectors) == 1 and "stPopoverButton" in selectors[0]
+
+
+def test_a_wide_table_scrolls_inside_its_card():
+    assert "overflow-x: auto" in css_rules(theme.streamlit_css())[".bp-table-wrap"]
+
+
 def test_no_button_is_ever_red_or_green():
     button_rules = [body for selector, body in css_rules(theme.streamlit_css()).items() if "button" in selector.lower()]
     assert button_rules

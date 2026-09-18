@@ -538,7 +538,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `kpi_header(data)` | Metric, Q2 2026, Q1 2026, Budget or threshold, Status. | |
 | `column_widths(total_width)` | Splits the table width by `KPI_COLUMN_SHARES`. | |
 | `write_cell(cell, text, size, fill_hex, text_hex, bold)` | One table cell: fill, margins, text. | |
-| `fill_table(table, header, rows, size)` | Navy header, striped rows, and each status cell red / green / gray. | Same colors as the Excel file (`excel_output.STATUS_COLORS`). |
+| `fill_table(table, header, rows, size)` | Navy header, white and surface stripes, and each status cell red / green / gray. | theme.py's status colors, the same as the memo and the web page (the Excel file keeps Excel's own fills). |
 | `kpi_slide(slide, deck)` | **Slide 1:** title "Northwind: key metrics — Q2 2026 vs Q1 2026"; fits the table (`fit_table`), then draws it. | The company name is in this title: the slide that used to carry it is gone. |
 | `charts_slide(slide, deck)` | **Slide 2:** draws both charts at their slide size, saves the PNGs to `output/charts/`, places them side by side. | |
 | `section(heading, lines)` | A bold heading and its bullet lines. | |
@@ -659,34 +659,36 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 ### `app.py`: the web page for non-technical users (Streamlit)
 
-**What it's for:** everything `main.py` and `approve.py` do, from a web page. **Portfolio** (the first page): one row per company in `data/` (latest quarter, flags tripped, data gaps, last run, deck status), each with Generate, Download deck, Download memo and Download Excel; a search box; Generate all with a progress bar; and an "Add a company" panel for a new workbook. **Company** (click a name): flags with thresholds and reasons, data gaps, the metrics table in the Excel colors, both charts, the AI commentary when a saved one matches these numbers, and Generate, the downloads and Approve. Start it by double-clicking `run_app.command` (Mac) or with `streamlit run app.py`.
+**What it's for:** everything `main.py` and `approve.py` do, from a web page. **Portfolio** (the first page): one row per company in `data/` (latest quarter, flags tripped, data gaps, last run, deck status), each with Generate and a Download button that opens Download deck, Download memo and Download Excel; a search box; Generate all with a progress bar; and an "Add a company" panel for a new workbook. **Company** (click a name): flags with thresholds and reasons, data gaps, the metrics table in the status colors, both charts, the AI commentary when a saved one matches these numbers, and Generate, the downloads and Approve. Start it by double-clicking `run_app.command` (Mac) or with `streamlit run app.py`.
 
-**How Streamlit works, in one paragraph:** Streamlit runs `app.py` from top to bottom every time anything on the page changes (a box ticked, a button clicked, a letter typed in the search box). `st.title`, `st.checkbox`, `st.dataframe` and so on each draw one thing on the page. `st.button(...)` returns True only in the run right after it was clicked, so each button does its work, remembers a message in `st.session_state` (a dictionary that survives reruns), and calls `st.rerun()` so the whole page redraws with the new state (a new "Last run", an enabled download). "Which page am I on" is also just a key in `st.session_state`.
+**How Streamlit works, in one paragraph:** Streamlit runs `app.py` from top to bottom every time anything on the page changes (a box ticked, a button clicked, a letter typed in the search box). `st.title`, `st.checkbox`, `st.html` and so on each draw one thing on the page. `st.button(...)` returns True only in the run right after it was clicked, so each button does its work, remembers a message in `st.session_state` (a dictionary that survives reruns), and calls `st.rerun()` so the whole page redraws with the new state (a new "Last run", an enabled download). "Which page am I on" is also just a key in `st.session_state`.
 
-**What doesn't change:** no new math, no new wording. The page shows the same text the deck shows (`build_deck.value_text`, `threshold_text`, `flag_count_text`, `gaps_lines`) in the same colors as the Excel workbook (`excel_output.STATUS_COLORS`, `tripped_cells`), and the deck's own charts (`charts.arr_chart`, `cash_chart`). Only em dashes are swapped for colons (`portfolio.plain`).
+**What doesn't change:** no new math, no new wording. The page shows the same text the deck shows (`build_deck.value_text`, `threshold_text`, `flag_count_text`, `gaps_lines`) in the same status colors as the deck (`theme.STATUS_COLORS`; which cells are red comes from `excel_output.tripped_cells`), and the deck's own charts (`charts.arr_chart`, `cash_chart`). Only em dashes are swapped for colons (`portfolio.plain`).
 
 **What changed in the final run (Task 2):** the page used to take one dragged-in workbook and build in a temporary folder, never touching `output/`. Now its Generate button writes to `output/`, the same files and manifest as `main.py`, because the portfolio table reads its "last run" and "deck status" from those manifests and Approve writes into them. This file only draws; the work behind every button is in `portfolio.py`, so it can be tested without a browser.
+
+**The look (Task 3):** every page starts with `theme.streamlit_css()` (put on the page with `st.html`), so it is one column about 1100 px wide, sections in white cards with a 1 px border on the surface color, Arial, and theme.py's sizes. A card is a container made with `key="card-..."`, which Streamlit turns into a class the style sheet picks out. Tables are HTML (`table_html`) with a navy header row, white text and 40 px rows: Streamlit's own table can color the header but not its text. **One primary (navy) button per page**: Generate all on the portfolio, Generate on a company's page. Every other button is white with a navy border, and none is ever red or green (Approve included), because red and green mean a flag's status. Four buttons per row didn't fit beside six columns of text in 1100 px, so a row has Generate and one "Download" button that opens the three downloads.
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
 | `ai_checkbox_label()` / `ai_checkbox()` | The AI box, with the typical cost, and a caption saying a saved analysis is reused either way. | "Ask Claude for AI commentary when no saved analysis matches (typically about $0.09 and 70 seconds per company)". The number is `TYPICAL_AI_COST_USD`, copied from README's Cost table: a label, not a calculation. |
-| `status_css(status)` | A status's Excel colors as a style for the on-screen table. | trip → "background-color: #FFC7CE; color: #9C0006" (light red). |
+| `status_css(status)` | A status's colors from theme.py as a table cell's style. | trip → "background-color: #FDE8E6; color: #C0392B" (red on its light fill). |
 | `md(text)` | Text for `st.markdown`: no em dash, and `$` kept as a dollar sign. | Markdown reads two `$` signs as the start and end of a formula, so "$1.2M to $0.9M" would turn into math. |
 | `metrics_table(data)` / `metrics_colors(data)` | The metrics as text, one row per metric and one column per quarter; and a same-shaped table of styles: gray = data missing, red = the flag tripped that quarter, else none. | Same rules as the Excel Metrics sheet. Rows are metrics (not quarters) so 8 quarters fit across a screen. |
 | `flag_row(data, flag)` / `flags_table(data)` / `flags_colors(data)` | The latest quarter's flags as Flag, Value, Threshold, Status; each whole row in its status color. `combo_rule_text(config)` describes the combo rule. | Same as the Excel Flags sheet. Fernhollow's Rule of 40 reads "Cannot evaluate: missing input". |
 | `chart_figures(data)` | The deck's two charts, drawn by `charts.py` at a screen size. | The same functions slide 2 uses, so a blank quarter is a visible gap here too. |
-| `styled(table, colors)` | Puts the colors on the table for `st.dataframe`. | pandas' `Styler.apply`. |
+| `cell_html(tag, text, style)` / `table_html(table, colors, index_header)` | A table as HTML with the class theme.py styles (navy header, 40 px rows), each cell in its color. | Every piece of text is escaped, so a "<" in a workbook can never become part of the page. |
 | `say(ok, text)` / `show_messages()` | Remember what a button did; show it once at the top of the redrawn page, green or red. | |
-| `download_button(...)` / `generate_button(...)` | One download (greyed out, with the reason, when `portfolio.download` has nothing current) and one Generate button. | Used on both pages, so a row and a company page behave the same. |
+| `download_button(...)` / `generate_button(...)` | One download (greyed out, with the reason, when `portfolio.download` has nothing current) and one Generate button (`primary=True` on a company's page: its one navy button). | Used on both pages, so a row and a company page behave the same. |
 | `page_config()` | config.yaml's thresholds, or a plain message on the page if they can't be read. | |
-| `open_company(stem)` / `portfolio_row(...)` / `portfolio_table(...)` | The table: a header line, then per company its name (a button that opens its page), five text cells, Generate and three downloads, and clean.py's message under a row whose workbook can't be read. | "Row click": Streamlit tables can't hold buttons, so each row is a line of columns. |
+| `open_company(stem)` / `portfolio_row(...)` / `portfolio_table(...)` | The table: a navy header line, then per company its name (a button that opens its page), five text cells, Generate and Download (deck, memo, Excel), and clean.py's message under a row whose workbook can't be read. | "Row click": Streamlit tables can't hold buttons, so each row is a line of columns, in a container the style sheet makes 40 px tall with a line under it. |
 | `generate_all_button(...)` | Generate every company under a progress bar, then a message per company. | One failure is reported and the rest carry on (`portfolio.generate_all`). |
 | `add_company_panel(config, data_dir, expanded)` | The upload, a company name (suggested from the file name), "Replace its workbook", and Add company. | Opens by itself when a search finds nothing, since that message says to upload one. |
-| `portfolio_page(data_dir, output_dir)` | Page 1: title, AI box, messages, search, Generate all, the table (or "No KPI workbook found ..."), Add a company. | |
+| `portfolio_page(data_dir, output_dir)` | Page 1: title, AI box, messages, search, Generate all, the table (or "No KPI workbook found ..."), Add a company, each in a white card. | |
 | `company_buttons(...)` / `approve_panel(...)` | Generate and four downloads (deck, memo PDF, memo Word, Excel); the reviewer's name and Approve, greyed out until there are files built from today's workbook. | |
 | `show_flags(data)` / `show_gaps(data)` / `show_metrics(data)` / `show_charts(data)` / `show_commentary(...)` | The company page's sections. The commentary is the headline, risks and questions, as on slide 4 (no wins), under "AI-drafted from computed metrics - review before use". | |
-| `company_page(stem, data_dir, output_dir)` | Page 2. A name with no workbook says "No KPI workbook found ..."; a workbook clean.py can't read shows its message and nothing else. | |
-| `main(data_dir, output_dir)` | The page Streamlit draws: a company's page if one was clicked, else the portfolio. | Runs only when Streamlit runs the file, so tests can import `app.py` without drawing anything; tests pass temporary folders. |
+| `company_page(stem, data_dir, output_dir)` | Page 2, each section in a white card. A name with no workbook says "No KPI workbook found ..."; a workbook clean.py can't read shows its message and nothing else. | |
+| `main(data_dir, output_dir)` | The page Streamlit draws: theme.py's style sheet, then a company's page if one was clicked, else the portfolio. | Runs only when Streamlit runs the file, so tests can import `app.py` without drawing anything; tests pass temporary folders. |
 
 ---
 
@@ -815,7 +817,7 @@ Each one prints ✓ lines and ends with "All checks passed", or stops at the fir
 
 #### `check_excel_output.py` (step 4b proof)
 
-Builds each Excel file, **reads it back from disk**, and compares it with the metrics table. Expected labels, formats and colors are typed out here rather than imported, so a wrong constant in `excel_output.py` can't make its own check pass.
+Builds each Excel file, **reads it back from disk**, and compares it with the metrics table. Expected labels and formats are typed out here rather than imported (colors come from theme.py), so a wrong constant in `excel_output.py` can't make its own check pass.
 
 | Function | What it does |
 |---|---|

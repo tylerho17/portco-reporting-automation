@@ -117,9 +117,15 @@ BUTTON_RADIUS_PX = 6
 BUTTON_PADDING = "10px 18px"       # top and bottom 10, left and right 18
 
 # Streamlit marks each button with its kind: <button data-testid="stBaseButton-primary">.
-PRIMARY = 'button[data-testid="stBaseButton-primary"]'
-SECONDARY = 'button[data-testid="stBaseButton-secondary"]'
-TERTIARY = 'button[data-testid="stBaseButton-tertiary"]'
+# A popover's button (the portfolio's "Download") is marked on its own and looks like a secondary one.
+PRIMARY = ('button[data-testid="stBaseButton-primary"]',)
+SECONDARY = ('button[data-testid="stBaseButton-secondary"]', '[data-testid="stPopoverButton"] button')
+TERTIARY = ('button[data-testid="stBaseButton-tertiary"]', 'button[data-testid="stBaseButton-tertiary"] p')
+
+
+def selector(buttons, state=""):
+    """Every button of one kind in one state: selector(PRIMARY, ":hover") -> 'button[...]:hover'."""
+    return ", ".join(button + state for button in buttons)
 
 
 def css_rule(selector, **declarations):
@@ -149,17 +155,17 @@ def button_rules():
     disabled = {"background_color": css_color(SURFACE), "color": css_color(MID_GRAY),
                 "border": f"1px solid {css_color(LINE)}"}
     return [
-        css_rule(PRIMARY, background_color=css_color(NAVY), color=css_color(WHITE),
+        css_rule(selector(PRIMARY), background_color=css_color(NAVY), color=css_color(WHITE),
                  border=f"1px solid {css_color(NAVY)}", **shape),
-        css_rule(f"{PRIMARY}:hover", background_color=css_color(NAVY_DARK), color=css_color(WHITE),
+        css_rule(selector(PRIMARY, ":hover"), background_color=css_color(NAVY_DARK), color=css_color(WHITE),
                  border_color=css_color(NAVY_DARK)),
-        css_rule(f"{PRIMARY}:disabled", **disabled),
-        css_rule(SECONDARY, background_color=css_color(WHITE), color=css_color(NAVY),
+        css_rule(selector(PRIMARY, ":disabled"), **disabled),
+        css_rule(selector(SECONDARY), background_color=css_color(WHITE), color=css_color(NAVY),
                  border=f"1px solid {css_color(NAVY)}", **shape),
-        css_rule(f"{SECONDARY}:hover", background_color=css_color(SURFACE), color=css_color(NAVY_DARK),
+        css_rule(selector(SECONDARY, ":hover"), background_color=css_color(SURFACE), color=css_color(NAVY_DARK),
                  border_color=css_color(NAVY_DARK)),
-        css_rule(f"{SECONDARY}:disabled", **disabled),
-        css_rule(f"{TERTIARY}, {TERTIARY} p", color=css_color(NAVY), font_weight="bold"),
+        css_rule(selector(SECONDARY, ":disabled"), **disabled),
+        css_rule(selector(TERTIARY), color=css_color(NAVY), font_weight="bold"),   # a company's name: a link
     ]
 
 
@@ -168,6 +174,7 @@ def card_and_table_rules():
     return [
         css_rule('[class*="st-key-card"]', background_color=css_color(WHITE), border=f"1px solid {css_color(LINE)}",
                  border_radius="8px", padding="16px 20px"),
+        css_rule(".bp-table-wrap", overflow_x="auto"),      # 9 columns of metrics: scroll, never spill
         css_rule(".bp-table", width="100%", border_collapse="collapse", font_size=f"{TABLE_PT}px",
                  color=css_color(SLATE), background_color=css_color(WHITE)),
         css_rule(".bp-table th", background_color=css_color(NAVY), color=css_color(WHITE), height=f"{ROW_HEIGHT_PX}px",

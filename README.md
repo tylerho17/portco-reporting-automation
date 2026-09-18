@@ -76,11 +76,12 @@ python make_data.py                            # regenerate data/northwind.xlsx 
 
 The page has two parts:
 
-1. **Portfolio** (the first page): one row per company in `data/`, with its latest quarter, flags tripped, data gaps, when it was last generated and its deck status (read from `output/<company>_manifest.json`: not generated yet, not reviewed, approved by NAME, or out of date because the workbook changed). Each row has **Generate** (builds the deck, memo and metrics workbook into `output/`, exactly as `python main.py` does) and **Download deck / memo / Excel** (greyed out until there are files built from today's workbook). A search box narrows the table, and a name with no workbook says so. **Generate all** runs every company under a progress bar; one company failing never stops the others. **Add a company** takes a new workbook, and adds it to `data/` only if it can be read (otherwise it shows clean.py's message saying what to fix).
-2. **Company** (click a company's name): its flags with thresholds and reasons, the data gaps, the metrics table in the metrics workbook's colors (red = tripped, green = passed, gray = data missing or cannot evaluate), both charts, the AI commentary when a saved analysis matches these numbers, and the buttons Generate, the downloads and **Approve** (type your name: it records you as the reviewer, as `approve.py` does; click Generate afterwards so the footers say reviewed).
+1. **Portfolio** (the first page): one row per company in `data/`, with its latest quarter, flags tripped, data gaps, when it was last generated and its deck status (read from `output/<company>_manifest.json`: not generated yet, not reviewed, approved by NAME, or out of date because the workbook changed). Each row has **Generate** (builds the deck, memo and metrics workbook into `output/`, exactly as `python main.py` does) and **Download**, which opens Download deck / memo / Excel (greyed out until there are files built from today's workbook). A search box narrows the table, and a name with no workbook says so. **Generate all** runs every company under a progress bar; one company failing never stops the others. **Add a company** takes a new workbook, and adds it to `data/` only if it can be read (otherwise it shows clean.py's message saying what to fix).
+2. **Company** (click a company's name): its flags with thresholds and reasons, the data gaps, the metrics table in the status colors (red = tripped, green = passed, gray = data missing or cannot evaluate), both charts, the AI commentary when a saved analysis matches these numbers, and the buttons Generate, the downloads and **Approve** (type your name: it records you as the reviewer, as `approve.py` does; click Generate afterwards so the footers say reviewed).
 
 - **The AI box** ("Ask Claude for AI commentary when no saved analysis matches") is off by default; its label gives the typical cost (about $0.09 and 70 seconds per company, from the [Cost](#cost) table). Either way, Generate first looks in `output/` for a saved analysis made from exactly the same numbers and reuses it for free. Only with the box ticked, and no such analysis, does it call Claude (this needs the key in `.env`).
 - **A workbook it can't read** shows `clean.py`'s own message (which sheet, row and cell, and what to fix), never a traceback, and gets "-" instead of numbers.
+- **The look** comes from `theme.py`, like the deck's and the memo's: one column about 1100 px wide, white cards, tables with a navy header, Arial. Each page has one navy (primary) button, Generate all or Generate; every other button is white with a navy border. No button is red or green: those colors mean a flag's status.
 - **The page writes to `output/`**, the same files and manifest as `python main.py`, so the table, `approve.py` and the command line always agree. Old files are never offered for download once the workbook or `config.yaml` has changed.
 
 **3. Review the deck, then approve it.** The footer on every slide ends with the review status. A
@@ -150,6 +151,7 @@ main.py        runs the chain for one workbook or all of data/, prints the summa
 app.py         the web page (run_app.command starts it): the portfolio table and a page per company;
 portfolio.py   its buttons run main.py's chain, memo.py and approve.py (portfolio.py does the work)
 approve.py     records a reviewer in <company>_manifest.json (provenance.py); the next build's footer says "reviewed by"
+theme.py       the one palette, font (Arial) and type sizes: the template, deck, charts, memo and web page use it
 config.yaml    flag thresholds, each with the investor reason in a comment
 ```
 
@@ -172,6 +174,7 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 11. **Every deck can be traced back to its inputs.** Each run writes `output/<company>_manifest.json`: the workbook and `config.yaml` by SHA-256 hash, the git commit (with a `*` if the code had uncommitted edits), the model and prompt version, the run time, tokens and cost, whether validation passed, and whether the deck carries Claude's text or the placeholder. The deck's footer repeats the commit and the model, so a printed slide is traceable on its own. A hash is the point: two files with the same name can hold different numbers, and only the hash tells them apart.
 12. **A person approves every deck before it counts.** Every slide's footer says `AI-drafted | not reviewed` until `approve.py` records a reviewer's name and the time; then it says `AI-drafted | reviewed by NAME on DATE`. The footer is quiet enough to leave on a deck that goes to a board, where a diagonal stamp across the numbers would not be; the DRAFT - NOT REVIEWED watermark is still there for anyone who wants it, with `--draft`. Approval is tied to the hashes it was given, so new data or an edited threshold sends the footer back to "not reviewed" automatically - a stale approval is worse than none. `approve.py` never builds anything: producing a deck and vouching for it stay two separate acts.
 13. **Text must fit.** `text_fit.py` measures text and shrinks it to a 12 pt floor; if it still doesn't fit, the build stops with the slide and box named. A deck with text running off the slide is worse than no deck.
+14. **One brand, defined once.** `theme.py` holds every color, the font and the type sizes (title 28, section 20, body 15, caption 13, table 14); a test fails if any other code file types a color. The brand is the fictional "Example Capital" in navy and grays. Red and green mean a flag's status and nothing else, so no button is ever red or green. The metrics workbook keeps Excel's own red and green fills, which people who live in Excel already read at a glance.
 
 ---
 
@@ -243,7 +246,7 @@ Placeholders: capture each one and replace the line with the image. Before captu
 - 📸 **Slide 4, AI commentary:** "AI-drafted from computed metrics - review before use", the headline, 3 risks and 3 questions for management. Include the footer: Northwind is approved, so it ends "AI-drafted | reviewed by ...".
 
 **The web page** (`run_app.command`, or `streamlit run app.py`)
-- 📸 **Portfolio:** the three companies' rows with their flags, data gaps, last run and deck status, and the Generate and download buttons.
+- 📸 **Portfolio:** the three companies' rows with their flags, data gaps, last run and deck status under the navy header row, the one navy Generate all button, and each row's Generate and Download buttons.
 - 📸 **Northwind's page:** "6 of 9 flags tripped" with the red and green flag rows, the metrics table with its gray "data missing" cells, and the two charts.
 
 **After: the backup workbook** (`output/northwind_metrics.xlsx`)

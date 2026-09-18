@@ -5,9 +5,14 @@ Two pages:
    deck status), with Generate, Download deck, Download memo and Download Excel on each row; a
    search box; Generate all with a progress bar; and an "Add a company" panel for a new workbook.
 2. Company (click a company's name): its flags with thresholds and reasons, data gaps, metrics
-   table in the Excel colors (red = tripped, green = passed, gray = data missing / cannot
+   table in the status colors (red = tripped, green = passed, gray = data missing / cannot
    evaluate), both charts, the AI commentary when a saved one matches these numbers, and the
    buttons Generate, the downloads and Approve.
+
+Look (theme.py, final Task 3): one column about 1100 px wide, white cards on the surface color,
+tables with a navy header and 40 px rows, Arial. One primary (navy) button per page: Generate all
+on the portfolio, Generate on a company's page. Every other button is white with a navy border;
+none is ever red or green, since those colors mean a flag's status.
 
 Rules:
 - No new math: every number and every word comes from metrics.py, excel_output.py, build_deck.py
@@ -22,6 +27,8 @@ Rules:
 Run: streamlit run app.py      (or double-click run_app.command on a Mac)
 """
 
+from html import escape
+
 import pandas as pd
 import streamlit as st
 from matplotlib import pyplot as plt
@@ -29,12 +36,13 @@ from matplotlib import pyplot as plt
 from build_deck import AI_DRAFTED_LINE, QUESTIONS_HEADING, flag_count_text, gaps_lines, points_text, runway_lines, \
     threshold_text, value_text
 from charts import arr_chart, cash_chart
-from excel_output import STATUS_COLORS, status_label, tripped_cells
+from excel_output import status_label, tripped_cells
 from main import DATA_DIR, OUTPUT_DIR, company_name
 from metrics import CANNOT_EVALUATE, METRIC_LABELS, MISSING_INPUT, TRIP, load_config
 from portfolio import (NO_WORKBOOK_FOUND, add_company, approve_company, download, error_message, find_workbook,
                        generate_all, generate_company, load_company, plain, portfolio_rows, run_state,
                        saved_commentary, search_message, search_rows, suggested_name)
+from theme import STATUS_COLORS, streamlit_css
 
 PAGE_TITLE = "Board Pack Generator"
 INTRO = ("Every portfolio company with a KPI workbook in data/. Click a name for its flags, metrics and "
@@ -58,10 +66,12 @@ ADD_INTRO = ("Drop in a company's KPI workbook (.xlsx). It is added to data/ onl
 APPROVE_INTRO = ("Approving records your name against today's workbook, as approve.py does. It builds nothing: "
                  "click Generate afterwards so the deck and memo footers say reviewed.")
 
-# The portfolio table: a column per piece of a row, widths relative to each other.
-TABLE_HEADERS = ["Company", "Latest quarter", "Flags tripped", "Data gaps", "Last run", "Deck status"]
+# The portfolio table: a column per piece of a row, widths relative to each other. The last two
+# columns hold Generate and one "Download" button that opens the three downloads (four buttons
+# side by side don't fit a 1100 px page beside six columns of text).
+TABLE_HEADERS = ["Company", "Latest quarter", "Flags tripped", "Data gaps", "Last run", "Deck status", "", ""]
 ROW_TEXT_KEYS = ["latest", "flags", "gaps", "last_run", "status"]
-ROW_WIDTHS = [1.4, 1.0, 1.7, 1.8, 1.2, 2.0, 1.1, 1.2, 1.2, 1.2]
+ROW_WIDTHS = [1.3, 1.0, 1.5, 1.8, 1.3, 1.8, 1.1, 1.2]
 
 # The download buttons: (portfolio.output_files name, label, file type for the browser).
 PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -88,7 +98,7 @@ def ai_checkbox_label():
 
 
 def status_css(status):
-    """The Excel workbook's colors for a status, as a style the on-screen table understands."""
+    """A status's colors (theme.py: red, green or gray, each on its light fill) as a table cell's style."""
     fill, text = STATUS_COLORS[status]
     return f"background-color: #{fill}; color: #{text}"
 
@@ -158,9 +168,27 @@ def chart_figures(data):
             cash_chart(quarters, data["actuals"]["ending_cash"], runway_lines(data), CHART_INCHES)]
 
 
-def styled(table, colors):
-    """The table with each cell styled by the matching cell of colors."""
-    return table.style.apply(lambda _: colors, axis=None)
+def cell_html(tag, text, style=""):
+    """One table cell; the text is escaped, so a "<" in a company's data can never become markup."""
+    style_part = f' style="{style}"' if style else ""
+    return f"<{tag}{style_part}>{escape(str(text))}</{tag}>"
+
+
+def table_html(table, colors, index_header=None):
+    """A table as HTML in theme.py's look (class "bp-table": navy header, white text, 40 px rows).
+
+    colors holds each cell's style (same shape as table). index_header names a first column
+    holding the table's row names (the metrics table's metric labels); None leaves them out.
+    """
+    header = ([index_header] if index_header else []) + list(table.columns)
+    rows = []
+    for (name, values), (_, styles) in zip(table.iterrows(), colors.iterrows()):
+        cells = [cell_html("td", name)] if index_header else []
+        cells += [cell_html("td", value, style) for value, style in zip(values, styles)]
+        rows.append("<tr>" + "".join(cells) + "</tr>")
+    head = "<tr>" + "".join(cell_html("th", text) for text in header) + "</tr>"
+    return (f'<div class="bp-table-wrap"><table class="bp-table"><thead>{head}</thead>'
+            f'<tbody>{"".join(rows)}</tbody></table></div>')
 
 
 # ---------------------------------------------------------------------------
@@ -194,9 +222,9 @@ def download_button(workbook, output_dir, current, kind, label, mime, key):
         st.download_button(label, found[1], file_name=found[0], mime=mime, key=key)
 
 
-def generate_button(workbook, ask_claude, config, output_dir, key):
-    """Generate one company's files, then redraw the page with what happened."""
-    if st.button("Generate", key=key):
+def generate_button(workbook, ask_claude, config, output_dir, key, primary=False):
+    """Generate one company's files, then redraw the page with what happened. primary=True: the page's navy button."""
+    if st.button("Generate", key=key, type="primary" if primary else "secondary"):
         with st.spinner(f"Generating {company_name(workbook)}..."):
             outcome = generate_company(workbook, config, ask_claude, output_dir)
         say(outcome["ok"], outcome["message"])
@@ -223,26 +251,28 @@ def open_company(stem):
 
 
 def portfolio_row(row, ask_claude, config, output_dir):
-    """One company: its name (click to open), five text cells, Generate and three downloads."""
-    cells = st.columns(ROW_WIDTHS, vertical_alignment="center")
-    if cells[0].button(row["company"], key=f"open_{row['stem']}", type="tertiary"):
-        open_company(row["stem"])
-    for cell, key in zip(cells[1:6], ROW_TEXT_KEYS):
-        cell.text(plain(row[key]))
-    with cells[6]:
-        generate_button(row["workbook"], ask_claude, config, output_dir, key=f"generate_{row['stem']}")
-    for cell, (kind, label, mime) in zip(cells[7:], ROW_DOWNLOADS):
-        with cell:
-            download_button(row["workbook"], output_dir, row["current"], kind, label, mime,
-                            key=f"{kind}_{row['stem']}")
-    if row["problem"]:
-        st.error(f"{row['company']}: {row['problem']}")
+    """One company: its name (click to open), five text cells, Generate, and Download (deck, memo, Excel)."""
+    with st.container(key=f"portfolio-row-{row['stem']}"):   # theme.py: 40 px tall, a line under it
+        cells = st.columns(ROW_WIDTHS, vertical_alignment="center")
+        if cells[0].button(row["company"], key=f"open_{row['stem']}", type="tertiary"):
+            open_company(row["stem"])
+        for cell, key in zip(cells[1:6], ROW_TEXT_KEYS):
+            cell.text(plain(row[key]))
+        with cells[6]:
+            generate_button(row["workbook"], ask_claude, config, output_dir, key=f"generate_{row['stem']}")
+        with cells[7].popover("Download", key=f"downloads_{row['stem']}"):
+            for kind, label, mime in ROW_DOWNLOADS:
+                download_button(row["workbook"], output_dir, row["current"], kind, label, mime,
+                                key=f"{kind}_{row['stem']}")
+        if row["problem"]:
+            st.error(f"{row['company']}: {row['problem']}")
 
 
 def portfolio_table(rows, ask_claude, config, output_dir):
-    """The header line, then one line per company."""
-    for cell, text in zip(st.columns(ROW_WIDTHS), TABLE_HEADERS):
-        cell.markdown(f"**{text}**")
+    """The navy header line, then one line per company."""
+    with st.container(key="portfolio-header"):
+        for cell, text in zip(st.columns(ROW_WIDTHS, vertical_alignment="center"), TABLE_HEADERS):
+            cell.markdown(text)
     for row in rows:
         portfolio_row(row, ask_claude, config, output_dir)
 
@@ -282,25 +312,30 @@ def add_company_panel(config, data_dir, expanded):
 
 
 def portfolio_page(data_dir, output_dir):
-    """Page 1: search, Generate all, the table, and Add a company."""
+    """Page 1: search, Generate all, the table, and Add a company, each in a white card."""
     st.title(PAGE_TITLE)
     st.write(INTRO)
-    ask_claude = ai_checkbox()
+    with st.container(key="card-ai"):
+        ask_claude = ai_checkbox()
     show_messages()
     config = page_config()
     if config is None:
         return
     rows = portfolio_rows(config, data_dir, output_dir)
-    query = st.text_input("Search companies", key="search", placeholder="Company name")
-    generate_all_button(config, ask_claude, data_dir, output_dir)
-    not_found = search_message(rows, query)
-    if not_found:
-        st.warning(not_found)
-    elif not rows:
-        st.info(NO_COMPANIES)
-    else:
-        portfolio_table(search_rows(rows, query), ask_claude, config, output_dir)
-    add_company_panel(config, data_dir, expanded=bool(not_found or not rows))
+    with st.container(key="card-portfolio"):
+        search_cell, button_cell = st.columns([3, 1], vertical_alignment="bottom")
+        query = search_cell.text_input("Search companies", key="search", placeholder="Company name")
+        with button_cell:
+            generate_all_button(config, ask_claude, data_dir, output_dir)
+        not_found = search_message(rows, query)
+        if not_found:
+            st.warning(not_found)
+        elif not rows:
+            st.info(NO_COMPANIES)
+        else:
+            portfolio_table(search_rows(rows, query), ask_claude, config, output_dir)
+    with st.container(key="card-add"):
+        add_company_panel(config, data_dir, expanded=bool(not_found or not rows))
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +346,7 @@ def company_buttons(workbook, state, ask_claude, config, output_dir):
     """Generate and the four downloads, side by side."""
     cells = st.columns(1 + len(PAGE_DOWNLOADS))
     with cells[0]:
-        generate_button(workbook, ask_claude, config, output_dir, key="generate_page")
+        generate_button(workbook, ask_claude, config, output_dir, key="generate_page", primary=True)
     for cell, (kind, label, mime) in zip(cells[1:], PAGE_DOWNLOADS):
         with cell:
             download_button(workbook, output_dir, state["current"], kind, label, mime, key=f"{kind}_page")
@@ -334,7 +369,7 @@ def show_flags(data):
     """The flag count, the colored flags table, and runway at next quarter's budget (context, not a flag)."""
     st.subheader(flag_count_text(data["flags"]))
     st.caption(LEGEND)
-    st.dataframe(styled(flags_table(data), flags_colors(data)), hide_index=True, width="stretch")
+    st.html(table_html(flags_table(data), flags_colors(data)))
     st.caption(md(runway_lines(data).splitlines()[-1] + " (context, not a flag)"))
 
 
@@ -344,8 +379,9 @@ def show_gaps(data):
 
 
 def show_metrics(data):
+    """Every metric (rows) in every quarter (columns), colored like the flags."""
     st.subheader("Metrics")
-    st.dataframe(styled(metrics_table(data), metrics_colors(data)), width="stretch")
+    st.html(table_html(metrics_table(data), metrics_colors(data), index_header="Metric"))
 
 
 def show_charts(data):
@@ -390,21 +426,23 @@ def company_page(stem, data_dir, output_dir):
     st.caption(f"Last run: {state['last_run']} · Deck status: {plain(state['status'])}")
     ask_claude = ai_checkbox()
     show_messages()
-    company_buttons(workbook, state, ask_claude, config, output_dir)
+    with st.container(key="card-buttons"):
+        company_buttons(workbook, state, ask_claude, config, output_dir)
     if problem:
         st.error(problem)
         return
-    show_flags(data)
-    show_gaps(data)
-    show_metrics(data)
-    show_charts(data)
-    show_commentary(workbook, config, output_dir)
-    approve_panel(workbook, state, data_dir, output_dir)
+    sections = [("flags", show_flags, (data,)), ("gaps", show_gaps, (data,)), ("metrics", show_metrics, (data,)),
+                ("charts", show_charts, (data,)), ("commentary", show_commentary, (workbook, config, output_dir)),
+                ("approve", approve_panel, (workbook, state, data_dir, output_dir))]
+    for name, show, arguments in sections:
+        with st.container(key=f"card-{name}"):   # theme.py: white, 1 px border, on the surface color
+            show(*arguments)
 
 
 def main(data_dir=DATA_DIR, output_dir=OUTPUT_DIR):
     """The page Streamlit draws: a company's page if one was clicked, else the portfolio. Tests pass temporary folders."""
-    st.set_page_config(page_title=PAGE_TITLE, layout="wide")
+    st.set_page_config(page_title=PAGE_TITLE, layout="wide")   # theme.py's style sheet caps it at about 1100 px
+    st.html(f"<style>{streamlit_css()}</style>")
     stem = st.session_state.get(COMPANY_KEY)
     if stem:
         company_page(stem, data_dir, output_dir)

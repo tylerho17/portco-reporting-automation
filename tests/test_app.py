@@ -10,6 +10,7 @@ Run from the project folder:  pytest
 import shutil
 from pathlib import Path
 
+import pandas as pd
 import pytest
 from openpyxl import Workbook
 from streamlit.testing.v1 import AppTest
@@ -19,9 +20,10 @@ import app
 import portfolio
 from analyze import BoardSummary, build_payload, save_analysis
 from clean import clean_workbook
-from excel_output import STATUS_COLORS
+import theme
 from metrics import CANNOT_EVALUATE, PASS, TRIP, load_config
 from provenance import NOT_REVIEWED, manifest_path, read_manifest
+from theme import STATUS_COLORS
 
 PROJECT_DIR = Path(__file__).parent.parent
 COMPANIES = ["alderpeak", "fernhollow", "northwind"]
@@ -62,10 +64,30 @@ def test_the_ai_checkbox_label_names_the_typical_cost():
     assert "AI commentary" in label and "$0.09" in label
 
 
-def test_status_colors_are_the_excel_ones():
+def test_status_colors_are_the_palette_s():
+    # Typed from the Task 3 brief: red C0392B on FDE8E6, green 1E8449 on EAF6EF, gray fill EDF0F3.
+    assert app.status_css(TRIP) == "background-color: #FDE8E6; color: #C0392B"
+    assert app.status_css(PASS) == "background-color: #EAF6EF; color: #1E8449"
+    assert app.status_css(CANNOT_EVALUATE) == "background-color: #EDF0F3; color: #334155"
     for status in (TRIP, PASS, CANNOT_EVALUATE):
         fill, text = STATUS_COLORS[status]
         assert app.status_css(status) == f"background-color: #{fill}; color: #{text}"
+
+
+def test_a_table_is_html_with_the_theme_s_class_and_escaped_text():
+    table = pd.DataFrame([["<b>NRR</b>", "97.1%"]], columns=["Flag", "Value"])
+    colors = pd.DataFrame([["", app.status_css(TRIP)]], columns=["Flag", "Value"])
+    html = app.table_html(table, colors)
+    assert html.startswith('<div class="bp-table-wrap"><table class="bp-table">')
+    assert "<th>Flag</th><th>Value</th>" in html
+    assert "<td>&lt;b&gt;NRR&lt;/b&gt;</td>" in html                     # text, never markup
+    assert f'<td style="{app.status_css(TRIP)}">97.1%</td>' in html
+
+
+def test_the_metrics_table_names_its_rows_in_the_first_column():
+    data = company_data("northwind")
+    html = app.table_html(app.metrics_table(data), app.metrics_colors(data), index_header="Metric")
+    assert "<th>Metric</th><th>Q3 2024</th>" in html and "<td>NRR (annualized)</td>" in html
 
 
 def test_markdown_text_keeps_dollar_signs_and_drops_em_dashes():
@@ -137,6 +159,42 @@ def texts(test):
     return [element.value for element in test.text]
 
 
+def html_bodies(test):
+    """Every piece of HTML the page wrote with st.html."""
+    return [element.proto.body for element in test.get("html")]
+
+
+def tables(test):
+    return [body for body in html_bodies(test) if 'class="bp-table"' in body]
+
+
+def primary_buttons(test):
+    """The key of every primary button on the page (buttons and download buttons)."""
+    return [button.proto.id for button in list(test.button) + list(test.get("download_button"))
+            if button.proto.type == "primary"]
+
+
+def test_both_pages_carry_the_theme_s_style_sheet(folders):
+    for company in (None, "northwind"):
+        assert f"<style>{theme.streamlit_css()}</style>" in html_bodies(page(folders, company=company))
+
+
+def test_each_page_has_exactly_one_primary_button(folders):
+    portfolio_page = page(folders)
+    assert [button.key for button in portfolio_page.button if button.proto.type == "primary"] == ["generate_all"]
+    assert len(primary_buttons(portfolio_page)) == 1
+    company_page = page(folders, company="northwind")
+    assert [button.key for button in company_page.button if button.proto.type == "primary"] == ["generate_page"]
+    assert len(primary_buttons(company_page)) == 1
+    assert company_page.button(key="approve").proto.type == "secondary"   # approve is never red or green
+
+
+def test_the_flags_table_is_drawn_with_status_fills(folders):
+    flags_html = tables(page(folders, company="northwind"))[0]
+    assert "<th>Flag</th>" in flags_html
+    assert flags_html.count(app.status_css(TRIP)) == 6 * len(app.FLAG_COLUMNS)   # six tripped rows, every cell
+
+
 def test_the_portfolio_lists_every_company_with_nothing_to_download_yet(folders):
     test = page(folders)
     assert not test.exception and not test.error
@@ -201,7 +259,7 @@ def test_the_company_page_shows_flags_gaps_metrics_charts_and_no_commentary_yet(
     test = page(folders, company="northwind")
     assert not test.exception and not test.error
     assert test.subheader[0].value == "6 of 9 flags tripped"
-    assert len(test.dataframe) == 2                                   # flags, then metrics
+    assert len(tables(test)) == 2                                     # flags, then metrics
     assert len(test.get("image")) == 2                                 # the two charts
     assert any(info.value == app.NO_COMMENTARY for info in test.info)
     assert [label for label, _ in downloads(test)] == [label for _, label, _ in app.PAGE_DOWNLOADS]
@@ -244,7 +302,7 @@ def test_no_em_dash_anywhere_on_either_page(folders):
     for company in (None, "fernhollow"):
         test = page(folders, company=company)
         shown = [element.value for kind in ("title", "subheader", "caption", "markdown", "text", "info", "error")
-                 for element in getattr(test, kind)]
+                 for element in getattr(test, kind)] + html_bodies(test)   # the tables are HTML
         assert shown and not any(EM_DASH in str(text) for text in shown)
 
 

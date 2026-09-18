@@ -144,7 +144,7 @@ def test_interview_prep_groups_the_questions_in_interview_order():
 def test_study_guide_tables_cover_the_deck_files():
     # The deck files must have their own function tables, not just a mention.
     covered = set().union(*(files for files, _ in study_guide_tables()))
-    assert {"build_deck.py", "make_template.py", "charts.py", "text_fit.py", "check_deck.py"} <= covered
+    assert {"build_deck.py", "make_template.py", "charts.py", "text_fit.py", "check_deck.py", "theme.py"} <= covered
 
 
 def test_study_guide_tables_cover_approval_and_the_web_page():
