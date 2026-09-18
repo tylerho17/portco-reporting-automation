@@ -595,6 +595,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 |---|---|---|
 | `ai_checkbox_label()` | The checkbox text, with the typical cost. | "Include AI commentary (typically about $0.09 and 70 seconds per workbook)". The number is `TYPICAL_AI_COST_USD`, copied from README's Cost table: a label, not a calculation. |
 | `save_upload(file_name, data, folder)` | Writes the uploaded bytes to a file, keeping only the file's own name. | `clean_workbook` reads a file path, not bytes. "../x.xlsx" becomes "x.xlsx", so an odd name can't write outside the folder. |
+| `is_excel_workbook(path)` | True if the file is a zip with `xl/workbook.xml` inside. | A .pptx or .docx renamed .xlsx is a zip too; checking only "is it a zip" let one through to a cryptic pandas error (LEARNINGS, polish Task 6). |
 | `status_css(status)` | A status's Excel colors as a style for the on-screen table. | trip → "background-color: #FFC7CE; color: #9C0006" (light red). |
 | `metrics_table(data)` / `metrics_colors(data)` | The metrics as text, one row per metric and one column per quarter; and a same-shaped table of styles: gray = data missing, red = the flag tripped that quarter, else none. | Same rules as the Excel Metrics sheet. Rows are metrics (not quarters) so 8 quarters fit across a screen. |
 | `flag_row(data, flag)` / `flags_table(data)` / `flags_colors(data)` | The latest quarter's flags as Flag, Value, Threshold, Status; each whole row in its status color. `combo_rule_text(config)` describes the combo rule. | Same as the Excel Flags sheet. |

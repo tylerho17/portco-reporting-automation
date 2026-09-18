@@ -119,6 +119,14 @@ def test_a_file_that_is_not_a_workbook_gets_a_plain_message(tmp_path):
     assert "Traceback" not in result["error"]
 
 
+def test_another_office_file_renamed_xlsx_gets_the_plain_message(tmp_path):
+    # A .pptx or .docx is a zip file too, so the zip check let it through, and the page said
+    # "Something unexpected went wrong (OptionError: ...)" instead of "isn't a readable Excel workbook".
+    deck = (PROJECT_DIR / "templates" / "base.pptx").read_bytes()
+    result = app.build_outputs("kpis.xlsx", deck, False, saved_dir=tmp_path)
+    assert result["error"] == app.NOT_A_WORKBOOK
+
+
 def test_an_unexpected_error_is_named_without_a_traceback(tmp_path, monkeypatch):
     def broken(*args, **kwargs):
         raise KeyError("oops")

@@ -55,6 +55,7 @@ AI_NEW_NOTE = "AI commentary written by Claude and checked; it is on slide 4. Re
 NOT_A_WORKBOOK = "This file isn't a readable Excel workbook. Save it from Excel as .xlsx and try again."
 UNEXPECTED_ERROR_START = "Something unexpected went wrong - please send this file to whoever looks after the tool"
 NOT_A_WORKBOOK_ERRORS = (zipfile.BadZipFile, InvalidFileException)
+EXCEL_WORKBOOK_PART = "xl/workbook.xml"   # inside every .xlsx (which is a zip file)
 
 FLAG_COLUMNS = ["Flag", "Value", "Threshold", "Status"]
 LEGEND = "Red = tripped · green = passed · gray = data missing or cannot evaluate"
@@ -77,6 +78,18 @@ def save_upload(file_name, data, folder):
     path = folder / Path(file_name).name   # "../x.xlsx" -> "x.xlsx": stays inside the folder
     path.write_bytes(data)
     return path
+
+
+def is_excel_workbook(path):
+    """True if the file is a zip holding an Excel workbook part (every .xlsx has xl/workbook.xml).
+
+    Being a zip isn't enough: a .pptx or .docx renamed .xlsx is a zip too, and pandas' error on
+    one is cryptic.
+    """
+    if not zipfile.is_zipfile(path):
+        return False
+    with zipfile.ZipFile(path) as archive:
+        return EXCEL_WORKBOOK_PART in archive.namelist()
 
 
 def status_css(status):
@@ -187,7 +200,7 @@ def ai_commentary(workbook_path, config, folder, include_ai, saved_dir, client):
 def build_in_folder(folder, file_name, file_bytes, include_ai, saved_dir, client):
     """Run every step on one uploaded workbook inside folder. Raises if a step fails."""
     workbook_path = save_upload(file_name, file_bytes, folder / "input")
-    if not zipfile.is_zipfile(workbook_path):  # every .xlsx is a zip file; else pandas' message is cryptic
+    if not is_excel_workbook(workbook_path):  # else pandas' message is cryptic
         raise ValueError(NOT_A_WORKBOOK)
     output_dir = folder / "output"
     config = load_config()
