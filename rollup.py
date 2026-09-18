@@ -200,11 +200,17 @@ def names_text(names):
 
 
 def quarter_words(entries):
-    """The one latest quarter every company shares ('Q2 2026'), or "each company's latest quarter"."""
+    """The one latest quarter every company shares ('Q2 2026'), "each company's latest quarter", or ''
+    when no workbook could be read."""
     quarters = {entry["data"]["latest"] for entry in entries if entry["data"] is not None}
     if len(quarters) == 1:
         return quarters.pop()
-    return "each company's latest quarter" if quarters else NO_VALUE
+    return "each company's latest quarter" if quarters else ""
+
+
+def slide_title(words, deck):
+    """'Companies by status, Q2 2026': the quarter after a comma, left off when there is none."""
+    return f"{words}, {deck['quarters']}" if deck["quarters"] else words
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +312,7 @@ def pages(entries):
 def ranking_slide(slide, deck, page, number, total):
     """One ranking slide: '(1 of 2)' in the title when the ranking needs more than one."""
     part = f" ({number} of {total})" if total > 1 else ""
-    set_title(slide, f"Portfolio ranked by flags tripped, {deck['quarters']}{part}", deck)
+    set_title(slide, slide_title("Portfolio ranked by flags tripped", deck) + part, deck)
     draw_table(slide, "Ranking table", deck["area"], RANKING_HEADER, [ranking_row(entry) for entry in page],
                RANKING_SHARES, deck)
 
@@ -320,7 +326,7 @@ def count_rows(rows, colored_by=None):
 def status_slide(slide, deck):
     """Two small tables side by side: companies by flag status (colored) and by review status (not:
     red and green mean a flag's status only)."""
-    set_title(slide, f"Companies by status, {deck['quarters']}", deck)
+    set_title(slide, slide_title("Companies by status", deck), deck)
     colors = {STATUS_LABELS[status]: COLOR_OF[status] for status in STATUS_ORDER}
     tables = [("Flag status table", "Flag status", count_rows(status_counts(deck["entries"]), colors)),
               ("Review status table", "Review status", count_rows(review_counts(deck["entries"])))]
@@ -337,7 +343,7 @@ def runway_threshold(config):
 
 def runway_slide(slide, deck):
     """The runway chart, drawn at the size it takes on the slide (so 13 pt in the chart is 13 pt here)."""
-    set_title(slide, f"Runway at current burn by company, {deck['quarters']}", deck)
+    set_title(slide, slide_title("Runway at current burn by company", deck), deck)
     left, top, width, height = deck["area"]
     order = runway_order(deck["entries"])
     months, words = runway_threshold(deck["config"])
@@ -433,10 +439,10 @@ def write_status_sheet(sheet, entries):
     """Companies by flag status (colored) and by review status, with every name."""
     write_header(sheet, STATUS_HEADERS)
     for status, (label, count, names) in zip(STATUS_ORDER, status_counts(entries)):
-        sheet.append(["Flag status", label, count, ", ".join(names)])
+        sheet.append(["Flag status", label, count, ", ".join(names) or NO_VALUE])
         color_cell(sheet.cell(row=sheet.max_row, column=2), COLOR_OF[status])
     for label, count, names in review_counts(entries):
-        sheet.append(["Review status", label, count, ", ".join(names)])
+        sheet.append(["Review status", label, count, ", ".join(names) or NO_VALUE])
     set_column_widths(sheet, [16, 36, 12, 80])
 
 

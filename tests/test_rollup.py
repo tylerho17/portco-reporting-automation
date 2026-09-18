@@ -294,6 +294,17 @@ def test_companies_on_different_quarters_are_titled_by_each_latest_quarter(folde
     assert rollup.quarter_words(entries(folders, config)) == "Q2 2026"
 
 
+def test_when_no_workbook_can_be_read_the_titles_name_no_quarter(tmp_path, config):
+    (tmp_path / "data").mkdir()
+    book = Workbook()
+    book.active.append(["Quarter", "Starting ARR"])
+    book.active.append(["Q1 2025", 100])
+    book.save(tmp_path / "data" / "broken.xlsx")
+    paths = rollup.save_rollup(config, tmp_path / "data", tmp_path / "output", run_date=RUN_DATE)
+    assert [slide.shapes.title.text for slide in Presentation(paths["deck"]).slides] == [
+        "Portfolio ranked by flags tripped", "Companies by status", "Runway at current burn by company"]
+
+
 def test_nothing_in_the_rollup_deck_has_an_em_dash(folders, config):
     _, presentation = deck(folders, config)
     for slide in presentation.slides:

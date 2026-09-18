@@ -165,6 +165,17 @@ def downloads(test):
     return [(button.proto.label, button.proto.disabled) for button in test.get("download_button")]
 
 
+def row_downloads(test):
+    """The companies' download buttons as (label, disabled), without the portfolio's rollup downloads."""
+    return [(label, disabled) for label, disabled in downloads(test) if "rollup" not in label]
+
+
+def rollup_popover(test):
+    """The "Download rollup" popover's settings (label, disabled) on the portfolio page."""
+    popovers = [block.proto.popover for block in test.get("popover")]
+    return next(popover for popover in popovers if popover.label == "Download rollup")
+
+
 def texts(test):
     return [element.value for element in test.text]
 
@@ -211,7 +222,41 @@ def test_the_portfolio_lists_every_company_with_nothing_to_download_yet(folders)
     assert test.checkbox[0].label == app.ai_checkbox_label()
     assert [test.button(key=f"open_{name}").label for name in COMPANIES] == ["Alderpeak", "Fernhollow", "Northwind"]
     assert "6 of 9 flags tripped" in texts(test) and portfolio.NOT_GENERATED in texts(test)
-    assert len(downloads(test)) == 9 and all(disabled for _, disabled in downloads(test))
+    assert len(row_downloads(test)) == 9 and all(disabled for _, disabled in row_downloads(test))
+
+
+def test_the_portfolio_offers_the_rollup_before_anything_is_generated(folders):
+    # Task 9: the rollup is worked out from the workbooks, so it needs no Generate first.
+    test = page(folders)
+    rollup_buttons = [(label, disabled) for label, disabled in downloads(test) if "rollup" in label]
+    assert rollup_buttons == [("Download rollup deck", False), ("Download rollup Excel", False)]
+    assert rollup_popover(test).label == "Download rollup"
+    assert not test.exception and not test.error
+
+
+def test_the_rollup_buttons_build_their_file_when_clicked_and_write_nothing_to_output(folders):
+    data_dir, output_dir = folders
+    for kind, name in (("deck", "Rollup deck"), ("excel", "Rollup workbook")):
+        build = app.rollup_file(kind, load_config(), data_dir, output_dir)
+        assert not output_dir.exists()                  # nothing built until the click
+        assert build()[:2] == b"PK", name               # a .pptx and a .xlsx are both zip files
+    assert not output_dir.exists()
+
+
+def test_drawing_the_portfolio_never_builds_the_rollup(folders, monkeypatch):
+    # The page redraws on every click; building a deck each time would make every click slow.
+    calls = []
+    monkeypatch.setattr(app, "rollup_download", lambda *args: calls.append(args) or ("x", b""))
+    page(folders)
+    assert calls == []
+
+
+def test_the_rollup_is_off_when_data_has_no_workbook(folders):
+    for workbook in folders[0].glob("*.xlsx"):
+        workbook.unlink()
+    test = page(folders)
+    assert not test.exception
+    assert rollup_popover(test).disabled
 
 
 def test_search_narrows_the_table_and_a_missing_name_says_upload_one(folders):
@@ -231,7 +276,7 @@ def test_generate_on_a_row_builds_its_files_and_offers_the_downloads(folders):
     assert [message.value for message in test.success] == [
         f"Northwind: generated. {portfolio.AI_NOT_ASKED_NOTE}"]
     assert NOT_REVIEWED in texts(test)
-    enabled = [label for label, disabled in downloads(test) if not disabled]
+    enabled = [label for label, disabled in row_downloads(test) if not disabled]
     assert enabled == ["Download deck", "Download memo", "Download Excel"]
 
 

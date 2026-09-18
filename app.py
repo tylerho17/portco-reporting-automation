@@ -3,7 +3,8 @@
 Two pages:
 1. Portfolio: a table of every company in data/ (latest quarter, flags tripped, data gaps, last run,
    deck status), with Generate, Download deck, Download memo and Download Excel on each row; a
-   search box; Generate all with a progress bar; and an "Add a company" panel for a new workbook.
+   search box; Generate all with a progress bar; Download rollup (Task 9: rollup.py's one deck and
+   one workbook across every company, built when clicked); and an "Add a company" panel for a new workbook.
 2. Company (click a company's name): its flags with thresholds and reasons, data gaps, metrics
    table in the status colors (red = tripped, green = passed, gray = data missing / cannot
    evaluate), both charts, the AI commentary when a saved one matches these numbers, and the
@@ -49,6 +50,7 @@ from portfolio import (NO_WORKBOOK_FOUND, add_company, approve_company, confirm_
                        find_workbook, generate_all, generate_company, load_company, mapping_proposals, plain,
                        portfolio_rows, run_state, saved_commentary, search_message, search_rows, suggested_name,
                        upload_proposals)
+from rollup import rollup_download, rollup_paths
 from theme import STATUS_COLORS, streamlit_css
 
 PAGE_TITLE = "Board Pack Generator"
@@ -91,6 +93,10 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 ROW_DOWNLOADS = [("deck", "Download deck", PPTX), ("memo", "Download memo", "application/pdf"),
                  ("excel", "Download Excel", XLSX)]
+ROLLUP_DOWNLOADS = [("deck", "Download rollup deck", PPTX), ("excel", "Download rollup Excel", XLSX)]
+ROLLUP_HELP = ("One deck and one workbook across every company: ranked by flags tripped, each company's worst "
+               "flag, companies by status and a runway chart. Built from today's workbooks when you click; "
+               "no AI, and nothing is written to output/.")
 PAGE_DOWNLOADS = [("deck", "Download deck", PPTX), ("memo", "Download memo (PDF)", "application/pdf"),
                   ("memo_docx", "Download memo (Word)", DOCX), ("excel", "Download Excel", XLSX)]
 
@@ -350,6 +356,22 @@ def generate_all_button(config, ask_claude, data_dir, output_dir):
     st.rerun()
 
 
+def rollup_file(kind, config, data_dir, output_dir):
+    """The function a rollup download button calls when clicked: it builds the file then (rollup.py), not on every redraw.
+
+    A build that fails is printed in the Terminal window; the page says only that the file couldn't be made.
+    """
+    return lambda: rollup_download(kind, config, data_dir, output_dir)[1]
+
+
+def rollup_button(config, data_dir, output_dir, has_companies):
+    """Download rollup: a popover with the rollup deck and workbook (off when data/ has no workbook)."""
+    with st.popover("Download rollup", key="rollup_downloads", help=ROLLUP_HELP, disabled=not has_companies):
+        for kind, label, mime in ROLLUP_DOWNLOADS:
+            st.download_button(label, rollup_file(kind, config, data_dir, output_dir),
+                               file_name=rollup_paths()[kind].name, mime=mime, key=f"rollup_{kind}")
+
+
 def add_company_panel(config, data_dir, expanded):
     """Upload a new company's workbook; it joins the table only if clean.py can read it."""
     with st.expander("Add a company", expanded=expanded):
@@ -380,10 +402,12 @@ def portfolio_page(data_dir, output_dir):
         return
     rows = portfolio_rows(config, data_dir, output_dir)
     with st.container(key="card-portfolio"):
-        search_cell, button_cell = st.columns([3, 1], vertical_alignment="bottom")
+        search_cell, button_cell, rollup_cell = st.columns([3, 1, 1.2], vertical_alignment="bottom")
         query = search_cell.text_input("Search companies", key="search", placeholder="Company name")
         with button_cell:
             generate_all_button(config, ask_claude, data_dir, output_dir)
+        with rollup_cell:
+            rollup_button(config, data_dir, output_dir, has_companies=bool(rows))
         not_found = search_message(rows, query)
         if not_found:
             st.warning(not_found)
