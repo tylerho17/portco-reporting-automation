@@ -19,8 +19,9 @@ whether it would survive real use, then how you work.
 4. [What broke](#what-broke): Q26–Q31
 5. [Scale and risk](#scale-and-risk): Q32–Q36
 6. [Working method](#working-method): Q37–Q39
-7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q47, the follow-ups an
-   interviewer asks after the first answer (column mapping, the eval set)
+7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q54, the follow-ups an
+   interviewer asks after the first answer (column mapping, the eval set, batch resilience, cost
+   ceilings)
 8. [When you can't recall a detail](#when-you-cant-recall-a-detail)
 
 ---
@@ -746,6 +747,88 @@ none. Each planted copy must fail its rule and the clean one must pass. What sta
 the commentary is actually insightful: that's the blind 1 to 5 score. Recording the analyses needs
 one live run, about a dollar for ten companies.
 *Point to:* FINAL_REPORT.md Task 6, "How the same harness would score AI commentary offline"; README.md "Next steps".
+
+### Batch resilience
+
+**Q48. The laptop dies halfway through a 275-company batch. What state is output/ in?**
+Consistent, and that's the point. Each company is built in its own private folder under
+`output/.staging` and moved into output/ only when every step succeeded, with the manifest moved
+last. So a company has either all new files or all of last quarter's, never a new deck beside an old
+memo. If the power goes during the move itself, the manifest still describes the older files, so the
+next run sees they don't match and rebuilds that company. The next batch also clears whatever a
+killed batch left in staging. Then `--resume` skips every company whose outputs were built from
+exactly today's workbook, config.yaml and mapping, checked by hash, with every file present. The
+rerun only redoes what's missing, and those reuse the saved analysis when the numbers haven't
+changed, so they cost nothing.
+*Point to:* `resilience.make_stage`, `resilience.commit_stage`, `resilience.resume_problem`; `tests/test_batch.py::test_the_manifest_is_moved_into_the_output_folder_last`, `tests/test_batch.py::test_the_next_batch_clears_what_a_killed_batch_left_in_staging`.
+
+**Q49. Why retry only rate limits, and not every API error?**
+Because a retry only helps if the next try can go differently. A rate limit is the API saying "not
+now": wait and it clears. So it waits what the API asks for, else 5, 10, 20, then 40 seconds, never
+more than 60 at once, and gives up after four retries. Anything else, a bad request, a bad key, a
+server error, would most likely fail the same way again, and every wasted wait adds up over 275
+companies. So those go straight to the placeholder slide: the deck is still built from the computed
+numbers, the batch says "OK (AI failed)", and the reason is saved in the analysis JSON. The retry
+for a failed validation is a different thing: once, with the list of problems, because Claude can
+fix a specific mistake it's told about.
+*Point to:* `resilience.RateLimitRetry`, `resilience.rate_limit_wait`; `tests/test_batch.py::test_other_api_errors_are_not_retried`, `tests/test_batch.py::test_rate_limits_that_never_clear_give_the_placeholder_not_a_failed_company`.
+
+**Q50. What does --timeout actually do? Can it stop a hung API call?**
+No, and I'd say so. Python can't safely stop a running step from outside. What `--timeout` does is
+stop waiting: after that many seconds the batch gives up on the company, records it as timed out, and
+starts the next one. The company's own thread notices at its next step and stops, and because it was
+working in its private folder, nothing it built reaches output/: last quarter's files stay. But a
+call already in flight carries on until it returns, up to the SDK's own 10-minute limit, and what it
+cost still counts toward `--max-cost`. One planted bug survives the tests here ("a company that
+finishes after its timeout moves its files in"), because a second guard throws its folder away first.
+Two guards for one case, so no test can show either one alone doing the work.
+*Point to:* README.md "Known limitations"; `tests/test_batch.py::test_a_company_that_wakes_after_its_timeout_while_the_batch_runs_on_lands_nothing`.
+
+**Q51. How many workers would you run?**
+I don't know yet, and I'd say that rather than guess. Workers help because the time is almost all
+waiting for Claude: about 70 seconds a company, so 5 hours one at a time for 275, and about 1.5 hours
+with four if the account allows it. The limit is the account's rate limit, and `--workers` has never
+run against the real API. The plan: start with 2 on a real quarter, read the rate-limit waits each
+company records, and step up until the waits start. The code is ready for it: the spend meter is
+shared safely between companies, each company prints its lines together, and charts are drawn without
+pyplot so two workers can draw at once. A test proves three workers really run three companies at the
+same time, with a fake client that counts calls in flight.
+*Point to:* `resilience.SpendMeter`; `tests/test_batch.py::test_three_workers_run_three_companies_at_the_same_time`; README.md "Cost".
+
+### Cost ceilings
+
+**Q52. How does --max-cost work? Can the batch spend more than the ceiling?**
+It can, by a bounded amount, and that's deliberate. Every AI call's cost is worked out from its tokens
+at the published price and added to a spend meter. Before each company starts, the batch checks it: at
+or past the ceiling, that company is marked STOPPED, with the spend and the ceiling in its manifest,
+the summary and the batch manifest, and the exit code is 1 because not everything was built. It checks
+before a company starts, not halfway through, because stopping a company mid-run would waste what it
+already spent and leave nothing to show for it. So the overshoot is at most what the companies already
+running spend: about 9 cents each, double with a retry. Failed attempts count, because Claude charged
+for them. A company skipped by `--resume` is never stopped: it costs nothing.
+*Point to:* `main.start_or_settle`, `main.stopped_result`; `tests/test_batch.py::test_a_spend_exactly_at_the_ceiling_stops_the_batch`, `tests/test_batch.py::test_failed_validation_counts_toward_the_spend`.
+
+**Q53. Apart from the ceiling, what keeps the AI bill down?**
+Four things, and none of them lowers quality. Reuse: if the facts Claude would see are exactly the same
+as a saved analysis, the saved one is used for free, after passing the same checks again. "Exactly"
+means the whole payload, not just the company and quarter, so an edited workbook never gets an old
+analysis. `--resume` skips companies that are already up to date. Only one retry for a failed answer:
+if the second fails too, that points to a prompt problem that more retries would just pay for. And
+`--skip-ai` builds every deck with no API call at all. What I didn't do is switch to the cheaper
+model: Haiku cost about a third as much per run but scored 2.0 against Sonnet's 4.0 blind, and a false
+claim on a board slide costs far more than the few cents saved.
+*Point to:* `main.reusable_analysis`; `tests/test_batch.py::test_a_resume_rebuild_reuses_a_saved_analysis_of_the_same_numbers`; README.md "Cost".
+
+**Q54. Where do your cost figures come from? Are they estimates?**
+They're measured. Every run's manifest records the model, the prompt version and the input and output
+tokens, a retry included. Cost is tokens times the published price, $2 in and $10 out per million for
+Sonnet, typed into `compare_models.PRICES` with the date it was checked. The batch adds the companies
+up, prints "AI spend this run", and saves the total in `output/batch_manifest.json`; the summary CSV
+has each company's cost. The README's $0.09 a company and $25 a quarter for 275 come from a real live
+run of all three companies, and the table says which one. The caveat I'd give: the price is typed in
+with a date, so if Anthropic changes it, someone has to update that line, and three companies is a
+small sample for an average.
+*Point to:* `main.ai_cost`, `compare_models.PRICES`, `compare_models.PRICES_AS_OF`; README.md "Cost".
 
 ---
 
