@@ -6,7 +6,8 @@ otherwise with "AI commentary unavailable"), open both saved files, and check:
 2. Every number in the memo (Word body and PDF body) appears in the saved
    output/<company>_metrics.xlsx, as Excel displays it: Metrics sheet cells and quarter labels,
    Flags sheet names and thresholds, the combo rule's wording, the runway-at-budget line, and the
-   Flags sheet's rows counted by status ("6 of 9 flags tripped"). The footer is checked on its own (7).
+   Flags sheet's rows counted by status ("6 of 9 flags tripped"). The footer is checked on its own (7),
+   and the What changed since the last run section (last run's values) by check_diff.py.
 3. Key metrics table: each row's latest and prior cells equal that metric's Excel cells; each
    flag's threshold and status equal the Flags sheet; every flag has a row.
 4. The flag count matches the company's story (check_companies.py); every tripped flag is listed;
@@ -22,14 +23,18 @@ Plus, in a temporary folder:
   accept but the metrics workbook doesn't show (Northwind's ending cash), both give
   "AI commentary unavailable" while every computed number still appears.
 - The number check is proven by planting a number in a copy of a saved memo: the check must fail.
+- A memo with a What changed since the last run section (Northwind's Q1 2026 run, then today's)
+  passes, and that section is shown to hold numbers today's workbook doesn't (so leaving it out is needed).
 
 Expected words are typed out here, not imported from memo.py, so a wrong constant there can't
 pass its own check. No API calls.
 Run: python check_memo.py  -> prints "All checks passed" or stops at the first failure.
 """
 
+import contextlib
 import copy
 import datetime
+import io
 import json
 import re
 import tempfile
@@ -44,7 +49,7 @@ from check_companies import COMPANIES
 from check_deck import allowed_numbers, excel_display, expected_flag_count, number_tokens, read_metrics_workbook
 from excel_output import save_metrics_workbook
 from mapping import mapping_sha256
-from memo import save_memo
+from memo import memo_paths, save_memo
 from metrics import COMBO_FLAG_NAME, CONFIG_PATH, TRIP, load_config
 from provenance import approval_status, file_sha256, git_commit, manifest_path, read_manifest
 
@@ -55,6 +60,8 @@ AI_LINE = "AI-drafted from computed metrics - review before use"
 RUNWAY_CONTEXT_ROW = "Runway at next quarter's budgeted burn"
 FLAG_STATUSES = ("Tripped", "Passed", "Cannot evaluate")
 EM_DASH = chr(0x2014)   # the em dash, by its Unicode number
+CHANGES_HEADING = "What changed since the last run"   # Task 10: its numbers are checked by check_diff.py
+KEY_METRICS_HEADING = "Key metrics"
 
 
 # ---------------------------------------------------------------------------
@@ -229,12 +236,25 @@ def check_same_text_and_no_em_dash(paragraphs, tables, pages, name):
 # One company
 # ---------------------------------------------------------------------------
 
+def without_changes(text):
+    """The text less the What changed section (Task 10), which holds last run's values and each move's size.
+
+    Those numbers are in no metrics workbook built today; check_diff.py checks the section line by
+    line against each company's answer key instead. Everything else must still be in the workbook.
+    """
+    if CHANGES_HEADING not in text:
+        return text
+    before, after = text.split(CHANGES_HEADING, 1)
+    return before + " " + after.split(KEY_METRICS_HEADING, 1)[1]
+
+
 def memo_numbers_check(docx_path, pdf_path, footer, allowed, name):
     """Check 2: every number in the Word body and the PDF body (footers left out) is in the metrics workbook."""
     paragraphs, tables = docx_body(docx_path)
     cells = [cell for table in tables for row in table for cell in row]
-    count = check_numbers(paragraphs + cells, allowed, f"{name} Word file")
-    check_numbers([without_footer(page, footer) for page in pdf_pages(pdf_path)], allowed, f"{name} PDF")
+    count = check_numbers([without_changes("\n".join(paragraphs))] + cells, allowed, f"{name} Word file")
+    pdf_body = " ".join(without_footer(page, footer) for page in pdf_pages(pdf_path))
+    check_numbers([without_changes(pdf_body)], allowed, f"{name} PDF")
     return count
 
 
@@ -328,6 +348,30 @@ def check_number_check_catches_a_planted_number(memo, config, folder):
     raise AssertionError("The number check didn't catch a number planted in the memo")
 
 
+def check_a_memo_with_changes(config, folder):
+    """A memo with a What changed section (Task 10) passes the number check, which leaves only that section out.
+
+    Northwind's Q1 2026 workbook is run, then today's, so the memo compares the two. Its section
+    holds last quarter's values and each move's size: numbers today's workbook doesn't show (proven
+    here, so the exception is needed), checked line by line by check_diff.py instead.
+    """
+    from check_diff import last_quarter_workbook   # here, not at the top: check_diff imports main.py
+    from main import run_company
+    workbook, output_dir = Path(COMPANIES[0]["answer_key"].OUTPUT_PATH), Path(folder) / "changes"
+    for path in (last_quarter_workbook(COMPANIES[0]["answer_key"], folder), workbook):
+        with contextlib.redirect_stdout(io.StringIO()):
+            run_company(path, config, True, output_dir=output_dir)
+    docx_path, pdf_path = memo_paths(workbook, output_dir)
+    _, _, allowed = workbook_allowed(output_dir / f"{workbook.stem}_metrics.xlsx")
+    paragraphs, _ = docx_body(docx_path)
+    assert CHANGES_HEADING in paragraphs, "the memo has no What changed section to check"
+    section = "\n".join(paragraphs).split(CHANGES_HEADING, 1)[1].split(KEY_METRICS_HEADING, 1)[0]
+    outside = sentence_tokens(section) - allowed
+    assert outside, "every number in the What changed section is in the workbook: the exception isn't needed"
+    memo_numbers_check(docx_path, pdf_path, expected_footer(workbook, output_dir, None), allowed, "Northwind")
+    return sorted(outside)
+
+
 def main():
     config = load_config()
     memos = [check_company(company, config, PROJECT_DIR / "output") for company in COMPANIES]
@@ -335,6 +379,9 @@ def main():
         check_bad_analyses_are_unavailable(config, folder)
         caught = check_number_check_catches_a_planted_number(memos[0], config, folder)
         print(f"✓ The number check fails on a memo with a planted number: {caught}")
+        outside = check_a_memo_with_changes(config, folder)
+        print(f"✓ A memo with What changed since the last run passes; that section alone holds numbers the "
+              f"workbook doesn't show (checked by check_diff.py): {', '.join(outside[:4])}...")
     print("All checks passed")
 
 
