@@ -8,17 +8,17 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 
 ## Before you record
 
-1. **Put the AI text back on the decks (no API call):** `python build_deck.py data/northwind.xlsx`. It's needed if `check_main.py` has run since, because that script leaves "AI summary unavailable" decks behind. Open slide 1 and check you see the headline, not the placeholder.
+1. **Put the AI text back on the decks (no API call):** `python build_deck.py data/northwind.xlsx`. It's needed if `check_main.py` has run since, because that script leaves "AI summary unavailable" decks behind. Open slide 4 and check you see the headline, not the placeholder.
 2. **Choose how to show the run** (0:35):
    - **Option A (free, no risk; recommended for now):** don't run the AI again. Show the terminal output of today's real live run of `python main.py --all`, saved in `output/day_logs/task4_live_run.txt` (e.g. open it in the VS Code terminal with `cat`). The narration doesn't say "live", so it's accurate either way.
    - **Option B (live, about $0.05 and 35 s for one company):** run `python main.py data/northwind.xlsx` on camera and trim the wait in Loom.
-   - **Why A for now:** today's Northwind answer only just fits slide 1. One extra word per win or risk, and the build stops and the company shows as FAILED (DAY_REPORT.md, Review, finding 1). A live run could hit that on camera. Use B once that's fixed.
+   - **Why A for now:** today's Northwind risks only just fit slide 4 (at the 12 pt floor). A slightly longer answer gets one retry and then the "AI summary unavailable" placeholder (DAY_REPORT.md, Review, finding 1; POLISH_REPORT.md, Task 2). A live run could hit that on camera.
 3. **Open these windows in this order:**
    1. `data/northwind.xlsx` in Excel, on the KPI Tracker tab
    2. VS Code with `CLAUDE.md` open and the Claude Code panel beside it
    3. a terminal in the project folder, with the final line of `python -m pytest -q` already showing
    4. `output/northwind_board_pack.pptx` in PowerPoint, on slide 1
-4. **Don't show Alderpeak's or Fernhollow's slide 1:** Claude's text there has claims that passed validation but are misleading (LEARNINGS.md, Task 4 live run). The walk-through uses Northwind only.
+4. **Don't show Alderpeak's or Fernhollow's slide 4:** Claude's text there has claims that passed validation but are misleading (LEARNINGS.md, Task 4 live run). The walk-through uses Northwind only.
 
 ---
 
@@ -48,25 +48,25 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 **Say:**
 > "One command runs the batch. Same code, three stories: healthy Alderpeak trips 0 of 9 flags, distressed Fernhollow 7, and Northwind 6."
 
-**Show, 0:45 – 0:55:** slide 1, Summary.
-
-**Say:**
-> "Slide one: Claude's headline, wins and risks, and the flag count, which Python computed."
-
-**Show, 0:55 – 1:05:** slide 2, Key metrics. Point at NRR 97.1%, runway 11.0 mo, then "data missing" in the Q1 2026 column of the ARR growth YoY row (it compares with the blank Q1 2025).
+**Show, 0:45 – 0:57:** slide 1, Key metrics. Point at NRR 97.1%, runway 11.0 mo, then "data missing" in the Q1 2026 column of the ARR growth YoY row (it compares with the blank Q1 2025).
 
 **Say:**
 > "Every number here is from Python. NRR is 97.1%, below 100%, and runway is 11 months against a 12-month floor. Where a number needs the blank quarter, it says data missing. It never guesses."
 
-**Show, 1:05 – 1:12:** slide 3, the charts. Point at the gap at Q1 2025.
+**Show, 0:57 – 1:04:** slide 2, the charts. Point at the gap at Q1 2025.
 
 **Say:**
 > "The blank quarter stays a visible gap in the charts."
 
-**Show, 1:12 – 1:20:** slide 4 (tripped flags on the left, the Combo rule under them, Data gaps on the right), then slide 5.
+**Show, 1:04 – 1:12:** slide 3 ("6 of 9 flags tripped" at the top left, the Combo rule under the flags, Data gaps on the right).
 
 **Say:**
-> "Risks lists each tripped flag against its threshold, plus a combo rule: NRR falling while pipeline rises points to retention, not sales. Then questions for management."
+> "Each tripped flag against its threshold, plus a combo rule: NRR falling while pipeline rises points to retention, not sales."
+
+**Show, 1:12 – 1:20:** slide 4, AI commentary. Point at the gray line under the title.
+
+**Say:**
+> "Only the last slide is Claude's: a headline, risks and questions for management, marked AI-drafted for review."
 
 ## 1:20 – 1:45 Design choices (~60 words)
 
@@ -90,8 +90,8 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 |---|---|---|
 | 275 portfolio companies | The demo's premise (README cost section) | — |
 | 0 of 9, 7 of 9, 6 of 9 flags | Summary table from `main.py` | `metrics.evaluate_flags` |
-| NRR 97.1%, below 100% | Slide 2, NRR row; threshold from `config.yaml` (`nrr_min`) | `metrics.nrr` |
-| Runway 11 months vs 12-month floor | Slide 2, Runway row; `config.yaml` (`runway_min_months`) | `metrics.runway_months` |
+| NRR 97.1%, below 100% | Slide 1, NRR row; threshold from `config.yaml` (`nrr_min`) | `metrics.nrr` |
+| Runway 11 months vs 12-month floor | Slide 1, Runway row; `config.yaml` (`runway_min_months`) | `metrics.runway_months` |
 | Q1 2025 blank | Northwind's blank quarter | `make_data.py` (`BLANK_QUARTER`) |
 | Over 400 tests | `python -m pytest -q` (415 today) | — |
 | Haiku scored 2 of 5 | README model comparison (needed 4.0) | `compare_models.py` |

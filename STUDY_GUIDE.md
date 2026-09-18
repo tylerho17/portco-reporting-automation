@@ -45,7 +45,7 @@ It matches the code as of 2026-09-17 (branch `day-step4`, Task 6). **Every build
 
 ### The one-sentence version
 
-A messy Excel file from a portfolio company goes in. Python tidies it, calculates the KPIs, checks them against investor thresholds and lists what's missing. Then it writes an Excel summary, asks Claude to word the commentary (checking that Claude didn't invent or calculate any number), and builds a 5-slide PowerPoint deck.
+A messy Excel file from a portfolio company goes in. Python tidies it, calculates the KPIs, checks them against investor thresholds and lists what's missing. Then it writes an Excel summary, asks Claude to word the commentary (checking that Claude didn't invent or calculate any number), and builds a 4-slide PowerPoint deck.
 
 ### The finance analogy
 
@@ -371,7 +371,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `box_for(placeholder_type, cover)` | Which box a placeholder goes to: title, subtitle, body or footer (None = leave it). | The cover slide's title sits lower than a content slide's. |
 | `position_placeholders(shapes, cover)` | Moves every placeholder on a master or layout to its 16:9 position. | |
 | `set_placeholder_style(placeholder, size_pt, hex_color, bold)` | Gives one placeholder its own text style. | Used for the white cover title. |
-| `style_cover_layout(layout)` | Title Slide: navy background, white title, hides the master's bar and footer rule. | The 5-slide deck doesn't use it; it's there for a cover page. |
+| `style_cover_layout(layout)` | Title Slide: navy background, white title, hides the master's bar and footer rule. | The 4-slide deck doesn't use it; it's there for a cover page. |
 | `add_master_shape(master, name, box, textbox)` | Adds a rectangle or text box to the slide master, behind everything, by writing its XML. | python-pptx can only add shapes to slides, not to a master. |
 | `fill_solid(shape, hex_color)` | Solid fill, no outline. | |
 | `add_brand_name(master)` | "Example Capital", navy, bold, 12 pt, bottom right. | |
@@ -394,7 +394,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 | Function / class | What it does, in plain English | Example / why it exists |
 |---|---|---|
-| `TextDoesNotFitError` (class) | The error raised when text doesn't fit even at 12 pt. Its message names the slide and box. | "Slide 4, Risks and flags: text doesn't fit even at the 12 pt minimum: '...'" |
+| `TextDoesNotFitError` (class) | The error raised when text doesn't fit even at 12 pt. Its message names the slide and box. | "Slide 3, Risks and flags: text doesn't fit even at the 12 pt minimum: '...'" |
 | `measuring_font(bold)` | Loads DejaVu Sans (regular or bold) once and remembers it (`lru_cache`). | Loading a font file for every word would be slow. |
 | `text_width_pt(text, size_pt, bold)` | How wide a piece of text is, in points. | Width at 100 pt × size / 100: width grows in step with size. |
 | `count_lines(text, width_pt, size_pt, bold)` | How many lines the text wraps to in a box that wide. A single word wider than the box is split across lines. | |
@@ -407,7 +407,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 ---
 
-### `charts.py`: the two charts on slide 3
+### `charts.py`: the two charts on slide 2
 
 **What it's for:** draws the ARR chart and the cash chart with matplotlib and saves them as PNG images. **It does no math**: values arrive computed, and every label goes through `metrics.format_value`.
 
@@ -726,7 +726,7 @@ Run with `python -m pytest -q` (415 tests, about 15 seconds). Expected values ar
 | `test_make_template.py` (8) | `placeholder_types(layout)`, `theme(presentation)`. | 16:9, exactly the 2 layouts, no slides, title/body/footer placeholders inside the slide in the right order, navy/gray theme and Arial, the saved file opens again. |
 | `test_text_fit.py` (12) | none | Wider text measures wider (bold wider still), wrapping, a word wider than the box, height, shrinking all sizes together, never below 12 pt, failing loudly with the box's name, table fitting. |
 | `test_charts.py` (5) | `texts(axis)`, `bar_positions(axis)`. | No bar for a blank quarter and "data missing" written there; latest values labelled; the cash line keeps the NaN (so it breaks); runway text in the title and zero on the axis; figure drawn at slide size. |
-| `test_build_deck.py` (27) | `flag(...)`, `three_quarters(blank)`, `deck_data(company, blank)`: a tiny 3-quarter company. `summary_dict()`, `write_analysis(...)`, `payload`: analysis files. `build(tmp_path, summary)`, `shape`, `all_text`, `status_fills`, `run_sizes`: build and read a deck. | Flag count and threshold wording; data gaps grouped by quarter; **every way `load_analysis` must reject a file** (missing, not JSON, failed, wrong shape, other quarter, other company, a number not in today's data, 2 questions); 5 slides in order; placeholder vs AI text; footer on every slide; status colors; "data missing" in the table; slide 4 contents; matching column font sizes; 2 chart pictures; text too long fails loudly; **no digit typed in any text in build_deck.py or charts.py**. |
+| `test_build_deck.py` (27) | `flag(...)`, `three_quarters(blank)`, `deck_data(company, blank)`: a tiny 3-quarter company. `summary_dict()`, `write_analysis(...)`, `payload`: analysis files. `build(tmp_path, summary)`, `shape`, `all_text`, `status_fills`, `run_sizes`: build and read a deck. | Flag count and threshold wording; data gaps grouped by quarter; **every way `load_analysis` must reject a file** (missing, not JSON, failed, wrong shape, other quarter, other company, a number not in today's data, 2 questions); 4 slides in order; placeholder vs AI text on slide 4, the AI-drafted line, no wins on the deck; footer on every slide; status colors; "data missing" in the table; slide 3 contents and flag count; matching column font sizes; 2 chart pictures; text too long fails loudly; **no digit typed in any text in build_deck.py or charts.py**. |
 | `test_main.py` (14) | `ok(...)`, `failed(...)`: result dicts. `FakeClient`: stands in for the Anthropic client, returns a fixed answer (or raises) and counts calls. `no_real_client`: runs before every test and makes creating a real client fail the test. `summary`, `run_northwind`, `headline_on_deck`, `saved_analysis`. | The CSV, both warnings and the result texts; a passing answer lands on the deck (1 call); an answer with an invented number is called exactly twice, then the placeholder and "OK (AI failed)"; an API error is "OK (AI failed)", not FAILED; a bug in the AI step fails the company and leaves no old analysis; `--skip-ai` never calls Claude or looks for a key; a missing key stops the run before any company. |
 | `test_docs.py` (7) | `python_files_named(text)`, `study_guide_tables()`, `defined_in(files, name)`. | README keeps the model comparison markers, and rewriting that block leaves the rest alone; every `.py` file named in README, CLAUDE.md, this guide and LOOM_SCRIPT.md exists; **every function in this guide's tables exists** in the file its heading names. |
 
@@ -758,7 +758,7 @@ Short answers you can say out loud in 30–60 seconds. **"Point to"** says where
 ### The project
 
 **Q1. Walk me through the project in one minute.**
-A messy portfolio-company KPI workbook goes in; a board pack comes out. `clean.py` reads the messy Excel: odd headers, "$14.3M" typed as text, a blank quarter. It produces a standard table in $K. `metrics.py` calculates NRR, GRR, burn multiple, runway, Rule of 40, CAC payback and budget variances, then checks 9 flags against thresholds in `config.yaml` and lists any data gaps. `excel_output.py` writes a highlighted Excel summary, and `analyze.py` has Claude write the headline, wins, risks and questions for management. Code then checks that Claude used only numbers from the data. `build_deck.py` puts it all on a 5-slide deck: summary, key metrics table, ARR and cash charts, risks and flags with data gaps, and questions. `main.py` runs it all for one company or a whole folder, and still builds the deck if the AI step fails.
+A messy portfolio-company KPI workbook goes in; a board pack comes out. `clean.py` reads the messy Excel: odd headers, "$14.3M" typed as text, a blank quarter. It produces a standard table in $K. `metrics.py` calculates NRR, GRR, burn multiple, runway, Rule of 40, CAC payback and budget variances, then checks 9 flags against thresholds in `config.yaml` and lists any data gaps. `excel_output.py` writes a highlighted Excel summary, and `analyze.py` has Claude write the headline, wins, risks and questions for management. Code then checks that Claude used only numbers from the data. `build_deck.py` puts it all on a 4-slide deck: key metrics table, ARR and cash charts, risks and flags with data gaps, and the AI commentary (headline, risks and questions, marked as AI-drafted). `main.py` runs it all for one company or a whole folder, and still builds the deck if the AI step fails.
 *Point to:* section 2 of this guide.
 
 **Q2. Why would a PE fund want this?**
@@ -877,7 +877,7 @@ Before scoring, the prediction was that the most polished-sounding answer would 
 Four layers:
 1. The fake data's answer key is checked to tie out: ARR and cash roll forward.
 2. The `check_*.py` scripts run the real workbooks end to end and compare with hand formulas typed like Excel (`3900 / (1850 + 580 - 260 - 510)`), written independently of the code.
-3. 415 pytest unit tests check each function, including every edge case, with the hand math in comments. `check_deck.py` also opens each saved deck and checks every number on slide 2 against the metrics workbook.
+3. 415 pytest unit tests check each function, including every edge case, with the hand math in comments. `check_deck.py` also opens each saved deck and checks every number on slide 1 against the metrics workbook.
 4. The tests were tested: the code was broken on purpose (in throwaway copies) to confirm the tests notice. 35 of 36 breaks were caught in Task 4 (the missed one can't change any result) and 18 of 18 in Task 5.
 
 *Point to:* `check_companies.py`, `tests/`, OVERNIGHT_REPORT "What failed".
@@ -898,23 +898,23 @@ Every build step is done, so next is making it safer and easier to run at scale:
 ### The deck
 
 **Q26. Why does the deck check Claude's analysis again, when it already passed validation?**
-Because the deck may be built later than the analysis, from a workbook that has changed, or from a file someone edited. `load_analysis` accepts the saved JSON only if it's for the same company and latest quarter, has the right shape, and `validate_summary` still passes against a payload **rebuilt from today's workbook**. So every number in Claude's text is still in today's data. If any check fails, slides 1 and 5 say "AI summary unavailable" and the terminal prints why. `check_deck.py` proves it by changing "11.0 mo" to "11.5 mo" in a copy, and by labelling a copy for the previous quarter: both get the placeholder.
+Because the deck may be built later than the analysis, from a workbook that has changed, or from a file someone edited. `load_analysis` accepts the saved JSON only if it's for the same company and latest quarter, has the right shape, and `validate_summary` still passes against a payload **rebuilt from today's workbook**. So every number in Claude's text is still in today's data. If any check fails, slide 4 says "AI summary unavailable" and the terminal prints why. `check_deck.py` proves it by changing "11.0 mo" to "11.5 mo" in a copy, and by labelling a copy for the previous quarter: both get the placeholder.
 *Point to:* `build_deck.load_analysis`; `check_deck.check_bad_analysis_gets_placeholder`.
 
 **Q27. What happens to the deck if the AI step fails? Why build it at all?**
-The deck is still built. Every number on it comes from Python, so the metrics table, charts, flags and data gaps are valid whatever Claude did. Only slides 1 and 5 change: they say "AI summary unavailable", with a note that the other numbers are unaffected. The batch result reads `OK (AI failed)`, a warning names the company, and the reason is saved in its analysis JSON. "AI failed" means only two things: the answer failed validation twice, or the API call itself failed. Any other error is treated as a bug and fails the company, so a coding mistake can't hide behind "AI failed". A missing API key stops the run before any company starts.
+The deck is still built. Every number on it comes from Python, so the metrics table, charts, flags and data gaps are valid whatever Claude did. Only slide 4 changes: it says "AI summary unavailable", with a note that the other numbers are unaffected. The batch result reads `OK (AI failed)`, a warning names the company, and the reason is saved in its analysis JSON. "AI failed" means only two things: the answer failed validation twice, or the API call itself failed. Any other error is treated as a bug and fails the company, so a coding mistake can't hide behind "AI failed". A missing API key stops the run before any company starts.
 *Point to:* `main.ai_step`, `main.ai_status`; `tests/test_main.py` (fake client).
 
 **Q28. How do you make sure text doesn't run off a slide, when PowerPoint doesn't tell Python how big text is?**
-`text_fit.py` estimates it. It measures each word's width with a real font file (DejaVu Sans, slightly wider than Arial, so it errs toward "needs more room"), wraps words into lines, and adds up line heights. If the text is too tall, every font size in the box drops by 1 pt together until it fits. If it doesn't fit at 12 pt, the build stops with the slide and box named, because a board deck with text off the page is worse than no deck. PowerPoint's own autofit is switched off, so the saved sizes are what's shown. `check_deck.py` re-measures the saved file, and was itself proven by breaking a deck on purpose. **The honest limit:** it's an estimate, not PowerPoint's own layout, and slide 1 has almost no spare room for Claude's text today (DAY_REPORT Review, finding 1).
+`text_fit.py` estimates it. It measures each word's width with a real font file (DejaVu Sans, slightly wider than Arial, so it errs toward "needs more room"), wraps words into lines, and adds up line heights. If the text is too tall, every font size in the box drops by 1 pt together until it fits. If it doesn't fit at 12 pt, the build stops with the slide and box named, because a board deck with text off the page is worse than no deck. PowerPoint's own autofit is switched off, so the saved sizes are what's shown. `check_deck.py` re-measures the saved file, and was itself proven by breaking a deck on purpose. **The honest limit:** it's an estimate, not PowerPoint's own layout, and slide 4's Risks column has little spare room for Claude's text today: Northwind's and Fernhollow's risks fit only at the 12 pt floor (DAY_REPORT Review, finding 1; POLISH_REPORT Task 2).
 *Point to:* `text_fit.shrink_to_fit`, `check_deck.check_no_overflow`.
 
 **Q29. How does the deck show a quarter the company never sent?**
-It never fills it in. On slide 2, a value that needs the blank quarter says "data missing" (Northwind's Q1 2026 ARR growth YoY compares with the blank Q1 2025), which is different from "n/a (no prior period)". On slide 3, the ARR chart draws no bar for Q1 2025 and writes "data missing" there. The cash line keeps the blank as NaN, so matplotlib breaks the line instead of drawing a straight join that would invent the numbers in between. On slide 4, a Data gaps column lists every affected metric and flag, grouped by the quarters they miss. `check_deck.py` checks there's no bar, the line breaks, and every "data missing" metric in the Excel file appears on slide 4.
+It never fills it in. On slide 1, a value that needs the blank quarter says "data missing" (Northwind's Q1 2026 ARR growth YoY compares with the blank Q1 2025), which is different from "n/a (no prior period)". On slide 2, the ARR chart draws no bar for Q1 2025 and writes "data missing" there. The cash line keeps the blank as NaN, so matplotlib breaks the line instead of drawing a straight join that would invent the numbers in between. On slide 3, a Data gaps column lists every affected metric and flag, grouped by the quarters they miss. `check_deck.py` checks there's no bar, the line breaks, and every "data missing" metric in the Excel file appears on slide 3.
 *Point to:* `charts.bar_panel`, `charts.cash_chart`, `build_deck.gaps_lines`.
 
 **Q30. How do you know no number on the deck was typed in by hand or mis-formatted?**
-Two ways. First, a unit test reads the source code of `build_deck.py` and `charts.py` and fails if any piece of text in them (docstrings aside) contains a digit, so even "of 9" or "12 months" can't be typed in. Every number comes from metrics.py, config.yaml or the validated analysis, formatted by `metrics.format_value`. Second, `check_deck.py` opens the saved deck, collects every number on slide 2, and checks each one appears in the saved metrics workbook **as Excel displays it**, using Excel's own number formats rather than the deck's formatting code. It also checks each row's cells, thresholds, statuses and colors. Breaking a cell on purpose (a wrong number, a right number in the wrong column, a wrong status) was caught each time.
+Two ways. First, a unit test reads the source code of `build_deck.py` and `charts.py` and fails if any piece of text in them (docstrings aside) contains a digit, so even "of 9" or "12 months" can't be typed in. Every number comes from metrics.py, config.yaml or the validated analysis, formatted by `metrics.format_value`. Second, `check_deck.py` opens the saved deck, collects every number on slide 1, and checks each one appears in the saved metrics workbook **as Excel displays it**, using Excel's own number formats rather than the deck's formatting code. It also checks each row's cells, thresholds, statuses and colors. Breaking a cell on purpose (a wrong number, a right number in the wrong column, a wrong status) was caught each time.
 *Point to:* `tests/test_build_deck.py::test_no_digit_in_any_text_written_in_the_code`, `check_deck.check_kpi_numbers`, `check_deck.check_kpi_rows`.
 
 ---

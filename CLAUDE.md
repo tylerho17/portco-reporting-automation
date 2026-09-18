@@ -1,7 +1,7 @@
 # Board Pack Generator
 
 ## Goal
-Messy portfolio-company KPI workbook (.xlsx) → 5-slide board update deck (.pptx) + AI summary.
+Messy portfolio-company KPI workbook (.xlsx) → 4-slide board update deck (.pptx) + AI summary.
 Demo project for a PE AI automation role. Must be clean, explainable, and reliable.
 
 ## About me
@@ -23,8 +23,8 @@ Demo project for a PE AI automation role. Must be clean, explainable, and reliab
 - compare_models.py      step 3b: blind Sonnet vs Haiku comparison -> README table
 - excel_output.py        step 4b: output/<company>_metrics.xlsx (Metrics, Flags, Data gaps sheets)
 - make_template.py       builds templates/base.pptx: fictional "Example Capital" brand, navy/gray, 16:9, title + content layouts
-- build_deck.py          step 4: output/<company>_board_pack.pptx on templates/base.pptx; slides: Summary, Key metrics, ARR and cash charts, Risks and flags, Questions. Re-checks the analysis JSON; "AI summary unavailable" if missing, failed, or too long for slides 1 and 5 (ai_text_problems) - a company is never left without a deck. Footer carries the git commit and model; every slide is watermarked "DRAFT - NOT REVIEWED" until approve.py records a reviewer
-- charts.py              the two matplotlib charts for slide 3 (ARR + net new ARR, ending cash with runway); a blank quarter is a visible gap
+- build_deck.py          step 4: output/<company>_board_pack.pptx on templates/base.pptx; slides: Key metrics, ARR and cash charts, Risks and flags, AI commentary (headline + 3 risks + 3 questions under "AI-drafted from computed metrics - review before use"; wins aren't shown). Re-checks the analysis JSON; "AI summary unavailable" if missing, failed, or too long for slide 4 (ai_text_problems) - a company is never left without a deck. Footer carries the git commit and model; every slide is watermarked "DRAFT - NOT REVIEWED" until approve.py records a reviewer
+- charts.py              the two matplotlib charts for slide 2 (ARR + net new ARR, ending cash with runway); a blank quarter is a visible gap
 - text_fit.py            measures slide text, shrinks it to a 12 pt floor, then stops naming the slide and box
 - provenance.py          run manifests: input/config SHA-256 hashes, git commit, model + prompt version, tokens, cost; and whether a human approved this deck (approval_status is the only judge)
 - approve.py             `python approve.py northwind [--reviewer NAME]`: records reviewer + time in the manifest, so rebuilding drops the DRAFT watermark. Never builds a deck
@@ -124,7 +124,7 @@ The three companies together prove flags aren't hard-coded.
 6. README with before/after screenshots
 
 ## Step 4 decisions (build_deck.py, not built yet)
-- K. If the AI summary fails after its retry, still build the deck: the numbers are valid. The Summary slide says "AI summary unavailable" and the batch result reads "OK (AI failed)".
+- K. If the AI summary fails after its retry, still build the deck: the numbers are valid. The AI commentary slide says "AI summary unavailable" and the batch result reads "OK (AI failed)".
 - L. `--skip-ai` builds the deck without AI text, using the same "AI summary unavailable" slide.
 
 ## Added build steps
