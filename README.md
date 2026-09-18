@@ -369,19 +369,19 @@ From the latest live `python main.py --all` run with claude-sonnet-5, after the 
 
 ## Screenshots
 
-Placeholders: capture each one and replace the line with the image. Before capturing decks, run `python build_deck.py data/<company>.xlsx` so the slides show the saved AI text rather than the placeholder (no API call).
+Placeholders: capture each one and replace the line with the image. Before capturing, run `python demo_reset.py`, then `python rollup.py` and `python export.py --all`: every file is rebuilt from the saved AI analyses (no API call). Northwind and Alderpeak show the saved AI text; Fernhollow shows "AI summary unavailable" until one paid run makes a new analysis. FINAL_REPORT.md (Task D) lists every capture with its file.
 
 **Before: the messy input**
 - 📸 **`data/northwind.xlsx`, KPI tab:** show the inconsistent headers (e.g. " Churned ARR ", "Cash - End of Qtr"), a number typed as text like "$14.3M", the blank Q1 2025 row, and the "Q3 2026 (Budget)" row at the bottom.
 
 **The run**
-- 📸 **Terminal, `python main.py --all`:** the ✓ lines for Northwind and the summary table (a saved copy of the live run is in `output/day_logs/task4_live_run.txt`).
+- 📸 **Terminal, `python main.py --all`:** the ✓ lines for Northwind and the summary table.
 
 **After: the Northwind deck** (`output/northwind_board_pack.pptx`)
 - 📸 **Slide 1, Key metrics:** the table with red, green and gray status cells.
 - 📸 **Slide 2, ARR and cash:** the charts, with the Q1 2025 "data missing" gap visible.
 - 📸 **Slide 3, Risks and flags:** "6 of 9 flags tripped", tripped flags vs thresholds, the combo rule, and the Data gaps line.
-- 📸 **Slide 4, AI commentary:** "AI-drafted from computed metrics - review before use", the headline, 3 risks and 3 questions for management. Include the footer: Northwind is approved, so it ends "AI-drafted | reviewed by ...".
+- 📸 **Slide 4, AI commentary:** "AI-drafted from computed metrics - review before use", the headline, 3 risks and 3 questions for management. Include the footer: after a reset it ends "AI-drafted | not reviewed"; to show "reviewed by ...", run `python approve.py northwind --reviewer NAME`, then `python build_deck.py data/northwind.xlsx`.
 
 **The web page** (`run_app.command`, or `streamlit run app.py`)
 - 📸 **Portfolio:** the three companies' rows with their flags, data gaps, last run and deck status under the navy header row, the one navy Generate all button, and each row's Generate and Download buttons.
