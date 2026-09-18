@@ -85,7 +85,8 @@ def test_every_declared_control_and_chart_mark_passes_3_to_1(mark, background, w
 
 def test_the_declared_pairs_name_only_palette_colors():
     palette = {theme.NAVY, theme.NAVY_DARK, theme.SLATE, theme.MID_GRAY, theme.LINE, theme.SURFACE, theme.WHITE,
-               theme.RED, theme.RED_FILL, theme.GREEN, theme.GREEN_FILL, theme.GRAY_FILL}
+               theme.RED, theme.RED_FILL, theme.GREEN, theme.GREEN_FILL, theme.GRAY_FILL,
+               theme.AMBER}   # Task 19: the charts' shrinking-quarter color
     for first, second, where in theme.TEXT_PAIRS + theme.NON_TEXT_PAIRS:
         assert {first, second} <= palette, where
 

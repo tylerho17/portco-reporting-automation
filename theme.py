@@ -4,7 +4,7 @@ No other file types a color. The brand is the fictional "Example Capital" (navy 
 red and green mean a flag's status and nothing else, so no button is ever red or green.
 
 - Palette: navy, navy dark, slate, mid gray, line, surface, white; red and green each with a light fill,
-  and a gray fill, for tripped / passed / cannot evaluate.
+  and a gray fill, for tripped / passed / cannot evaluate; amber, for a chart's shrinking quarter only.
 - The Excel workbook keeps Excel's own "Bad" / "Good" fills (EXCEL_STATUS_COLORS), as before.
 - Font: Arial, else Helvetica, else DejaVu Sans (it ships with matplotlib, so it is always there).
 - Sizes (pt on slides, px on the web page): title 28, section 20, body 15, caption 13, table 14,
@@ -36,6 +36,7 @@ WHITE = "FFFFFF"        # cards, table rows, secondary buttons
 RED, RED_FILL = "C0392B", "FDE8E6"        # tripped
 GREEN, GREEN_FILL = "1A7742", "EAF6EF"    # passed (was 1E8449: 4.25 : 1 on its fill, under AA's 4.5)
 GRAY_FILL = "EDF0F3"                      # cannot evaluate / data missing
+AMBER = "D97706"        # charts only: a quarter where ARR shrank (always hatched too; not a flag color)
 
 # Status -> (fill, text): the deck, the memo and the web page.
 STATUS_COLORS = {
@@ -86,6 +87,15 @@ NON_TEXT_PAIRS = [
     (NAVY, SURFACE, "web: Streamlit's checkbox tick and progress bar"),
     (NAVY, WHITE, "charts: bars and the ARR line"),
     (RED, WHITE, "charts: a tripped flag's bar"),
+    (AMBER, WHITE, "charts: a quarter where ARR shrank"),
+]
+
+# (color, color, where): two series drawn side by side in one chart. They must differ in lightness by
+# 3 : 1 (the same ratio as a mark on its background), so they stay apart in grayscale and so for every
+# kind of color blindness: lightness survives where hue doesn't. The runway chart's red vs navy
+# (2.8 : 1) isn't here: a tripped bar is told apart by its hatching and the word "tripped" instead.
+SERIES_PAIRS = [
+    (NAVY, AMBER, "charts: ARR grew (navy) / ARR shrank (amber, hatched)"),
 ]
 
 

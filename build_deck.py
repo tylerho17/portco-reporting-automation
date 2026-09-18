@@ -570,14 +570,28 @@ def kpi_slide(slide, deck):
 # 6. Slide 2: Charts
 # ---------------------------------------------------------------------------
 
+def chart_width_emu(area_width):
+    """Each chart's width: half the content area, less half the gap between the two."""
+    return (area_width - COLUMN_GAP) // 2
+
+
+def chart_size_inches(area=None):
+    """(width, height) of each chart in inches: drawn at slide size, so 12 pt stays 12 pt.
+
+    tests/test_chart_layout.py draws the charts at this size too.
+    """
+    _, _, width, height = area or content_area()
+    return (Emu(chart_width_emu(width)).inches, Emu(height).inches)
+
+
 def charts_slide(slide, deck):
     """ARR (with net new ARR) on the left, ending cash (with runway) on the right."""
     data = deck["data"]
     quarters = list(data["metrics"].index)
     set_title(slide, f"ARR and cash, {quarters[0]} to {quarters[-1]}", deck)
     left, top, width, height = deck["area"]
-    chart_width = (width - COLUMN_GAP) // 2
-    size_inches = (Emu(chart_width).inches, Emu(height).inches)  # drawn at slide size: 12 pt stays 12 pt
+    chart_width = chart_width_emu(width)
+    size_inches = chart_size_inches(deck["area"])
 
     stem = Path(data["source_name"]).stem
     charts = [

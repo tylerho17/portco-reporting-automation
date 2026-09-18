@@ -575,19 +575,34 @@ page shows them in a red box instead of the portfolio.
 
 **Two choices worth explaining:**
 - **Two panels, not two y-axes.** Net new ARR is small next to ARR and can go negative, so it gets its own panel and zero line. A chart with two y-axes lets the reader compare heights that aren't comparable.
-- **A blank quarter stays visible.** Bars: no bar, and "data missing" written where it would be. Line: the NaN stays in the data, so matplotlib stops the line at the gap instead of joining across it (joining would draw numbers that don't exist).
+- **A blank quarter stays visible.** Bars: no bar, and "data missing" written where it would be (turned on its side when there are so many quarters that it wouldn't fit across). Line: the NaN stays in the data, so matplotlib stops the line at the gap instead of joining across it (joining would draw numbers that don't exist).
+- **One axis style for both charts (Task 19).** Every $K axis has whole-$K ticks, 3 to 6 of them, zero among them, and starts and ends on a labelled gridline; every quarter axis gives each quarter the same slot. If the quarter labels would touch, every second one is hidden (the latest always stays). The latest value is written just right of the latest bar or point, the one place nothing else is drawn.
+- **A shrinking quarter doesn't rely on color (Task 19).** A net new ARR bar below zero is amber AND hatched, and a small legend says "ARR shrank". Amber and navy differ in lightness by 4.8 : 1, so they stay apart in grayscale, which is what matters for color blindness (it changes hue, not lightness). The rollup's tripped runway bars are red and hatched too.
 
-**Constants worth knowing:** `FONT_SIZE = 13` (theme.py's caption size), `DPI = 200`, `HEADROOM = 1.2` (cash axis top = 1.2 × highest cash), `GAP_LABEL` ("data missing", from metrics.py). Colors come from `theme.py` (navy bars and line, slate text, mid gray axes and "data missing"); the font is the first of Arial, Helvetica, DejaVu Sans installed, set once for every chart through matplotlib's `rcParams`.
+**Constants worth knowing:** `FONT_SIZE = 13` (theme.py's caption size), `DPI = 200`, `Y_TICK_GAPS = 5` and `Y_MIN_TICKS = 3` (3 to 6 labels on a $K axis), `Y_MARGIN = 0.05` (5% of room past the data), `HATCH = "///"`, `SHRANK_LABEL` ("ARR shrank"), `GAP_LABEL` ("data missing", from metrics.py). Colors come from `theme.py` (navy bars and line, amber for a shrinking quarter, slate text, mid gray axes and "data missing"); the font is the first of Arial, Helvetica, DejaVu Sans installed, set once for every chart through matplotlib's `rcParams`.
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
-| `style_axis(axis, quarters, money_column)` | Quiet styling: no top/right border, light grid, "Q2\n2026" labels, y-axis in $K. | |
+| `new_figure(size_inches)` | An empty figure at slide size, with its own drawing canvas. | The canvas lets `finish_layout` measure labels before saving. |
+| `quiet_axes(axis, grid_axis)` | No top/right border, mid gray left/bottom border, light grid, slate tick labels. | Used by all three charts, so they look alike. |
+| `panel_title(axis, text)` | Bold slate title at the top left. | |
+| `quarter_axis(axis, quarters)` | One slot per quarter, "Q2\n2026" labels, half a slot of room at each end. | |
+| `value_range(values)` | The lowest and highest a $K axis must show: every value and zero, plus 5%. A range under $3K is widened to $3K. | All zero would otherwise give 0.25 steps that all print as "0". |
+| `money_ticks(values)` | 3 to 6 whole-$K round numbers covering `value_range`. | Northwind's ARR: 0, 10,000, 20,000, 30,000. |
+| `money_axis(axis, values, column)` | Sets those ticks, makes them the axis limits, formats them with `format_value`. | "27,470" on the axis reads like "27,470" on slide 1. |
 | `label_gaps(axis, values)` | Writes "data missing" at every blank quarter. | |
-| `label_latest(axis, values, column, below)` | Writes the latest value next to its bar or point (below a negative bar). | Only the latest value is labelled, so the chart stays readable. |
-| `bar_panel(axis, quarters, values, column)` | Bars for every quarter that has a value, a zero line, the title and labels. | |
+| `label_latest(axis, values, column, x_offset)` | Writes the latest value just right of the latest bar or point. | Only the latest value is labelled, so the chart stays readable. |
+| `quarter_slot_px(axis)` | The width of one quarter's slot, in pixels. | |
+| `labels_fit(boxes, step)` | True if showing every `step`-th quarter label (counted back from the latest) leaves no two touching. | |
+| `thin_quarter_labels(axis, renderer)` | Hides every second (third...) quarter label until the rest fit. The latest stays. | 16 quarters at slide width. |
+| `turn_narrow_gap_labels(axis, renderer)` | Turns "data missing" on its side when it's wider than its quarter's slot. | Two blank quarters in a row at 16 quarters. |
+| `title_fits(axis, renderer)`, `wrap_title(axis, renderer)` | Breaks a title that runs off the figure onto more lines. | "At next quarter's budgeted burn: ∞ (budget not burning)". |
+| `finish_layout(figure)` | Lays the figure out once, then runs the three fixes above. | |
+| `shrank_legend(axis)` | A one-entry legend above the panel: the amber, hatched box = "ARR shrank". | Only drawn when a quarter shrank. |
+| `bar_panel(axis, quarters, values, column)` | Bars for every quarter that has a value (amber and hatched below zero), a zero line, the title and labels. | |
 | `arr_chart(quarters, ending_arr, net_new_arr, size_inches)` | Figure with two panels: ending ARR (taller) above net new ARR. | |
 | `cash_chart(quarters, ending_cash, runway_text, size_inches)` | Ending cash as a line, zero kept on the axis, runway at current and at budgeted burn in the title. | Cash running out means reaching zero, so the axis always shows zero. |
-| `runway_chart(companies, runways, texts, tripped, threshold, threshold_text, size_inches)` | The rollup's chart: one horizontal bar per company, first company on top, red and labelled "tripped" where the runway flag trips, navy otherwise, and a dashed line at the threshold. An infinite or missing runway gets no bar, only its words. | Built for `rollup.py`. The word "tripped" is there so the status never depends on seeing red. |
+| `runway_chart(companies, runways, texts, tripped, threshold, threshold_text, size_inches)` | The rollup's chart: one horizontal bar per company, first company on top, red, hatched and labelled "tripped" where the runway flag trips, navy otherwise, and a dashed line at the threshold. An infinite or missing runway gets no bar, only its words. | Built for `rollup.py`. The word "tripped" is there so the status never depends on seeing red. |
 | `save_chart(figure, path)` | Saves the PNG at its own size. | Drawn at the size it has on the slide, so 12 pt in the chart is 12 pt on screen. Since Task 7 the figures are made with matplotlib's `Figure()`, not `pyplot`: pyplot keeps one shared list of open figures, which isn't safe when several companies draw at once (`main.py --workers`). |
 
 ---
