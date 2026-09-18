@@ -2387,3 +2387,88 @@ Every pair, after the fix:
   the quick start once seen.
 - **The README screenshots** are still placeholders; they need someone at the screen.
 - **LOOM_SCRIPT.md and INTERVIEW_PREP.md** weren't in this task's list and weren't changed.
+
+## Task B: interview prep for the final run (INTERVIEW_PREP.md)
+
+### What I built
+
+- **A new section, "Deep dives on the final run" (Q40 to Q72),** between Working method and the
+  honest-recall section. INTERVIEW_PREP.md already had one first answer per topic (Q34b to Q35), so
+  these are the second questions an interviewer asks after it: "why not just...?", "what if...?",
+  "what can't it do?". 33 questions, each written to be 30 to 60 seconds spoken, in plain English,
+  each ending with a *Point to:* line naming the file, function or test to open:
+  - **Column mapping (Q40 to Q43):** why a 99% proposal still needs a person, how a header is scored
+    (name, then values, then strongest pair first), why heuristics before Claude and how a model call
+    would stay safe, what stops a saved mapping going wrong (and the file-name weakness).
+  - **The eval set (Q44 to Q47):** why an eval as well as unit tests, how the answer keys stay
+    independent of the code, the revenue YoY bug it missed at first, and the design (not built) for
+    scoring the AI commentary offline.
+  - **Batch resilience (Q48 to Q51):** the state of output/ after a crash, why only rate limits are
+    retried, what `--timeout` can't do, and why the worker count is still unmeasured.
+  - **Cost ceilings (Q52 to Q54):** how `--max-cost` can overshoot and by how much, what else keeps the
+    bill down (reuse, resume, one retry, not switching to Haiku), and where the cost figures come from.
+  - **Golden files (Q55 to Q57):** why a golden doesn't freeze bugs on its own, why text dumps, what the
+    goldens don't cover.
+  - **The approval gate (Q58 to Q60):** what it can't prove (that anyone read the deck), why a changed
+    threshold voids an approval, and when the memo is covered.
+  - **The run diff (Q61 to Q63):** why two move sizes, what it can't tell you (one run of history, only
+    the latest quarter's metrics, so a restatement isn't listed), how it was tested without a real
+    quarter.
+  - **The rollup (Q64 to Q65):** why no AI text, and what happens to a broken workbook or a tie.
+  - **Exports (Q66 to Q68):** how a tool knows which inputs an export reflects, why the email has no AI
+    text (and hasn't been pasted into real Outlook), why exports are on demand.
+  - **What breaks at 275 (Q69 to Q72):** six of my own design choices that would hurt first, how you'd
+    know next morning that a batch went right, triaging 20 failed workbooks, and why review time scales
+    worse than cost.
+- **"When you can't recall a detail", expanded:** the three kinds of detail you can lose (a number, a
+  name, a mechanism) and the honest answer for each; four situations the deep dives make likely
+  (something designed but not built, planted-bug counts, a decision Claude Code made and flagged, scale
+  that hasn't been measured); four sentences to adapt; and a second "numbers worth knowing" table for the
+  deep dives, each row with where to check it.
+- **Kept current:** the Contents list, a pointer from Q35 to the new 275 follow-ups, and the test count
+  (it said "over 500"; Q32 and the table now say 1,384, "over 1,300" out loud).
+- **Every fact checked against the code or the reports** before it went in: the waits and cap in
+  resilience.py, where `--max-cost` is checked (`main.start_or_settle`), the prices in compare_models.py,
+  what `approve.approve` refuses, `memo.memo_approval`, the diff defaults, the export JSON's fields
+  (`export.export_record`), the rollup's limits. Every `module.function` and test named is real:
+  tests/test_docs.py checks each one.
+
+### Checks (no API calls)
+
+- `python -m pytest -q`: 1384 passed. tests/test_docs.py (file names, function and test names, section
+  order, no em dash) ran after each piece before its commit.
+- Rebuilt from the saved analysis JSONs: `build_deck.py` and `memo.py` for all three companies; each
+  manifest says `ai_text: true` for deck and memo.
+- `python golden.py`: 9 of 9 match. `python check_deck.py`, `python check_memo.py`: all checks passed.
+- config.yaml untouched. Six commits for the pieces, each pushed.
+
+### What failed and how I fixed it (logged in LEARNINGS.md)
+
+1. **tests/test_docs.py failed on an example file name.** Q69's first draft said a company might send
+   "Acme Q3 KPIs.xlsx"; the test reads anything ending in .xlsx as a project file and found none.
+   Reworded without the extension, before the commit.
+
+### Decisions you didn't specify
+
+1. **Follow-ups, not repeats.** The ten topics already had a first answer (Q34 to Q35). Rewriting those
+   would have lost answers you may have practised, so the new questions are the ones that come after,
+   and the old answers are unchanged except for the test count and a pointer.
+2. **One new section after Working method,** numbered on from Q39, rather than new questions squeezed in
+   as Q34r and on. The first pass through the file still follows the order an interviewer asks in; the
+   deep dives are for when they dig in. The test on section order still passes.
+3. **Several answers admit a limit on purpose** (Q50 timeout, Q51 workers, Q58 approval, Q62 diff, Q67
+   Outlook, Q69 six weak spots). An interviewer for this role will probe for what breaks; naming it first
+   is stronger than being caught.
+4. **Q72's "10 minutes a deck" is labelled an assumption** in the answer itself, not a finding, following
+   the section's own rule about unmeasured numbers.
+5. **No rehearsal timing.** "30 to 60 seconds" is judged by length (about 90 to 150 words each, like the
+   existing answers), not by reading them aloud.
+
+### Unresolved
+
+- **Nobody has said these answers out loud.** A few (Q41, Q48, Q52) are at the long end; if one runs
+  over a minute when you practise it, cut its last sentence first: it's usually the proof, which can wait
+  for "how do you know?".
+- **LOOM_SCRIPT.md and STUDY_GUIDE.md section 5** don't point to the new questions. STUDY_GUIDE's
+  interview questions are the older list INTERVIEW_PREP.md was built from; worth a line there saying the
+  deep dives live in INTERVIEW_PREP.md.
