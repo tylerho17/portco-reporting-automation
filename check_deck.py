@@ -21,6 +21,13 @@ otherwise with the placeholder), open the saved file, and check:
    "AI-drafted | not reviewed"), measured to fit one line. No DRAFT watermark by default.
 Plus: a tampered analysis (one number changed) or a stale one (another quarter) gets the placeholder;
 --draft stamps every slide of an unreviewed deck and never an approved one.
+8. --appendix (built in a temporary folder; the default decks above have no appendix): one more slide,
+   "Appendix: every metric, Q3 2024 to Q2 2026", whose table has every metric of the Metrics sheet
+   for all 8 quarters. Each cell is what Excel shows in the same cell, with the longer reason words
+   as their short marks (n/a, n/m, ∞). A cell is gray exactly where Excel's is gray (data missing),
+   red and bold exactly where Excel's is red (flag tripped). The key explains every mark and color on
+   the slide and nothing else. Footer, 12 pt floor and overflow as on every slide. This check is
+   itself proven by breaking an appendix on purpose (a wrong cell, a lost color, a lost key entry).
 
 No API calls. Run: python check_deck.py  -> prints "All checks passed" or stops at the first failure.
 """
@@ -36,6 +43,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 from pptx import Presentation
+from pptx.dml.color import RGBColor
 from pptx.util import Emu
 
 from build_deck import FICTIONAL_NOTE, PLACEHOLDER_TEXT, analysis_path, save_deck
@@ -48,7 +56,7 @@ from mapping import mapping_sha256
 from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, CONFIG_PATH, PASS, TRIP, compute_metrics, load_config
 from provenance import NOT_REVIEWED, approval_status, file_sha256, manifest_path, read_manifest
 from text_fit import MIN_FONT_PT, paragraph, text_height_pt, text_width_pt
-from theme import STATUS_COLORS
+from theme import EXCEL_STATUS_COLORS, STATUS_COLORS
 
 PROJECT_DIR = Path(__file__).parent
 LATEST, PRIOR, FIRST = "Q2 2026", "Q1 2026", "Q3 2024"
@@ -59,6 +67,12 @@ PICTURE = 13         # MSO_SHAPE_TYPE.PICTURE
 # the Excel workbook keeps Excel's own). tests/test_theme.py types these values by hand.
 STATUS_FILLS = {"Tripped": STATUS_COLORS[TRIP][0], "Passed": STATUS_COLORS[PASS][0],
                 "Cannot evaluate": STATUS_COLORS[CANNOT_EVALUATE][0]}
+
+# The appendix's short marks, typed from the Task 20 decisions: Excel's words start with the mark.
+APPENDIX_MARKS = ("n/a", "n/m", "∞")
+KEY_ENTRIES = {"n/a": "n/a = no prior period", "n/m": "n/m = not meaningful"}
+EXCEL_RED = EXCEL_STATUS_COLORS[TRIP][0]              # the metrics workbook's fill for a tripped cell
+EXCEL_GRAY = EXCEL_STATUS_COLORS[CANNOT_EVALUATE][0]  # and for a data-missing one
 
 # Excel number format -> the same display written as a Python format (what Excel shows in the cell).
 EXCEL_FORMATS = {"0.0%": "{:.1%}", '0.00"x"': "{:.2f}x", '0.0" mo"': "{:.1f} mo", "#,##0": "{:,.0f}"}
@@ -103,6 +117,24 @@ def read_metrics_workbook(path):
     return table, flags
 
 
+def read_metric_fills(path):
+    """{(quarter, label): "red", "gray" or None} from the Metrics sheet's cell fills.
+
+    Red is Excel's "Bad" fill (a tripped flag), gray its data-missing fill. check_excel_output.py
+    proves which cells get them. Any other fill stops the check: it would mean something new.
+    """
+    sheet = load_workbook(path)["Metrics"]
+    labels = [cell.value for cell in sheet[1]]
+    names = {None: None, EXCEL_RED: "red", EXCEL_GRAY: "gray"}
+    fills = {}
+    for row in sheet.iter_rows(min_row=2):
+        for label, cell in zip(labels[1:], row[1:]):
+            color = str(cell.fill.fgColor.rgb)[-6:] if cell.fill.fill_type else None
+            assert color in names, f"{path.name}: {cell.coordinate} has an unexpected fill {color}"
+            fills[(row[0].value, label)] = names[color]
+    return fills
+
+
 def allowed_numbers(table, flags):
     """Every number shown anywhere in the metrics workbook: metric cells, quarter labels, flag thresholds."""
     texts = [text for text in table.values() if text] + [quarter for quarter, _ in table]
@@ -133,10 +165,15 @@ def table_rows(slide):
 # Checks
 # ---------------------------------------------------------------------------
 
+def expected_titles(company):
+    """The 4 slide titles, typed by hand."""
+    return [f"{company}: key metrics, {LATEST} vs {PRIOR}", f"ARR and cash, {FIRST} to {LATEST}",
+            f"Risks and flags, {LATEST}", f"AI commentary, {LATEST}"]
+
+
 def check_titles(slides, company):
-    expected = [f"{company}: key metrics, {LATEST} vs {PRIOR}", f"ARR and cash, {FIRST} to {LATEST}",
-                f"Risks and flags, {LATEST}", f"AI commentary, {LATEST}"]
-    assert len(slides) == 4, f"{company}: {len(slides)} slides, expected 4"
+    expected = expected_titles(company)
+    assert len(slides) == 4, f"{company}: {len(slides)} slides, expected 4 (no appendix by default)"
     titles = [slide.shapes.title.text for slide in slides]
     assert titles == expected, f"{company}: titles\nExpected: {expected}\nGot:      {titles}"
 
@@ -348,6 +385,140 @@ def check_overflow_check_catches_overflow(path):
 
 
 # ---------------------------------------------------------------------------
+# The appendix slide (--appendix)
+# ---------------------------------------------------------------------------
+
+def short_mark(shown):
+    """An appendix cell for what Excel shows: "n/a (no prior period)" -> "n/a", "∞ (ARR shrank)" -> "∞"."""
+    return next((mark for mark in APPENDIX_MARKS if shown.startswith(mark)), shown)
+
+
+def appendix_expected(table):
+    """(quarters, [(label, [cell text per quarter]), ...]) from the Metrics sheet, in its order."""
+    quarters = list(dict.fromkeys(quarter for quarter, _ in table))
+    labels = list(dict.fromkeys(label for _, label in table))
+    return quarters, [(label, [short_mark(table[(quarter, label)]) for quarter in quarters]) for label in labels]
+
+
+def expected_key_entries(expected_rows, fills):
+    """How each entry the key must have starts: one per short mark and color on the slide."""
+    shown = {text for _, cells in expected_rows for text in cells}
+    entries = [words for mark, words in KEY_ENTRIES.items() if mark in shown]
+    entries += [f"∞ in {label} = " for label, cells in expected_rows if "∞" in cells]
+    if "gray" in fills.values():
+        entries.append("gray = data missing")
+    if "red" in fills.values():
+        entries.append("red, bold = flag tripped")
+    return entries
+
+
+def check_appendix_cell(cell, fill_name, where):
+    """One cell: gray or red exactly where Excel's cell is; bold only when red (tripped)."""
+    fill = str(cell.fill.fore_color.rgb)
+    expected = {"red": STATUS_FILLS["Tripped"], "gray": STATUS_FILLS["Cannot evaluate"]}.get(fill_name)
+    if expected:
+        assert fill == expected, f"{where} is {fill}, expected {expected} as in the metrics workbook"
+    else:
+        assert fill not in STATUS_FILLS.values(), f"{where} is colored {fill}; the metrics workbook's cell isn't"
+    bold = bool(cell.text_frame.paragraphs[0].runs[0].font.bold)
+    assert bold == (fill_name == "red"), f"{where}: bold should mark a tripped cell and only a tripped cell"
+
+
+def check_appendix_cells(slide, table, fills, name):
+    """The table: Excel's cells as short marks, gray and red exactly where Excel's are. Returns the rows checked."""
+    quarters, expected_rows = appendix_expected(table)
+    grid = shape(slide, "Appendix table").table
+    rows = [[cell.text for cell in row.cells] for row in grid.rows]
+    assert rows[0] == ["Metric"] + quarters, f"{name}: appendix header {rows[0]}"
+    assert [row[0] for row in rows[1:]] == [label for label, _ in expected_rows], f"{name}: appendix metric rows"
+    for row_number, (label, cells) in enumerate(expected_rows, start=1):
+        assert rows[row_number][1:] == cells, f"{name}: appendix {label!r} shows {rows[row_number][1:]}, Excel {cells}"
+        for column, quarter in enumerate(quarters, start=1):
+            check_appendix_cell(grid.cell(row_number, column), fills[(quarter, label)],
+                                f"{name}: appendix {label}, {quarter}")
+    return expected_rows
+
+
+def check_appendix_slide(presentation, table, fills, name):
+    """The appendix slide: title, cells, colors and key. Returns (metrics, quarters) checked."""
+    slides = list(presentation.slides)
+    assert len(slides) == 5, f"{name}: {len(slides)} slides with --appendix, expected 5"
+    title = f"Appendix: every metric, {FIRST} to {LATEST}"
+    assert slides[4].shapes.title.text == title, f"{name}: appendix title {slides[4].shapes.title.text!r}"
+    expected_rows = check_appendix_cells(slides[4], table, fills, name)
+    key = shape(slides[4], "Appendix key").text_frame.text
+    expected = expected_key_entries(expected_rows, fills)
+    entries = key.removeprefix("Key: ").split("; ")
+    assert key.startswith("Key: ") and len(entries) == len(expected), f"{name}: key {key!r}, expected {expected}"
+    for words in expected:
+        assert any(entry.startswith(words) for entry in entries), f"{name}: the key lacks {words!r}: {key!r}"
+    return len(expected_rows), len(expected_rows[0][1])
+
+
+def check_appendix(config, folder):
+    """Each company built with --appendix in a temporary folder: the 4 slides as before, then the appendix.
+
+    Returns the last deck and its metrics workbook, for the deliberate-break proof.
+    """
+    folder = Path(folder)
+    for company in COMPANIES:
+        name, workbook = company["name"], Path(company["answer_key"].OUTPUT_PATH)
+        deck, _ = save_deck(workbook, config, None, output_dir=folder, appendix=True)
+        metrics_file = save_metrics_workbook(workbook, config, folder)
+        table, _ = read_metrics_workbook(metrics_file)
+        presentation = Presentation(deck)
+        slides = presentation.slides
+        assert [slide.shapes.title.text for slide in list(slides)[:4]] == expected_titles(name), f"{name}: titles"
+        metrics, quarters = check_appendix_slide(presentation, table, read_metric_fills(metrics_file), name)
+        check_footers(slides, workbook.name, name, expected_review(workbook, folder))
+        assert watermark_count(slides) == 0, f"{name}: a DRAFT watermark without --draft"
+        check_no_overflow(presentation, name)
+        print(f"✓ {name} with --appendix: 5 slides; {metrics} metrics x {quarters} quarters match the metrics "
+              f"workbook's cells, gray and red, and the key; nothing overflows")
+    return deck, metrics_file
+
+
+def fails(check):
+    """True if the check fails (AssertionError) on what it is given."""
+    try:
+        check()
+    except AssertionError:
+        return True
+    return False
+
+
+def wrong_number(slide):
+    shape(slide, "Appendix table").table.cell(1, 8).text_frame.paragraphs[0].runs[0].text = "1"
+
+
+def lost_color(slide):
+    """The first colored cell goes back to white."""
+    grid = shape(slide, "Appendix table").table
+    colored = next(cell for row in grid.rows for cell in row.cells if str(cell.fill.fore_color.rgb) in STATUS_FILLS.values())
+    colored.fill.fore_color.rgb = RGBColor.from_string("FFFFFF")
+
+
+def lost_key_entry(slide):
+    run = shape(slide, "Appendix key").text_frame.paragraphs[0].runs[0]
+    run.text = run.text.rsplit("; ", 1)[0]
+
+
+def overflowing_cell(slide):
+    shape(slide, "Appendix table").table.cell(1, 1).text_frame.paragraphs[0].runs[0].text = "data missing " * 6
+
+
+def check_appendix_check_catches_mistakes(deck, metrics_file):
+    """Break a saved appendix on purpose, four ways; the appendix or overflow check must fail every time."""
+    table, fills = read_metrics_workbook(metrics_file)[0], read_metric_fills(metrics_file)
+    for break_slide in (wrong_number, lost_color, lost_key_entry, overflowing_cell):
+        presentation = Presentation(deck)
+        break_slide(presentation.slides[4])
+        caught = (fails(lambda: check_appendix_slide(presentation, table, fills, "broken appendix"))
+                  or fails(lambda: check_no_overflow(presentation, "broken appendix")))
+        assert caught, f"The appendix checks didn't catch an appendix broken on purpose ({break_slide.__name__})"
+
+
+# ---------------------------------------------------------------------------
 # One company, and the tampered analyses
 # ---------------------------------------------------------------------------
 
@@ -441,6 +612,10 @@ def main():
         check_bad_analysis_gets_placeholder(config, folder)
     with tempfile.TemporaryDirectory() as folder:
         check_draft_option(config, folder)
+    with tempfile.TemporaryDirectory() as folder:
+        check_appendix_check_catches_mistakes(*check_appendix(config, folder))
+        print("✓ The appendix checks fail on an appendix broken on purpose (a wrong number, a lost color, "
+              "a lost key entry, an overflowing cell)")
     print("All checks passed")
 
 
