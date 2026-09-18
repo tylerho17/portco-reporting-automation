@@ -12,6 +12,9 @@ A header that is neither a standard column nor in HEADER_ALIASES is looked up in
 confirmed mapping (mappings/<company>.yaml, written by mapping.py once a person confirmed it). If it
 isn't there either, the script stops with mapping.py's proposal for it (UnconfirmedMappingError).
 
+The result is cached (cache.py, Task 17) by the hash of the workbook and of its mapping file, so
+the deck, memo and Excel steps of one run don't read the same file again.
+
 Run directly to print the clean table:  python clean.py data/northwind.xlsx
 """
 
@@ -25,6 +28,9 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
+
+from cache import ResultCache
+from provenance import file_sha256
 
 # ---------------------------------------------------------------------------
 # Standard column names (from CLAUDE.md)
@@ -449,6 +455,9 @@ def clean_sheet(sheet, header_row, confirmed=None):
     return actuals, next_budget
 
 
+_CLEANED = ResultCache()   # {(workbook hash, mapping file hash): (actuals, next_budget)}
+
+
 def clean_workbook(path, mappings_dir=None):
     """Read a messy KPI workbook and return (actuals, next_budget).
 
@@ -456,10 +465,24 @@ def clean_workbook(path, mappings_dir=None):
     "Sheet 'KPI Tracker', cell F7 (Q2 2025, revenue): Can't read 'n/a' as a number ..."
     Headers are also matched against the company's confirmed mapping (mappings/<company>.yaml; a
     test passes its own mappings_dir). An unknown header stops with mapping.py's proposal for it.
+    The same workbook with the same mapping is read once: later calls get a copy of the first answer.
     """
     import mapping   # here, not at the top of the file: mapping.py imports this file
 
-    check_is_workbook(path)
+    check_is_workbook(path)   # first, so a missing file stops in plain words, not in the hashing
+    key = (file_sha256(path), mapping.mapping_sha256(path, mappings_dir))
+    return _CLEANED.get(key, lambda: read_workbook(path, mappings_dir))
+
+
+def clear_cache():
+    """Forget every cleaned workbook (benchmark.py and the tests start from nothing)."""
+    _CLEANED.clear()
+
+
+def read_workbook(path, mappings_dir=None):
+    """clean_workbook's work, without the cache: open the workbook, find the KPI tab and clean it."""
+    import mapping
+
     sheet_name, sheet, header_row = find_kpi_sheet(path)
     try:
         confirmed = mapping.confirmed_aliases(path, mappings_dir)

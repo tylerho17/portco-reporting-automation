@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from cache import ResultCache
 from clean import clean_workbook
 from config_schema import check_config, read_config
 
@@ -274,7 +275,33 @@ def input_reason(actuals, metric, position):
     return None
 
 
+_METRICS = ResultCache()   # {table_key(actuals): metrics}
+_REASONS = ResultCache()   # {table_key(actuals, metrics): reasons}
+
+
+def table_key(*tables):
+    """A key that changes whenever any number, label, column or type in the tables changes (for the caches).
+
+    pandas hashes each row's values and its quarter label; the column names, index names and
+    types are added as they are, so two tables share a key only if they hold the same things.
+    """
+    return tuple((tuple(table.columns), table.index.name, tuple(table.index), tuple(map(str, table.dtypes)),
+                  pd.util.hash_pandas_object(table, index=True).to_numpy().tobytes())
+                 for table in tables)
+
+
+def clear_cache():
+    """Forget every cached metric and reason table (benchmark.py and the tests start from nothing)."""
+    _METRICS.clear()
+    _REASONS.clear()
+
+
 def compute_metrics(actuals):
+    """metrics_table(actuals), worked out once per set of numbers (cache.py, Task 17). Returns a copy."""
+    return _METRICS.get(table_key(actuals), lambda: metrics_table(actuals))
+
+
+def metrics_table(actuals):
     """Build one table: a row per quarter, a column per metric.
 
     Two safety rules on top of the formulas:
@@ -313,6 +340,11 @@ def compute_metrics(actuals):
 
 
 def metric_reasons(actuals, metrics):
+    """reasons_table(actuals, metrics), worked out once per pair of tables (cache.py, Task 17). Returns a copy."""
+    return _REASONS.get(table_key(actuals, metrics), lambda: reasons_table(actuals, metrics))
+
+
+def reasons_table(actuals, metrics):
     """A table shaped like `metrics`: for each value, why there is no number (a reason), or None."""
     reasons = {}
     for metric in metrics.columns:
