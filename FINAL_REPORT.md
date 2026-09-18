@@ -262,3 +262,119 @@ what failed and how it was fixed, and anything unresolved.
   same files. It's a local tool, so I didn't add locking.
 - **The live output/ manifests** were not changed by this task (no page button was clicked on the
   real folders), so Task 1's note about check_main.py's "skipped" AI records still stands.
+
+---
+
+## Task 3: styling (theme.py, the template, deck, charts, memo and web page)
+
+### What I built
+
+- **`theme.py`** (new) holds the only palette: navy 0B2545, navy dark 08192F, slate 334155, mid gray
+  64748B, line E2E8F0, surface F8FAFC, white; red C0392B on FDE8E6, green 1E8449 on EAF6EF, gray fill
+  EDF0F3. Also the font (Arial, then Helvetica, then DejaVu Sans), the sizes (title 28, section 20,
+  body 15, caption 13, table 14, floor 12), the brand name, and the web page's style sheet
+  (`streamlit_css`) and Streamlit settings (`streamlit_theme`). No other code file types a color;
+  a test scans every one.
+- **Excel keeps its fills:** `excel_output.STATUS_COLORS` is now `theme.EXCEL_STATUS_COLORS`, with
+  the same values as before (FFC7CE / C6EFCE / D9D9D9).
+- **`templates/base.pptx` regenerated** with `python make_template.py`: navy 28 pt titles, slate
+  15 pt body (13 pt one level down), navy top bar, footer rule in the line color, surface in the
+  theme, a 28 pt white cover title. A test fails if the committed file isn't rebuilt.
+- **Deck:** title 28, headings and the AI headline 20, lists and AI text 15, the AI-drafted line and
+  the placeholder note 13, table 14, footer 12. Navy table header, white and surface stripes, status
+  cells in the palette's red, green and gray. The text still shrinks to fit and stops at 12 pt.
+- **Charts:** Arial (else Helvetica, else DejaVu Sans) at 13 pt, navy bars and line, slate titles and
+  labels, mid gray axes and "data missing".
+- **Memo:** the palette, Arial in the Word file and embedded in the PDF (else DejaVu Sans), status
+  cells in the palette's fills. Still "Example Capital"-neutral, like the deck.
+- **Web page:** theme.py's style sheet on both pages; one column about 1100 px on the surface color;
+  each section in a white card with a 1 px border; the flags and metrics tables as HTML with a navy
+  header, white text and 40 px rows; the portfolio table with a navy header row and 40 px rows. One
+  primary (navy) button per page (Generate all; Generate on a company's page); every other button
+  white with navy text and a 1 px navy border; Approve is secondary; no button is red or green.
+  `.streamlit/config.toml` gets a `[theme]` section (navy accents, Arial, 15 px, 6 px buttons).
+- **Tests:** `tests/test_theme.py` (22, new), plus 6 in test_make_template.py, 2 in test_charts.py,
+  2 in test_build_deck.py, 2 in test_memo.py, 5 in test_app.py. **648 tests pass.**
+- **Proof the checks work:** `output/task3_mutations.py` broke the code 26 ways in temporary copies
+  (a typed color, red primary buttons, a lost border, Excel's fill replaced, deck sizes and colors
+  reverted, the chart font dropped, the old template put back, DejaVu in the PDF, no style sheet,
+  two primary buttons, unescaped table text, config.toml drifting, a wider page, shorter rows, an 11 pt
+  floor, another brand's name, Helvetica dropped from the order). **26 of 26 caught**, each by the
+  test meant to catch it.
+- **Rebuilt from saved analyses, no API call:** check_excel_output.py, check_deck.py, check_memo.py
+  and check_main.py all pass; then the three decks and memos were rebuilt from their saved analyses,
+  and all three still carry Claude's text (the bigger sizes still fit slide 4).
+- **Docs:** README (the look, theme.py, design decision 14, screenshot list), STUDY_GUIDE (new
+  theme.py section and table, every changed row, test table, counts), LOOM_SCRIPT count, 6
+  LEARNINGS rows.
+
+### Decisions you didn't specify
+
+1. **Where the new red and green go.** The Excel workbook keeps Excel's fills, as you said. The deck,
+   the memo and the web page take the palette's red, green and gray. So the web page's colors are no
+   longer the workbook's exactly (they were before); they match the deck and memo instead.
+2. **The memo keeps printed-page sizes** (title 18, body 9.5, table 8.5, footer 7). Your 28 / 20 / 15
+   scale is a screen and slide scale; on US Letter it would turn a 1 to 2 page memo into about four.
+   Colors and Arial do apply.
+3. **Which slide text gets which size:** the AI headline and every heading are "section" (20); lists
+   and the AI risks and questions are "body" (15); the AI-drafted line and the placeholder's note are
+   "caption" (13); the footer line and the brand name stay at the 12 pt floor, because the footer
+   already needs every point of width for the file name, commit, model and review status. Chart text
+   is all caption size (13). The DRAFT watermark (--draft only) stays 48 pt.
+4. **The template's cover title** went from 40 to 28 pt (title size). No deck uses the cover.
+5. **The PDF font:** Helvetica on a Mac is a `.ttc` file the PDF library can't embed safely, so the
+   memo's PDF goes Arial, then DejaVu Sans. Charts and the web page use the full order.
+6. **config.toml repeats five colors and the font.** Streamlit sets its own accents (checkbox tick,
+   progress bar, focus ring, links) only from that file; left alone they are Streamlit red. A test
+   fails if the file and theme.py ever differ, so theme.py is still the one source.
+7. **The check scripts now take their expected colors from theme.py** instead of typing them, and
+   `test_theme.py` types every value by hand, so an independent check still exists (LEARNINGS).
+8. **HTML tables on the web page.** Streamlit's own table can't make header text white, so a navy
+   header would have been dark on navy. The HTML escapes every cell's text.
+9. **A "Download" button per row** opens Download deck / memo / Excel. Four buttons plus six text
+   columns don't fit 1100 px with 10 by 18 px padding. The company page still shows all four
+   download buttons side by side.
+10. **Buttons:** hover on a secondary button is the surface color with navy dark text; a greyed-out
+    button of either kind is surface with mid gray text and a line-color border. A company's name in
+    the table is a navy text link (Streamlit's "tertiary" button).
+11. **Cards** are Streamlit containers with a `card-...` key; the style sheet finds them by that key.
+    Messages (success green, error red) keep Streamlit's own colors: they are status, not buttons.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **Helvetica fallback for the PDF:** the first test expected Helvetica when Arial is missing and got
+   DejaVu Sans (`.ttc` file). Split into `first_installed_font` (charts, page) and `font_file` (PDF).
+2. **The PDF-font test found a Helvetica** that reportlab names in an empty block on every page. The
+   test now reads only fonts that draw text.
+3. **"Only theme.py types a color" vs the check scripts' hand-typed colors.** Resolved as in
+   decision 7.
+4. **Layout:** white header text impossible in Streamlit's table (decision 8); ten columns too wide
+   (decision 9).
+5. **Small slips:** a STUDY_GUIDE row still named `charts.hex_color` (the doc test caught it); a CSS
+   test helper that matched several rules; a size test looking for slide 4's AI-drafted line on a
+   deck with no AI text; `cells[-1]` on a python-pptx row.
+6. **Refused commands:** heredocs with `{"` or too long, `for` loops, `;` chains, `streamlit config
+   show`, Quick Look to picture the deck. Worked around with the Edit tool, scripts in `output/`,
+   Python, and single commands.
+
+### Unresolved
+
+- **Nobody has looked at the restyled deck or web page as a picture.** The chart PNGs look right
+  (Arial, navy, slate). The deck passes every fit and size check, and AppTest draws both pages with no
+  error, one primary button and no em dash, but AppTest can't show layout: whether the cards, the
+  navy header row, the 40 px rows and the "Download" popover look right needs a browser. The style
+  sheet targets Streamlit's own markers (`stBaseButton-primary`, `stPopoverButton`, `st-key-...`),
+  which a future Streamlit version could rename. Worth ten minutes with `run_app.command` and
+  PowerPoint before recording the Loom.
+- **CLAUDE.md doesn't list theme.py** (I didn't edit it; the task didn't say to). Suggested line:
+  "theme.py: the one palette, font (Arial, else Helvetica, else DejaVu Sans) and type sizes; the
+  template, deck, charts, memo and web page import it; no other file types a color". Its app.py line
+  is also still Task 2's (noted there).
+- **The deck's slide titles still use an em dash** (between "key metrics" and "Q2 2026"), as before this task,
+  and so do the "Cannot evaluate" status and the "None" data gaps label shared with Excel. I didn't
+  change existing deck wording in a styling task; the memo and web page already show colons.
+- **text_fit.py still measures with DejaVu Sans**, which is wider than Arial, so text shrinks a
+  little earlier than it must. Safe, and unchanged.
+- **The manifests' AI records** say "skipped" after check_main.py (as in Task 1): the decks and memos
+  were rebuilt from the saved analyses afterwards, but the manifests' `ai` part stays "skipped" until
+  the next real run.
