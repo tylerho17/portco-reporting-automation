@@ -9,7 +9,8 @@ Two pages:
    last run (Task 10: flags that flipped, metrics that moved, new and resolved data gaps), data gaps, metrics
    table in the status colors (red = tripped, green = passed, gray = data missing / cannot
    evaluate), both charts, the AI commentary when a saved one matches these numbers, and the
-   buttons Generate, the downloads and Approve.
+   buttons Generate, the downloads, Export and Approve. Export (Task 11) holds export.py's metrics and
+   flags as CSV and JSON and the email summary, built from today's workbook when clicked.
 
 Review mapping (Task 5): a workbook with headers clean.py doesn't know shows, on its company page
 and in "Add a company", each header with mapping.py's proposed column, how sure it is, why, and the
@@ -45,6 +46,7 @@ from build_deck import AI_DRAFTED_LINE, QUESTIONS_HEADING, flag_count_text, gaps
 from charts import arr_chart, cash_chart
 from diff_runs import HEADING, NO_EARLIER_RUN, change_sections, compared_with_text
 from excel_output import status_label, tripped_cells
+from export import export_bytes, export_paths
 from main import DATA_DIR, OUTPUT_DIR, company_name
 from mapping import confidence_text
 from metrics import CANNOT_EVALUATE, METRIC_LABELS, MISSING_INPUT, TRIP, load_config
@@ -101,6 +103,13 @@ ROLLUP_HELP = ("One deck and one workbook across every company: ranked by flags 
                "no AI, and nothing is written to output/.")
 PAGE_DOWNLOADS = [("deck", "Download deck", PPTX), ("memo", "Download memo (PDF)", "application/pdf"),
                   ("memo_docx", "Download memo (Word)", DOCX), ("excel", "Download Excel", XLSX)]
+# Task 11: the company page's Export popover: (export.EXPORT_KINDS name, label, file type for the browser).
+EXPORT_DOWNLOADS = [("metrics_csv", "Metrics (CSV)", "text/csv"), ("flags_csv", "Flags (CSV)", "text/csv"),
+                    ("json", "Metrics and flags (JSON)", "application/json"),
+                    ("email", "Email summary (HTML)", "text/html")]
+EXPORT_HELP = ("Metrics and flags for other tools (CSV, JSON), and an email summary: open the HTML file in a "
+               "browser, select all, copy, and paste into Outlook. Built from today's workbook when you click; "
+               "no AI text, and nothing is written to output/.")
 
 CHART_INCHES = (6.4, 4.4)       # each chart's size on the page
 COMPANY_KEY = "company"         # st.session_state: the company page being shown, or none (the portfolio)
@@ -425,14 +434,29 @@ def portfolio_page(data_dir, output_dir):
 # Page 2: one company
 # ---------------------------------------------------------------------------
 
-def company_buttons(workbook, state, ask_claude, config, output_dir):
-    """Generate and the four downloads, side by side."""
-    cells = st.columns(1 + len(PAGE_DOWNLOADS))
+def export_file(kind, data, workbook):
+    """The function an export button calls when clicked: it builds the file then (export.py), not on every redraw."""
+    return lambda: export_bytes(kind, data, workbook)
+
+
+def export_button(workbook, data):
+    """Export: a popover with the four exports, built from today's workbook (off when it can't be read)."""
+    with st.popover("Export", key="exports", help=EXPORT_HELP, disabled=data is None):
+        for kind, label, mime in EXPORT_DOWNLOADS:
+            st.download_button(label, export_file(kind, data, workbook), file_name=export_paths(workbook)[kind].name,
+                               mime=mime, key=f"export_{kind}")
+
+
+def company_buttons(workbook, state, ask_claude, config, output_dir, data):
+    """Generate, the four downloads and Export, side by side."""
+    cells = st.columns(2 + len(PAGE_DOWNLOADS))
     with cells[0]:
         generate_button(workbook, ask_claude, config, output_dir, key="generate_page", primary=True)
     for cell, (kind, label, mime) in zip(cells[1:], PAGE_DOWNLOADS):
         with cell:
             download_button(workbook, output_dir, state["current"], kind, label, mime, key=f"{kind}_page")
+    with cells[-1]:
+        export_button(workbook, data)
 
 
 def mapping_panel(workbook, config):
@@ -538,7 +562,7 @@ def company_page(stem, data_dir, output_dir):
     ask_claude = ai_checkbox()
     show_messages()
     with st.container(key="card-buttons"):
-        company_buttons(workbook, state, ask_claude, config, output_dir)
+        company_buttons(workbook, state, ask_claude, config, output_dir, data)
     if problem:
         st.error(problem)
         mapping_panel(workbook, config)   # shown only when the problem is headers to confirm

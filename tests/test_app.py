@@ -17,6 +17,7 @@ from streamlit.testing.v1 import AppTest
 
 import analyze
 import app
+import export
 import make_data
 import mapping
 import portfolio
@@ -320,8 +321,55 @@ def test_the_company_page_shows_flags_gaps_metrics_charts_and_no_commentary_yet(
     assert len(tables(test)) == 2                                     # flags, then metrics
     assert len(test.get("image")) == 2                                 # the two charts
     assert any(info.value == app.NO_COMMENTARY for info in test.info)
-    assert [label for label, _ in downloads(test)] == [label for _, label, _ in app.PAGE_DOWNLOADS]
+    assert [label for label, _ in downloads(test)] == [label for _, label, _ in app.PAGE_DOWNLOADS + app.EXPORT_DOWNLOADS]
     assert test.button(key="approve").disabled                        # nothing to approve yet
+
+
+def exports_popover(test):
+    """The company page's "Export" popover settings (label, disabled)."""
+    popovers = [block.proto.popover for block in test.get("popover")]
+    return next(popover for popover in popovers if popover.label == "Export")
+
+
+def test_the_company_page_offers_the_exports_before_anything_is_generated(folders):
+    # Task 11: the exports are worked out from today's workbook, so they need no Generate first.
+    test = page(folders, company="northwind")
+    assert not test.exception and not test.error
+    assert not exports_popover(test).disabled
+    labels = [label for _, label, _ in app.EXPORT_DOWNLOADS]
+    assert labels == ["Metrics (CSV)", "Flags (CSV)", "Metrics and flags (JSON)", "Email summary (HTML)"]
+    assert [(label, disabled) for label, disabled in downloads(test) if label in labels] == [
+        (label, False) for label in labels]
+    names = [button.proto.label for button in test.get("download_button")]
+    assert names[-4:] == labels
+
+
+def test_the_export_buttons_build_their_file_when_clicked_and_write_nothing_to_output(folders):
+    data_dir, output_dir = folders
+    workbook = data_dir / "northwind.xlsx"
+    data, _ = portfolio.load_company(workbook, load_config())
+    for kind, _, _ in app.EXPORT_DOWNLOADS:
+        build = app.export_file(kind, data, workbook)
+        assert not output_dir.exists()                  # nothing built until the click
+        assert build() == export.export_bytes(kind, data, workbook), kind
+    assert not output_dir.exists()
+
+
+def test_drawing_the_company_page_never_builds_an_export(folders, monkeypatch):
+    calls = []
+    monkeypatch.setattr(app, "export_bytes", lambda *args: calls.append(args) or b"")
+    page(folders, company="northwind")
+    assert calls == []
+
+
+def test_the_exports_are_off_for_a_workbook_that_cannot_be_read(folders):
+    book = Workbook()
+    book.active.append(["Quarter", "Starting ARR"])
+    book.active.append(["Q1 2025", 100])
+    book.save(folders[0] / "broken.xlsx")
+    test = page(folders, company="broken")
+    assert not test.exception
+    assert exports_popover(test).disabled
 
 
 def test_the_company_page_says_there_is_nothing_to_compare_with_before_any_run(folders):
