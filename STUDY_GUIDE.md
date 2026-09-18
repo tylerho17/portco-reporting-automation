@@ -2,7 +2,7 @@
 
 For you, a finance student learning Python, to understand this project well enough to explain every part of it in an interview.
 
-It matches the code as of 2026-09-17 (branch `day-step4`, Task 6). **Every build step is done:** 1, 2, 3, 3b, 4 (the deck: `make_template.py`, `build_deck.py`, `charts.py`, `text_fit.py`), 4b, 5 (with the AI step connected to `main.py`) and 6 (the README). One live `main.py --all` run has been made. **Not done yet:** the README screenshots, which need you at the screen.
+It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build step is done:** 1, 2, 3, 3b, 4 (the deck: `make_template.py`, `build_deck.py`, `charts.py`, `text_fit.py`), 4b, 5 (with the AI step connected to `main.py`) and 6 (the README). One live `main.py --all` run has been made. **Added since:** run manifests and the approval gate (`provenance.py`, `approve.py`), the review status in the deck's footer with the watermark made opt-in (`--draft`), the 4-slide deck, and the web page (`app.py`, started by `run_app.command`). **Not done yet:** the README screenshots, which need you at the screen.
 
 ## Contents
 
@@ -29,14 +29,18 @@ It matches the code as of 2026-09-17 (branch `day-step4`, Task 6). **Every build
   python metrics.py data/northwind.xlsx      # every metric, the flags, the data gaps
   python main.py --all --skip-ai             # the batch run: Excel files, and decks with the AI placeholder
   python build_deck.py data/northwind.xlsx   # one deck, using the saved AI analysis (output/northwind_analysis.json)
-  python -m pytest -q                        # 400+ unit tests
+  python build_deck.py data/northwind.xlsx --draft   # the same, with the DRAFT watermark if nobody has approved it
+  python approve.py northwind                # record yourself as the reviewer (writes output/northwind_manifest.json)
+  python -m pytest -q                        # 500+ unit tests
   python check_companies.py                  # end-to-end proof for all 3 companies
   python check_deck.py                       # end-to-end proof for the 3 decks
   ```
 
-  **These DO call the API and cost money:** `python main.py` **without** `--skip-ai` (about $0.05 per company), `python analyze.py ...` and `python compare_models.py run`. You don't need them to study: the analyses from the live run are already saved in `output/`.
+  **These DO call the API and cost money:** `python main.py` **without** `--skip-ai` (about $0.09 per company), `python analyze.py ...` and `python compare_models.py run`. You don't need them to study: the analyses from the live run are already saved in `output/`.
 
-  **One trap:** `python check_main.py` runs `main.py --all --skip-ai` into `output/`, so afterwards every deck shows "AI summary unavailable". Run `python build_deck.py data/<company>.xlsx` to put the saved AI text back (no API call).
+  **One trap:** `python check_main.py` runs `main.py --all --skip-ai` into `output/`, so afterwards every deck shows "AI summary unavailable" and each manifest's `ai` record says "skipped". Run `python build_deck.py data/<company>.xlsx` to put the saved AI text back on the deck (no API call); the manifest's `ai` record stays "skipped" until the next live run.
+
+  **Or use the web page:** double-click `run_app.command` (or `streamlit run app.py`), drag in `data/northwind.xlsx`, and download the deck. Leave "Include AI commentary" unticked and it's free; ticked, it reuses the saved analysis of the same numbers, also free.
 - **Do the exercises in section 6 before you look at section 8.**
 
 ---
@@ -89,6 +93,9 @@ metrics.xlsx            check → retry once →             + charts.py (2 matp
 
 main.py      runs the chain for one workbook or every workbook in data/, always builds the deck,
              prints a summary table and saves output/batch_summary.csv
+             and output/northwind_manifest.json (provenance.py: hashes, commit, model, cost)
+app.py       the same chain for one workbook dropped onto a web page (run_app.command starts it)
+approve.py   a person records their review in the manifest; the next build's footer says "reviewed by"
 config.yaml  the flag thresholds            .env  the API key (never committed)
 check_*.py and tests/   prove each step gives the right answer
 ```
@@ -114,12 +121,18 @@ check_*.py and tests/   prove each step gives the right answer
 
   **Before it uses Claude's text, it checks it again** against numbers rebuilt from today's workbook. If the analysis is missing, failed, is for another quarter or has a number that's no longer in the data, slide 4 says "AI summary unavailable". The other slides are built as normal, because their numbers come from Python. `text_fit.py` measures every piece of text and shrinks it to fit, down to 12 pt; below that, the build stops and names the slide and box.
 
+  **Every slide's footer says where the deck came from and whether a person has reviewed it:** `Fictional data | northwind.xlsx | 2026-09-17 | 9c1b52c | claude-sonnet-5 | AI-drafted | not reviewed`. The last part becomes `AI-drafted | reviewed by Tyler Ho on 2026-09-17` once `approve.py` has recorded a reviewer. There's **no watermark** unless you build with `--draft`, which stamps "DRAFT - NOT REVIEWED" across every slide of a deck nobody has approved.
+
 **Step 5: run the batch** (`main.py`). For each workbook it runs clean → metrics → Excel → AI → deck and prints a ✓ line per step. It catches failures so one broken company doesn't stop the rest. **The deck is always built:**
 - **Claude's answer passed:** its text is on the deck, result `OK`.
 - **The answer failed twice, or the API call failed:** the deck has the placeholder, result `OK (AI failed)`.
 - **`--skip-ai`:** no API call, the placeholder, result `OK (AI skipped)`.
 
-Without `--skip-ai`, it checks for the API key before any company runs. It finishes with a summary table, `output/batch_summary.csv`, and an exit code (0 = every company OK, 1 = a company failed, 2 = wrong arguments). `OK (AI failed)` still counts as OK: every output was built.
+Without `--skip-ai`, it checks for the API key before any company runs. It finishes with a summary table, `output/batch_summary.csv`, and an exit code (0 = every company OK, 1 = a company failed, 2 = wrong arguments). `OK (AI failed)` still counts as OK: every output was built. Each company also gets `output/<company>_manifest.json`: the workbook and config.yaml by SHA-256 hash, the git commit, the model, tokens and cost, and any approval.
+
+**Step 6: a person reviews and approves** (`approve.py`). Someone reads the deck, then runs `python approve.py northwind`. That writes their name and the time into the manifest, next to the hashes of the workbook and config.yaml the deck was built from. It never builds a deck. The next build's footer says "reviewed by ...". If the workbook or a threshold changes afterwards, the hashes no longer match and the footer goes back to "not reviewed" on its own: the reviewer approved numbers that aren't on the deck any more.
+
+**The web page** (`app.py`) runs steps 1 to 5 for one workbook dragged onto a browser page, shows the flags and metrics in the Excel colors, and offers the deck and metrics workbook as downloads. It works in a temporary folder, so it never touches `output/`, and its decks always say "not reviewed".
 
 **The proof layer.** Two kinds of proof:
 - **`check_*.py` scripts** run the real workbooks end to end and compare the results with the answer keys and hand formulas.
@@ -167,12 +180,16 @@ Without `--skip-ai`, it checks for the API key before any company runs. It finis
 | **PNG / DPI** | The chart image format / dots per inch. 200 DPI keeps charts sharp on a projector. |
 | **`lru_cache`** | Remembers a function's answer for the same inputs. `text_fit.py` uses it so the font file loads once, not once per word. |
 | **fake client** | A stand-in object with the same method (`messages.parse`) as the real Anthropic client, used in tests so they never call the API. |
+| **SHA-256 hash** | A 64-character fingerprint of a file's bytes. The same file always gives the same hash; change one byte and it's completely different. Like a checksum on a wire transfer: it proves the file is the one you think it is, whatever it's called. |
+| **manifest** | `output/<company>_manifest.json`: the record of one run (input and config hashes, commit, model, cost) plus the approval. The audit trail behind a deck. |
+| **JSON** | A plain-text format for nested data: `{"reviewer": "Tyler Ho"}`. Python's `json` module reads and writes it; it's how the analysis and manifest are saved. |
+| **Streamlit** | A package that turns a Python script into a web page (`app.py`). You write `st.checkbox(...)`, it draws a checkbox; no HTML to write. |
 
 ---
 
 ## 4. Every file, function by function
 
-Order: config, then the pipeline files in the order data flows (clean, metrics, analyze, Excel, the 4 deck files, main), then the data generators, the check scripts, the model comparison, the tests and the small files.
+Order: config, then the pipeline files in the order data flows (clean, metrics, analyze, Excel, the 4 deck files, main), the web page (app), the manifest and approval (provenance, approve), then the data generators, the check scripts, the model comparison, the tests and the small files.
 
 ### `config.yaml`: the thresholds
 
@@ -432,17 +449,19 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 ### `build_deck.py`: the 4-slide board deck (build step 4)
 
-**What it's for:** `output/<company>_board_pack.pptx`. Run on its own with `python build_deck.py data/northwind.xlsx` (no API call: it uses the saved `output/northwind_analysis.json` if there is one). Add `--no-analysis` for the placeholder, or `--analysis PATH` for another file.
+**What it's for:** `output/<company>_board_pack.pptx`. Run on its own with `python build_deck.py data/northwind.xlsx` (no API call: it uses the saved `output/northwind_analysis.json` if there is one). Add `--no-analysis` for the placeholder, `--analysis PATH` for another file, or `--draft` for the DRAFT - NOT REVIEWED watermark on a deck nobody has approved.
 
 **Rules it follows:**
 - **No math and no typed numbers.** Every number comes from metrics.py, config.yaml or the validated analysis. A test reads the code and fails if any text in it contains a digit.
 - **Claude's text is checked again before it's used** (`load_analysis`). If it fails, slide 4 says "AI summary unavailable", and the other slides are built as normal.
-- **Text must fit** (text_fit.py), and every slide gets a footer: "Fictional data, generated for demonstration | Source: northwind.xlsx | Run date: 2026-09-17".
+- **Text must fit** (text_fit.py), and every slide gets a one-line footer: "Fictional data | northwind.xlsx | 2026-09-17 | 9c1b52c | claude-sonnet-5 | AI-drafted | not reviewed". That's the fictional-data note, the source file, the run date, the git commit (with `*` if the code had uncommitted edits), the model ("no AI text" on a placeholder deck) and the review status.
+- **The review status comes from the manifest**, judged by `provenance.approval_status` (the only place that decides): "AI-drafted | reviewed by Tyler Ho on 2026-09-17" once a still-valid approval is recorded, otherwise "AI-drafted | not reviewed".
+- **No watermark unless asked.** With `--draft` (here or in main.py), every slide of an unreviewed deck also gets a see-through "DRAFT - NOT REVIEWED" drawn on top. `--draft` never stamps an approved deck, because the stamp would be false.
 - **The old deck is deleted first**, so a failed build never leaves last run's deck looking current.
 
 **Constants worth knowing:** `PLACEHOLDER_TEXT = "AI summary unavailable"`, `PLACEHOLDER_NOTE` (says the numbers are unaffected), font sizes (`TITLE_SIZE` 28, `HEADLINE_SIZE` 22, `BODY_SIZE` 14, `LIST_SIZE` 16, `TABLE_SIZE` 14), `KPI_COLUMN_SHARES` (table column widths), `CONTEXT_ROWS` (the 3 non-flag rows on slide 1), `SLIDE_BUILDERS` (the 4 slide functions in order), `AI_DRAFTED_LINE` (the line under slide 4's title).
 
-**The call order:** `save_deck` → `clean_workbook` → `collect_deck_data` → `load_analysis` → `build_presentation` → for each slide: `new_slide`, that slide's function, `add_footer` → save.
+**The call order:** `save_deck` → `clean_workbook` → `collect_deck_data` → `load_analysis` → `approval_status` (from the manifest) → `build_presentation` → for each slide: `new_slide`, that slide's function, `add_footer`, and `add_watermark` only with `--draft` on an unapproved deck → save → `record_deck_status`.
 
 **1. Data and text pieces**
 
@@ -475,7 +494,12 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `add_columns(slide, columns, top, height, deck)` | Two boxes side by side. Fits each, then shrinks both by the bigger shrink. | Risks and Questions never show two different font sizes. |
 | `set_title(slide, text, deck)` | Writes the slide title, shrunk to fit. | |
 | `new_slide(presentation, layout)` | Adds a slide and removes its empty body placeholder. | Each slide places its own boxes in that area. |
-| `add_footer(slide, deck, run_date)` | The footer text on every slide. | |
+| `commit_text()` | The git commit for the footer: "9c1b52c", or "9c1b52c*" when the code had uncommitted edits. | A printed slide names the code that built it. |
+| `review_text(approval, with_name)` | "reviewed by Tyler Ho on 2026-09-17", "reviewed on 2026-09-17" (no name), or "not reviewed". | The manifest keeps the time to the second; the footer only has room for the day. |
+| `footer_text(deck, run_date, with_name)` | Joins the footer's parts with " \| ". | |
+| `fits_one_line(text, box)` | True if the footer text, at 12 pt, is no wider than its box. | A reviewer's name can be any length, so its width is measured, not assumed. |
+| `add_footer(slide, deck, run_date)` | The footer on every slide. If a long reviewer name would wrap it, the name is left out ("reviewed on DATE") and stays in the manifest. | Anything else that doesn't fit still stops the build. |
+| `set_alpha(run, percent)` / `add_watermark(slide, deck)` | Only with `--draft`: "DRAFT - NOT REVIEWED" diagonally across the slide, 25% opaque, on top of everything. | On top, not behind: the table and charts are opaque and would hide it. See-through, so the numbers stay readable. |
 
 **4. The four slides**
 
@@ -501,19 +525,21 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
-| `build_presentation(data, summary, run_date, chart_dir)` | Opens the template, runs the 4 slide functions in order, adds footers. Sets `deck["where"] = "Slide 3"` first, so a fit error names the slide. | |
+| `build_presentation(data, summary, run_date, chart_dir, approval, model, draft)` | Opens the template, runs the 4 slide functions in order, adds footers, and the watermark only with `--draft` (`draft=True`) and nobody approved. Sets `deck["where"] = "Slide 3"` first, so a fit error names the slide. | |
 | `slide_number(build_slide)` | Which slide a function builds, counting from 1. | Messages say "slide 4" without the number being typed anywhere. |
 | `ai_text_problems(summary)` | Problems if the headline, risks or questions don't fit slide 4's boxes even at 12 pt. | analyze.py calls it, so an over-long answer gets the retry. |
 | `deck_path(workbook_path, output_dir)` | `data/northwind.xlsx` → `output/northwind_board_pack.pptx`. | |
 | `analysis_path(workbook_path, output_dir)` | `data/northwind.xlsx` → `output/northwind_analysis.json`. | main.py and check scripts use it too, so the name is set once. |
-| `save_deck(workbook_path, config, analysis_file, run_date, output_dir)` | **The one function `main.py` calls.** Deletes the old deck, cleans the workbook, collects the data, loads the analysis (or none), builds and saves. Returns (deck path, why the AI text isn't on it, or None). | |
-| `main(argv)` | Command line: `--analysis`, `--no-analysis`. Prints where the deck was saved, and why the AI text is missing if it is. | |
+| `analysis_details(path)` | The model and prompt version a saved analysis was made with. | The footer names the model whose words are on slide 4. |
+| `record_deck_status(workbook_path, output_dir, approval, ai_text)` | After a rebuild, updates the manifest's `deck` part (reviewed or not, AI text or not), if there is a manifest. | So the manifest never says "approved" beside a deck whose footer says "not reviewed". |
+| `save_deck(workbook_path, config, analysis_file, run_date, output_dir, draft)` | **The one function `main.py` and `app.py` call.** Deletes the old deck, cleans the workbook, collects the data, loads the analysis (or none), reads the approval from the manifest, builds and saves. Returns (deck path, why the AI text isn't on it, or None). | |
+| `main(argv, output_dir)` | Command line: `--analysis`, `--no-analysis`, `--draft`. Prints where the deck was saved, and why the AI text is missing if it is. | |
 
 ---
 
 ### `main.py`: the batch runner (build step 5)
 
-**What it's for:** `python main.py data/northwind.xlsx` runs one company; `python main.py --all` runs every workbook in `data/`; add `--skip-ai` to make no API call. One failing company never stops the batch.
+**What it's for:** `python main.py data/northwind.xlsx` runs one company; `python main.py --all` runs every workbook in `data/`; add `--skip-ai` to make no API call, and `--draft` to watermark every deck nobody has approved. One failing company never stops the batch.
 
 **What happens to each company, and what the Result column says:**
 
@@ -533,12 +559,14 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `shown_path(path)` | Prints a path as `output/...` when it's inside the project, else in full. | Tests save into a temporary folder outside the project. |
 | `api_key_problem()` | Loads `.env`, then returns None if `ANTHROPIC_API_KEY` is set, else "ANTHROPIC_API_KEY isn't set: add it to .env, or run with --skip-ai". | The SDK reports a missing key as a plain `TypeError`, which would look like a bug in every company (LEARNINGS). |
 | `ai_step(workbook_path, actuals, next_budget, config, output_dir, client)` | Deletes the old analysis JSON, builds the payload, calls `analyze.analyze`, and saves the result **whether it passed or failed** (`save_analysis`). Returns the JSON path if it passed, else None. Catches only `AnalysisError` (failed twice) and `anthropic.AnthropicError` (API failed). | Any other error is a bug and fails the company, so a coding mistake can't hide behind "AI failed". `client` is for tests (a fake client). |
-| `deck_step(workbook_path, config, analysis_file, output_dir)` | Calls `build_deck.save_deck` and prints whether the AI text made it onto the deck. Returns why not, or None. | |
+| `deck_step(workbook_path, config, analysis_file, output_dir, draft)` | Calls `build_deck.save_deck` (passing `--draft` on) and prints whether the AI text made it onto the deck. Returns why not, or None. | |
+| `ai_record(ai, analysis_file)` | What the manifest says about the AI step: model, prompt version, attempts, tokens, seconds, cost, and passed / failed / skipped. | Nothing is set to 0 when the AI didn't run: a 0 would read like a real cost. |
+| `manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable)` | Writes `output/<company>_manifest.json` (`provenance.build_manifest`), carrying over any approval already recorded. | Whether that approval still counts is decided by `provenance.approval_status`, never assumed. |
 | `ai_status(skip_ai, why_unavailable)` | "skipped" with `--skip-ai`; otherwise "ok" only if the AI text is really on the deck, else "failed". | "OK" means the text is on the slide, not just that Claude answered. |
 | `blank_quarters(actuals)` | Quarters with at least one blank input. | Northwind → `["Q1 2025"]`. |
-| `run_company(workbook_path, config, skip_ai, client, output_dir)` | Clean → metrics → flags → gaps → Excel → AI step (unless `--skip-ai`) → deck, printing a ✓ line for each. Returns a result dict for the summary table. | |
+| `run_company(workbook_path, config, skip_ai, client, output_dir, draft)` | Clean → metrics → flags → gaps → Excel → AI step (unless `--skip-ai`) → deck → manifest, printing a ✓ line for each. Returns a result dict for the summary table. | |
 | `describe_error(error)` | Prints `✗ FAILED: <type>: <message>`. Bad-input errors (`ValueError`, `OSError`) get one line; anything else also gets a full traceback, because it's probably a bug. | A person fixing a workbook doesn't need a traceback; a developer fixing a bug does. Known gap (DAY_REPORT Review, finding 2): a text-fit stop also gets a traceback. |
-| `run_batch(workbook_paths, config, skip_ai, client, output_dir)` | Loops over the workbooks with `try`/`except` around each company, records the error and moves on. | The key reliability feature: company 2 breaking doesn't stop company 3. |
+| `run_batch(workbook_paths, config, skip_ai, client, output_dir, draft)` | Loops over the workbooks with `try`/`except` around each company, records the error and moves on. | The key reliability feature: company 2 breaking doesn't stop company 3. |
 | `flags_text(result)` | "6 of 9", or "7 of 9, 1 cannot evaluate". | Without the second part, Fernhollow's "7 of 9" would hide a flag that had no answer. |
 | `gaps_text(result)` | "none", or "19 metrics/flags (blank: Q1 2025)". | |
 | `result_text(result)` | "OK", "OK (AI skipped)", "OK (AI failed)" or "FAILED: …". | |
@@ -560,6 +588,8 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 **What doesn't change:** no new math, no new wording. The page shows the same text the deck shows (`build_deck.value_text`, `threshold_text`, `flag_count_text`, `gaps_lines`) in the same colors as the Excel workbook (`excel_output.STATUS_COLORS`, `tripped_cells`).
 
+**What's different from `main.py`:** it builds in a temporary folder and never writes to `output/`, so it can't overwrite a command-line deck, manifest or approval. It writes no manifest, so its deck's footer always says "AI-drafted | not reviewed", and it never passes `--draft`, so there's no watermark. Approving is a command-line step (`approve.py`) on the `output/` decks.
+
 | Function | What it does, in plain English | Example / why it exists |
 |---|---|---|
 | `ai_checkbox_label()` | The checkbox text, with the typical cost. | "Include AI commentary (typically about $0.09 and 70 seconds per workbook)". The number is `TYPICAL_AI_COST_USD`, copied from README's Cost table: a label, not a calculation. |
@@ -574,6 +604,41 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `styled(table, colors)` | Puts the colors on the table for `st.dataframe`. | pandas' `Styler.apply`. |
 | `show_downloads(result)` / `show_result(result)` | Draws the page: the error, or the heading, the two download buttons, the AI note, the flags, the data gaps, the metrics. | |
 | `main()` | The page: title, checkbox, file drop. Builds once per file and checkbox choice. | Runs only when Streamlit runs the file, so the tests can import `app.py` without drawing anything. |
+
+---
+
+### `provenance.py` and `approve.py`: where a deck came from, and who signed it off
+
+**What they're for:** a printed slide should be traceable to the exact inputs behind it, and a person, not the code, should decide when a deck is fit for a board.
+- `provenance.py` writes and reads `output/<company>_manifest.json`, and decides whether an approval still counts. `main.py` writes a manifest for every company it runs.
+- `approve.py` is the human step: `python approve.py northwind` (your name from `git config user.name`) or `--reviewer "A Name"`. It writes the name and the time into the manifest, next to the workbook's and config.yaml's hashes. **It never builds a deck**: producing a deck and vouching for it stay two separate acts.
+
+**The finance analogy:** a manager's sign-off on a reconciliation, stapled to the exact version of the file they checked. If someone edits the file afterwards, the sign-off doesn't carry over to the new version.
+
+**What the deck shows:** the footer ends "AI-drafted | not reviewed" until someone approves, then "AI-drafted | reviewed by Tyler Ho on 2026-09-17" on the next build. There's no watermark by default; `--draft` adds "DRAFT - NOT REVIEWED" to unapproved decks only.
+
+**`provenance.py`**
+
+| Function | What it does, in plain English | Example / why it exists |
+|---|---|---|
+| `file_sha256(path)` | The file's SHA-256 fingerprint, read a chunk at a time. | Two files both called northwind.xlsx can hold different numbers; only the hash tells them apart. |
+| `git_output(arguments, folder)` | Runs a read-only git command; None if git can't answer. | A copy of the project without git still runs. |
+| `git_commit(folder)` | The commit, and whether there were uncommitted edits. | "9c1b52c" alone wouldn't describe code that had been edited since. |
+| `timestamp()` | Now, to the second: "2026-09-17T14:03:11". | |
+| `manifest_path(workbook_path, output_dir)` | `data/northwind.xlsx` → `output/northwind_manifest.json`. | Beside the deck and the metrics workbook. |
+| `read_manifest(path)` | The saved manifest, or None if it's missing or unreadable. | A broken manifest doesn't stop a run; the deck just isn't approved. |
+| `approval_status(manifest, input_hash, config_hash)` | (the approval, None) if a reviewer is recorded **and** today's workbook and config.yaml hash the same as when they approved; else (None, why not). | **The only judge.** main.py, build_deck.py and approve.py all ask it, so they can't disagree. |
+| `deck_status(approval)` | The manifest's `deck.status`: "approved by Tyler Ho on 2026-09-17T22:33:47", or `NOT_REVIEWED` (the same words the `--draft` watermark uses; the footer says "not reviewed"). | |
+| `build_manifest(...)` | Everything about one run in one dict: input and config hashes, commit, AI record, deck file, AI text or not, status, approval. | |
+| `save_manifest(path, manifest)` | Writes it as indented JSON. | Meant to be opened and read by a person. |
+
+**`approve.py`**
+
+| Function | What it does, in plain English | Example / why it exists |
+|---|---|---|
+| `reviewer_name(given, folder)` | The name given, else git's `user.name`; stops if there's neither. | An approval must have a person's name on it. |
+| `approve(company, reviewer, ...)` | Writes the approval into the manifest. Stops if there's no manifest, or if the workbook or config.yaml changed since that run. | Approving then would put a name against numbers the reviewer never saw. |
+| `main(argv, ...)` | Command line. Prints "Approved Northwind by ..." and "Rebuild the deck so its footer says reviewed: python build_deck.py data/northwind.xlsx", or one "Not approved: ..." line. | |
 
 ---
 
@@ -675,7 +740,10 @@ Builds each company's deck (with its saved analysis if there is one), **opens th
 | `check_kpi_rows(slide, table, flags, name)` | Row by row: latest and prior cells equal the Excel cells, thresholds and statuses match the Flags sheet, status cell colors are right. |
 | `check_charts(slide, company)` | Two pictures; redraws the charts and checks the blank quarter has no bar and the cash line has a NaN there. |
 | `check_risks_slide(slide, company, table_flags, gap_labels)` | Slide 3: the flag count, every tripped flag, the combo result, and every "data missing" metric (or "None"). |
-| `check_footers(slides, source_name, name)` | The fictional-data note, file name and today's date on every slide. |
+| `expected_review(workbook, output_dir)` | What the footer must end with ("AI-drafted \| not reviewed" or "... reviewed by NAME on DATE"), worked out from the manifest here, **not** with build_deck's code. |
+| `check_footers(slides, source_name, name, review)` | Every footer: the fictional-data note, file name, today's date, ends with the expected review status, and fits on one line. |
+| `watermark_count(slides)` | How many slides carry the watermark. Without `--draft` it must be 0. |
+| `check_draft_option(config, folder)` | Builds all 3 decks with `--draft` in a temporary folder: Alderpeak and Fernhollow get the watermark on 4 of 4 slides; Northwind, which is approved, gets none. |
 | `frame_paragraphs(frame, where)` | Reads a saved text box back into text_fit.py's paragraph form; stops on any font below 12 pt. |
 | `check_text_fits(...)` / `check_table_fits(frame, where)` | Re-measures the saved text and table cells: they need no more room than they have. |
 | `check_no_overflow(presentation, name)` | Every shape inside the slide and above the footer line; every text fits. |
@@ -738,23 +806,25 @@ Every run uses `--skip-ai`. The `main.py` process also gets no API key and an AP
 
 ### `tests/`: unit tests (pytest)
 
-Run with `python -m pytest -q` (415 tests, about 15 seconds). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
+Run with `python -m pytest -q` (527 tests, about 30 seconds). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
 | `test_clean.py` (81) | `write_workbook(path, labels, blank)`: a tiny workbook in pytest's temp folder. | `parse_number` (good text, real numbers, blanks → NaN, 17 kinds of unreadable text stop), `normalize_header` and `standard_column` on most of the Northwind headers, quarter labels and order (Q4 → Q1 rollover, skipped, repeated), and whole workbooks (blank row kept, missing row stops, duplicate row stops). |
 | `test_metrics.py` (163) | `table(**columns)`: a small table with only the needed columns. `values(series)`: compare with NaN allowed. `burn_table`, `cac_table`: tables for one metric. `full_actuals(blank, blank_cells)`: 8 realistic quarters with optional blanks. `combo_metrics`, `reasons_for`, `combo`, `flags_for`, `gaps_for`, `reasons_of`: shortcuts for combo, flag, gap and reason tests. `TEST_CONFIG`: thresholds typed into the test file, so editing config.yaml never breaks a test. | Every metric against hand math; every CLAUDE.md edge case (∞, 0, −0.0); a missing input never becomes 0 or ∞; `check_threshold` exactly at the threshold, float noise, real misses, NaN, ∞; `check_combo` trip/pass/cannot evaluate with its reason and the 1-point minimum; config validation; the three reasons (every input blanked one at a time must say missing input); not-meaningful budgets; `data_gaps` following the QoQ/YoY rules; the printout's words. |
 | `test_bad_inputs.py` (63) | `good_table()`: a valid table. `set_cell`, `drop_column`, `add_column`: break one thing. `write_workbook(path, rows, empty_columns_left)`: Notes tab, title, empty row, table from row 3. `error_from`, `assert_stops_with`: run `clean_workbook` and check how the error message starts. `reorder_quarters(labels)`: quarter rows in a given order. | Broken workbooks stop with the sheet name and Excel address: missing columns, two headers with one meaning, unknown headers, quarters out of order, a budget row with actuals, a budget row for the wrong quarter or with no quarter, two KPI tabs, footnote rows, unreadable text, Excel error cells. `test_good_workbook_cleans` proves the starting workbook is valid, so each failure comes from the one thing that was broken. |
-| `test_analyze.py` (20) | `summary_saying(text)`: an answer with one piece of text. `northwind`: the real Northwind payload, built once. | Minus signs in the number check; the payload's words for each reason and its flag names; `save_analysis` output that `build_deck.load_analysis` accepts (passed) or rejects (failed). |
+| `test_analyze.py` (46) | `summary_saying(text)`: an answer with one piece of text. `northwind`: the real Northwind payload, built once. | Minus signs in the number check; the payload's words for each reason and its flag names; `save_analysis` output that `build_deck.load_analysis` accepts (passed) or rejects (failed). |
 | `test_excel_output.py` (9) | `two_quarters`, `budget_row`, `runway_context_cell`, `fill`, `metrics_cell`, `reason_workbook`. | Runway-at-budget labels (a blank wins over ∞), the words and gray fill for each reason, the Flags status text, the Data gaps sheet. |
 | `test_compare_models.py` (6) | none | Blind letters never drop a run; a letter scored twice stops. |
-| `test_make_template.py` (8) | `placeholder_types(layout)`, `theme(presentation)`. | 16:9, exactly the 2 layouts, no slides, title/body/footer placeholders inside the slide in the right order, navy/gray theme and Arial, the saved file opens again. |
-| `test_text_fit.py` (12) | none | Wider text measures wider (bold wider still), wrapping, a word wider than the box, height, shrinking all sizes together, never below 12 pt, failing loudly with the box's name, table fitting. |
+| `test_make_template.py` (9) | `placeholder_types(layout)`, `theme(presentation)`. | 16:9, exactly the 2 layouts, no slides, title/body/footer placeholders inside the slide in the right order, navy/gray theme and Arial, the saved file opens again. |
+| `test_text_fit.py` (13) | none | Wider text measures wider (bold wider still), wrapping, a word wider than the box, height, shrinking all sizes together, never below 12 pt, failing loudly with the box's name, table fitting. |
 | `test_charts.py` (5) | `texts(axis)`, `bar_positions(axis)`. | No bar for a blank quarter and "data missing" written there; latest values labelled; the cash line keeps the NaN (so it breaks); runway text in the title and zero on the axis; figure drawn at slide size. |
-| `test_build_deck.py` (27) | `flag(...)`, `three_quarters(blank)`, `deck_data(company, blank)`: a tiny 3-quarter company. `summary_dict()`, `write_analysis(...)`, `payload`: analysis files. `build(tmp_path, summary)`, `shape`, `all_text`, `status_fills`, `run_sizes`: build and read a deck. | Flag count and threshold wording; data gaps grouped by quarter; **every way `load_analysis` must reject a file** (missing, not JSON, failed, wrong shape, other quarter, other company, a number not in today's data, 2 questions); 4 slides in order; placeholder vs AI text on slide 4, the AI-drafted line, no wins on the deck; footer on every slide; status colors; "data missing" in the table; slide 3 contents and flag count; matching column font sizes; 2 chart pictures; text too long fails loudly; **no digit typed in any text in build_deck.py or charts.py**. |
-| `test_main.py` (14) | `ok(...)`, `failed(...)`: result dicts. `FakeClient`: stands in for the Anthropic client, returns a fixed answer (or raises) and counts calls. `no_real_client`: runs before every test and makes creating a real client fail the test. `summary`, `run_northwind`, `headline_on_deck`, `saved_analysis`. | The CSV, both warnings and the result texts; a passing answer lands on the deck (1 call); an answer with an invented number is called exactly twice, then the placeholder and "OK (AI failed)"; an API error is "OK (AI failed)", not FAILED; a bug in the AI step fails the company and leaves no old analysis; `--skip-ai` never calls Claude or looks for a key; a missing key stops the run before any company. |
+| `test_build_deck.py` (50) | `flag(...)`, `three_quarters(blank)`, `deck_data(company, blank)`: a tiny 3-quarter company. `summary_dict()`, `write_analysis(...)`, `payload`: analysis files. `build(tmp_path, summary)`, `shape`, `all_text`, `status_fills`, `run_sizes`: build and read a deck. | Flag count and threshold wording; data gaps grouped by quarter; **every way `load_analysis` must reject a file** (missing, not JSON, failed, wrong shape, other quarter, other company, a number not in today's data, 2 questions); 4 slides in order; placeholder vs AI text on slide 4, the AI-drafted line, no wins on the deck; footer on every slide; status colors; "data missing" in the table; slide 3 contents and flag count; matching column font sizes; 2 chart pictures; text too long fails loudly; **no digit typed in any text in build_deck.py or charts.py**; no watermark by default, 4 of 4 with `--draft`, none on an approved deck even with `--draft`; both footer review wordings, the one-line fit and the long-name fallback. |
+| `test_main.py` (27) | `ok(...)`, `failed(...)`: result dicts. `FakeClient`: stands in for the Anthropic client, returns a fixed answer (or raises) and counts calls. `no_real_client`: runs before every test and makes creating a real client fail the test. `summary`, `run_northwind`, `headline_on_deck`, `saved_analysis`. | The CSV, both warnings and the result texts; a passing answer lands on the deck (1 call); an answer with an invented number is called exactly twice, then the placeholder and "OK (AI failed)"; an API error is "OK (AI failed)", not FAILED; a bug in the AI step fails the company and leaves no old analysis; `--skip-ai` never calls Claude or looks for a key; a missing key stops the run before any company; the manifest; no watermark by default and "not reviewed" in the footer, `--draft` from the command line stamps every slide, a still-valid approval is named on a re-run. |
+| `test_provenance.py` (13) | `manifest_for(...)`: a manifest for a tiny workbook in a temp folder. | The hash is the standard SHA-256 and changes only when the bytes do; the commit (or "unknown" outside git); a missing or broken manifest reads as None; a manifest records every input and output; no approval → not reviewed; an approval holds for today's files and is void once the workbook or config.yaml changes. |
+| `test_approve.py` (8) | `company`: a workbook, config and manifest in a temp folder. `approve_testco(...)`. | The reviewer and time are recorded and nothing else in the manifest changes; no manifest, a changed workbook, changed thresholds or no name each stop; the command line says to rebuild so the footer says reviewed (never "watermark": that needs `--draft`), or prints one line when it refuses. |
 | `test_app.py` (19) | `FakeClient`, `summary(headline)`, `no_real_client` (as in test_main.py). `build_northwind`: the Northwind workbook's bytes through `build_outputs`. `save_northwind_analysis`: a saved analysis of today's numbers. `headline_in(deck_bytes)`. `render_northwind`, `render_bad_file`: draw the results with Streamlit's `AppTest`. | The checkbox names the cost; an upload can't escape its folder; the Excel colors; clean.py's message word for word, a non-Excel file and a bug each give a plain message with no traceback; Northwind gives a 4-slide deck and a 3-sheet workbook, 6 of 9 flags in red and green rows, "data missing" gray and a tripped NRR red; a saved analysis of the same numbers is reused with **no** call, one of other numbers is not; no saved analysis → 1 call; no key or an API error still builds the placeholder deck; the page and the results draw with no error; `run_app.command` is executable and starts app.py. |
-| `test_docs.py` (7) | `python_files_named(text)`, `study_guide_tables()`, `defined_in(files, name)`. | README keeps the model comparison markers, and rewriting that block leaves the rest alone; every `.py` file named in README, CLAUDE.md, this guide and LOOM_SCRIPT.md exists; **every function in this guide's tables exists** in the file its heading names. |
+| `test_docs.py` (15) | `python_files_named(text)`, `study_guide_tables()`, `defined_in(files, name)`, `files_named`, `functions_named`, `watermark_lines(text)`. | README keeps the model comparison markers, and rewriting that block leaves the rest alone; every `.py` file named in README, CLAUDE.md, this guide and LOOM_SCRIPT.md exists; **every function in this guide's tables exists** in the file its heading names; INTERVIEW_PREP.md's files, functions and group order; README, CLAUDE.md, this guide and LOOM_SCRIPT.md never describe the watermark without `--draft`, all name `--draft`, app.py and run_app.command, and count 4 slides. |
 
 ---
 
@@ -774,8 +844,10 @@ Run with `python -m pytest -q` (415 tests, about 15 seconds). Expected values ar
 | `DAY_REPORT.md` | The same for today's tasks (the deck, main.py wiring, the live run, docs), plus a review of everything committed today. |
 | `README.md` | What it does, how to run it, data flow, design decisions, the model comparison, cost, screenshots to capture, next steps. |
 | `LOOM_SCRIPT.md` | The 2-minute demo video script, with timestamps and recording prep. |
+| `POLISH_REPORT.md` | The polish tasks (review status in the footer, the 4-slide deck, the web page, interview prep, these docs): what each built, the decisions made, what failed, what's unresolved. |
+| `INTERVIEW_PREP.md` | Every interview question in the order it tends to be asked, with 30–60 second answers and where to point. |
 | `templates/base.pptx` | The brand template, built by `make_template.py` and committed. |
-| `output/` | Generated files (git-ignored): `*_board_pack.pptx`, `*_metrics.xlsx`, `*_analysis.json`, `charts/*.png`, `batch_summary.csv`, `compare/`, `day_logs/` (the saved live run). |
+| `output/` | Generated files (git-ignored): `*_board_pack.pptx`, `*_metrics.xlsx`, `*_analysis.json`, `*_manifest.json` (with any approval), `charts/*.png`, `batch_summary.csv`, `compare/`, `day_logs/` (the saved live run). |
 
 ---
 

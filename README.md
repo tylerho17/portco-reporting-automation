@@ -34,6 +34,7 @@ cp .env.example .env        # then put your key after ANTHROPIC_API_KEY= (only n
 python main.py data/northwind.xlsx     # one company
 python main.py --all                   # every workbook in data/
 python main.py --all --skip-ai         # no API call and no key needed: decks say "AI summary unavailable"
+python main.py --all --draft           # also stamp DRAFT - NOT REVIEWED across every slide of an unreviewed deck
 ```
 
 For each company it prints a ✓ line per step, then a summary table:
@@ -62,6 +63,7 @@ Results: `OK`, `OK (AI failed)` (deck built with the placeholder), `OK (AI skipp
 
 ```bash
 python build_deck.py data/northwind.xlsx       # rebuild one deck from the saved analysis JSON (no API call)
+python excel_output.py data/northwind.xlsx     # rebuild one metrics workbook (no API call)
 python analyze.py data/northwind.xlsx          # AI step only (calls the API): prints the commentary, saves the JSON
 python clean.py data/northwind.xlsx            # print the cleaned table
 python metrics.py data/northwind.xlsx          # print every metric, flag and data gap
@@ -78,23 +80,25 @@ python make_data.py                            # regenerate data/northwind.xlsx 
 - **A workbook it can't read** shows `clean.py`'s own message (which sheet, row and cell, and what to fix), never a traceback.
 - **Nothing is written to `output/`**: the page builds in a temporary folder and hands you the files. The deck's footer says "not reviewed"; approvals (`approve.py`) belong to the command-line decks.
 
-**3. Review the deck, then approve it.** Every deck is stamped **DRAFT - NOT REVIEWED** across all
-4 slides until a person says otherwise. Open it, read it, then:
+**3. Review the deck, then approve it.** The footer on every slide ends with the review status. A
+new deck says `AI-drafted | not reviewed` until a person says otherwise. Open it, read it, then:
 
 ```bash
 python approve.py northwind                      # your name comes from git config user.name
 python approve.py northwind --reviewer "A Name"  # or give it
-python build_deck.py data/northwind.xlsx         # rebuild: the watermark is gone
+python build_deck.py data/northwind.xlsx         # rebuild: the footer now says "AI-drafted | reviewed by A Name on 2026-09-17"
 ```
 
 The approval is recorded in the manifest against the hashes of the workbook and `config.yaml` it was
-built from. Change either one and the deck goes back to DRAFT on its own the next time it is built,
-because what you reviewed is no longer what the deck says.
+built from. Change either one and the footer goes back to "not reviewed" on its own the next time the
+deck is built, because what you reviewed is no longer what the deck says.
+
+Want it louder while a deck circulates for review? Build with `--draft` (`python build_deck.py data/northwind.xlsx --draft`, or `python main.py --all --draft`) and every slide of an unreviewed deck also carries a see-through DRAFT - NOT REVIEWED watermark. `--draft` never stamps an approved deck, and without `--draft` there is no watermark.
 
 **Prove it works (no API calls).**
 
 ```bash
-python -m pytest -q          # 400+ unit tests, expected values worked out by hand
+python -m pytest -q          # 500+ unit tests, expected values worked out by hand
 python check_northwind.py    # cleaned data and metrics vs Northwind's answer key
 python check_companies.py    # the same for Alderpeak and Fernhollow, plus each company's story
 python check_excel_output.py # the metrics workbook matches metrics.py
@@ -133,6 +137,8 @@ excel_output.py         analyze.py                         build_deck.py
                                                             (AI text re-checked here; placeholder if missing or failed)
 
 main.py        runs the chain for one workbook or all of data/, prints the summary, writes batch_summary.csv
+app.py         the same chain for one uploaded workbook, as a web page (run_app.command starts it)
+approve.py     records a reviewer in <company>_manifest.json (provenance.py); the next build's footer says "reviewed by"
 config.yaml    flag thresholds, each with the investor reason in a comment
 ```
 
@@ -153,7 +159,7 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 9. **Three fictional companies with answer keys prove the flags aren't hard-coded:** Northwind (growing but leaking customers, 6 of 9 flags), Alderpeak (healthy, 0 of 9) and Fernhollow (distressed, 7 of 9 plus one that can't be evaluated because of a blank quarter).
 10. **The model was picked by a blind test with a rule set before running** (below): Sonnet 5 is the default because Haiku 4.5 scored 2.0 of 5 against a required 4.0.
 11. **Every deck can be traced back to its inputs.** Each run writes `output/<company>_manifest.json`: the workbook and `config.yaml` by SHA-256 hash, the git commit (with a `*` if the code had uncommitted edits), the model and prompt version, the run time, tokens and cost, whether validation passed, and whether the deck carries Claude's text or the placeholder. The deck's footer repeats the commit and the model, so a printed slide is traceable on its own. A hash is the point: two files with the same name can hold different numbers, and only the hash tells them apart.
-12. **A person approves every deck before it counts.** Decks are watermarked DRAFT - NOT REVIEWED until `approve.py` records a reviewer's name and the time. Approval is tied to the hashes it was given, so new data or an edited threshold sends the deck back to DRAFT automatically - a stale approval is worse than none. `approve.py` never builds anything: producing a deck and vouching for it stay two separate acts.
+12. **A person approves every deck before it counts.** Every slide's footer says `AI-drafted | not reviewed` until `approve.py` records a reviewer's name and the time; then it says `AI-drafted | reviewed by NAME on DATE`. The footer is quiet enough to leave on a deck that goes to a board, where a diagonal stamp across the numbers would not be; the DRAFT - NOT REVIEWED watermark is still there for anyone who wants it, with `--draft`. Approval is tied to the hashes it was given, so new data or an edited threshold sends the footer back to "not reviewed" automatically - a stale approval is worse than none. `approve.py` never builds anything: producing a deck and vouching for it stay two separate acts.
 13. **Text must fit.** `text_fit.py` measures text and shrinks it to a 12 pt floor; if it still doesn't fit, the build stops with the slide and box named. A deck with text running off the slide is worse than no deck.
 
 ---
@@ -223,7 +229,10 @@ Placeholders: capture each one and replace the line with the image. Before captu
 - 📸 **Slide 1, Key metrics:** the table with red, green and gray status cells.
 - 📸 **Slide 2, ARR and cash:** the charts, with the Q1 2025 "data missing" gap visible.
 - 📸 **Slide 3, Risks and flags:** "6 of 9 flags tripped", tripped flags vs thresholds, the combo rule, and the Data gaps line.
-- 📸 **Slide 4, AI commentary:** "AI-drafted from computed metrics - review before use", the headline, 3 risks and 3 questions for management.
+- 📸 **Slide 4, AI commentary:** "AI-drafted from computed metrics - review before use", the headline, 3 risks and 3 questions for management. Include the footer: Northwind is approved, so it ends "AI-drafted | reviewed by ...".
+
+**The web page** (`run_app.command`, or `streamlit run app.py`)
+- 📸 **After dropping in `data/northwind.xlsx`:** the two download buttons, "6 of 9 flags tripped" with the red and green flag rows, and the metrics table with its gray "data missing" cells.
 
 **After: the backup workbook** (`output/northwind_metrics.xlsx`)
 - 📸 **Metrics sheet:** red tripped cells and gray "data missing" cells around Q1 2025.
@@ -238,7 +247,7 @@ Placeholders: capture each one and replace the line with the image. Before captu
 ## Known limitations
 
 Things the code does not catch, found by reading Claude's real answers against the data. They are
-why a person still reads every deck, and why the DRAFT watermark exists.
+why a person still reads every deck, and why its footer says "not reviewed" until someone has.
 
 - **Where a trend is described from.** The prompt asks for a trend to be described from its peak or
   the flag's lookback window. Fernhollow's latest summary still describes NRR "from 98.0%", which is

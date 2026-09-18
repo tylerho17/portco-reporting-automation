@@ -147,6 +147,49 @@ def test_study_guide_tables_cover_the_deck_files():
     assert {"build_deck.py", "make_template.py", "charts.py", "text_fit.py", "check_deck.py"} <= covered
 
 
+def test_study_guide_tables_cover_approval_and_the_web_page():
+    # The approval gate and the web page are explained function by function, like the rest.
+    covered = set().union(*(files for files, _ in study_guide_tables()))
+    assert {"provenance.py", "approve.py", "app.py"} <= covered
+
+
+# The four docs a reader follows: the watermark is opt-in, the deck has 4 slides, and the web page exists.
+USER_DOCS = (README, CLAUDE_MD, STUDY_GUIDE, LOOM_SCRIPT)
+
+
+def watermark_lines(text):
+    """Every line that talks about the watermark ("watermark", or the capitalised word "DRAFT" of its wording).
+
+    Whole word only, so the constant AI_DRAFTED_LINE (slide 4's "AI-drafted ..." line) doesn't count.
+    """
+    return [line for line in text.splitlines() if re.search(r"[Ww]atermark|\bDRAFT\b", line)]
+
+
+def test_docs_say_the_watermark_needs_draft():
+    # Since polish Task 1 a deck has no watermark unless it is built with --draft; the footer says
+    # "not reviewed" instead. A line about the watermark that doesn't say --draft reads as the old default.
+    for doc in USER_DOCS:
+        stale = [line.strip()[:80] for line in watermark_lines(doc.read_text()) if "--draft" not in line]
+        assert stale == [], f"{doc.name} describes the watermark without --draft"
+
+
+def test_docs_name_the_draft_option_the_web_page_and_its_launcher():
+    for doc in USER_DOCS:
+        missing = [name for name in ("--draft", "app.py", "run_app.command") if name not in doc.read_text()]
+        assert missing == [], f"{doc.name} doesn't mention {missing}"
+
+
+def test_readme_and_study_guide_show_both_footer_review_wordings():
+    for doc in (README, STUDY_GUIDE):
+        text = doc.read_text()
+        assert "AI-drafted | not reviewed" in text and "AI-drafted | reviewed by" in text, doc.name
+
+
+def test_docs_count_four_slides():
+    for doc in USER_DOCS:
+        assert not re.search(r"(?i)\b(5|five)[- ]slide|\bslide 5\b", doc.read_text()), doc.name
+
+
 def test_study_guide_names_only_functions_that_exist():
     missing = [f"{name} ({', '.join(sorted(files))})" for files, names in study_guide_tables()
                for name in sorted(names) if not defined_in(files, name)]
