@@ -2319,3 +2319,71 @@ Every pair, after the fix:
   `appendix=True` to `save_deck`.
 - **CLAUDE.md's Architecture list** could mention it. Suggested addition to the build_deck.py line:
   "--appendix adds one optional slide after the four: every metric for every quarter, with a key".
+
+## Task A: docs for every file added in the final run
+
+### What I built
+
+- **README.md, a Quick start for someone who doesn't code** (new section, first in Contents):
+  double-click `run_app.command`, pick a company, click **Generate**, then **Download deck** and
+  **Download memo (PDF)** or **(Word)** on the company's page, or the row's **Download** on the Portfolio
+  page. It says what the first run does (a few minutes' setup, needs internet), that the Terminal window
+  stays open, that the AI box stays unticked so nothing is sent to Claude, where the files land, why a
+  download can be grey, and how to approve. Every button name was checked against app.py's labels.
+- **README.md, the data-flow diagram** now also names rollup.py, diff_runs.py, resilience.py, run_log.py,
+  cache.py, golden.py, the eval set and demo_reset.py (the memo, mapping, theme, portfolio and exports were
+  already there). The test count reads 1,300+ (it said 500+).
+- **CLAUDE.md, Architecture:** a line for every file added in this run: eval/ (the eval set), mapping.py,
+  config_schema.py, cache.py, theme.py, memo.py, diff_runs.py (the run diff), rollup.py, export.py (the
+  exports), resilience.py, run_log.py, portfolio.py, demo_reset.py, golden.py, benchmark.py, check_memo.py,
+  check_rollup.py, check_diff.py, check_export.py, mappings/, DEMO.md, POLISH_REPORT.md and FINAL_REPORT.md.
+  The app.py line now describes the two pages (it described the one-page upload app, which "never touches
+  output/"; the page now writes to output/ as main.py does). The main.py line lists every option and the
+  step order; build_deck.py mentions `--appendix` (Task 20's unresolved suggestion); charts.py and output/
+  are current.
+- **STUDY_GUIDE.md:** section 4 already had a section and function table for every new file, so the work
+  was the overview around it: the status line (it stopped at Task 12 and said branch `polish`), the free
+  commands (memo.py, mapping.py), the web page as two pages with the quick start's clicks, the analyst
+  table (mapping, memo, what changed, rollup, exports), the section 2 picture, the memo in the output step,
+  the batch's step order, an "Around the chain" paragraph, four glossary words (cache, JSON Lines, golden
+  file, WCAG AA contrast), the section 4 order line, and Small files (FINAL_REPORT.md, DEMO.md,
+  tests/golden/, eval/data/, and the full output/ list).
+- **Rebuilt from the saved analysis JSONs, no API call:** `build_deck.py` and `memo.py` for all three
+  companies. All six files carry Claude's saved text (each manifest says `ai_text: true` for deck and memo).
+
+### Checks (no API calls)
+
+- `python -m pytest -q`: 1384 passed (the baseline before this task: 1383 passed, 1 failed, below).
+- `python golden.py`: 9 of 9 match. `python check_deck.py`, `python check_memo.py`: all checks passed.
+- `python mapping.py data/northwind.xlsx` says "Nothing to confirm", as the study guide now says.
+- No em dash in any doc (tests/test_docs.py). config.yaml untouched.
+
+### What failed and how I fixed it (logged in LEARNINGS.md)
+
+1. **tests/test_docs.py failed on my first README and CLAUDE.md lines** because they named `run_eval.py`
+   and `make_eval_data.py` without `eval/`. The test checks every `.py` a doc names from the project
+   folder. Written in full.
+2. **The baseline run had a failure from Task 20:** check_deck.py typed `"FFFFFF"`, which
+   `test_no_file_but_theme_py_types_a_color` forbids. Now `theme.WHITE`, in its own commit; check_deck.py
+   still catches the broken appendix.
+
+### Decisions you didn't specify
+
+1. **The quick start is the first section** of the README, before "How to run it", because the reader it
+   is for stops at the first command they don't understand. It points on to the longer web page section and
+   DEMO.md rather than repeating them.
+2. **It says to leave the AI box unticked.** A non-technical user shouldn't need an API key or spend money;
+   the saved analysis of the same numbers is reused for free either way.
+3. **STUDY_GUIDE's section 4 left as it was:** each Task already added its file's section and tables,
+   and the test in tests/test_docs.py proves their function names are real.
+4. **The check_deck.py fix went in although this task is docs:** a red test on the branch would make
+   every later task's "all tests pass" untrue, and it was one line.
+
+### Unresolved
+
+- **The quick start hasn't been tried by a non-technical person**, and not on a Mac that has never run it:
+  whether macOS asks before opening a `.command` file copied from elsewhere (it can, for files downloaded
+  from the internet) is untested. If it does, right-click, Open is the usual way past it; worth a line in
+  the quick start once seen.
+- **The README screenshots** are still placeholders; they need someone at the screen.
+- **LOOM_SCRIPT.md and INTERVIEW_PREP.md** weren't in this task's list and weren't changed.
