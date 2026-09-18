@@ -71,6 +71,14 @@ def test_shrink_never_goes_below_the_floor():
     assert fitted[0]["size"] == 12
 
 
+def test_text_that_starts_below_the_floor_fails_loudly():
+    # Review finding 3: shrinking can only make text smaller, so text handed in below the floor
+    # can never be made to comply. It used to be returned unchanged, at a size no one can read.
+    paragraphs = [paragraph("short", MIN_FONT_PT - 2)]
+    with pytest.raises(TextDoesNotFitError, match=f"below the {MIN_FONT_PT} pt minimum"):
+        shrink_to_fit(paragraphs, 1000, 1000, "Slide 9, headline")
+
+
 def test_fit_table_returns_one_size_and_a_height_per_row():
     rows = [["Metric", "Value"], ["NRR (annualized)", "97.1%"], ["GRR (annualized)", "88.1%"]]
     size, heights = fit_table(rows, [200, 100], 1000, "test table", start_size=14)

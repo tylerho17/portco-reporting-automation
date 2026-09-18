@@ -33,11 +33,15 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
-from analyze import AnalysisError, analyze, build_payload, payload_to_text, save_analysis
-from build_deck import PLACEHOLDER_TEXT, analysis_path, save_deck
+from analyze import PROMPT_VERSION, AnalysisError, analyze, build_payload, payload_to_text, save_analysis
+from build_deck import PLACEHOLDER_TEXT, analysis_details, analysis_path, deck_path, save_deck
 from clean import clean_workbook
+from compare_models import run_cost
 from excel_output import save_metrics_workbook
-from metrics import CANNOT_EVALUATE, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config, metric_reasons
+from metrics import (CANNOT_EVALUATE, CONFIG_PATH, TRIP, compute_metrics, data_gaps, evaluate_flags, load_config,
+                     metric_reasons)
+from provenance import build_manifest, manifest_path, read_manifest, save_manifest
+from text_fit import TextDoesNotFitError
 
 PROJECT_DIR = Path(__file__).parent
 DATA_DIR = PROJECT_DIR / "data"
@@ -45,8 +49,9 @@ OUTPUT_DIR = PROJECT_DIR / "output"
 SUMMARY_CSV_PATH = OUTPUT_DIR / "batch_summary.csv"
 
 # Errors caused by a bad input file (clean.py raises ValueError with a clear message; a missing
-# or unreadable file raises OSError). Anything else is probably a bug, so its traceback is printed.
-INPUT_ERRORS = (ValueError, OSError)
+# or unreadable file raises OSError), or by text that can't fit a slide (text_fit.py names the slide
+# and the box). Anything else is probably a bug, so its traceback is printed.
+INPUT_ERRORS = (ValueError, OSError, TextDoesNotFitError)
 
 # What happened to the AI summary, and how the Result column says it.
 AI_OK, AI_SKIPPED, AI_FAILED = "ok", "skipped", "failed"
@@ -91,9 +96,9 @@ def api_key_problem():
 def ai_step(workbook_path, actuals, next_budget, config, output_dir, client=None):
     """Ask Claude for the commentary and save output/<company>_analysis.json, whether it passed or not.
 
-    Returns the analysis file for the deck, or None when the AI failed (the deck then shows the
-    placeholder). Only a validation failure after the retry or an API error counts as "AI failed";
-    any other error is a bug and fails the company. client=None uses the real Anthropic client.
+    Returns {"analysis_file": the file for the deck or None, "run_info": ..., "validation": what
+    happened}. Only a validation failure after the retry or an API error counts as "AI failed"; any
+    other error is a bug and fails the company. client=None uses the real Anthropic client.
     """
     path = analysis_path(workbook_path, output_dir)
     path.unlink(missing_ok=True)  # an old analysis must never look like this run's
@@ -104,17 +109,17 @@ def ai_step(workbook_path, actuals, next_budget, config, output_dir, client=None
         save_analysis(path, payload, run_info=error.run_info, error=str(error))
         print(f"  ✗ AI commentary: failed validation after the retry ({shown_path(path)}):")
         print("      " + str(error).replace("\n", "\n      "))
-        return None
+        return {"analysis_file": None, "run_info": error.run_info, "validation": f"failed: {error}"}
     except anthropic.AnthropicError as error:  # the API call itself failed (connection, rate limit, ...)
         message = f"{type(error).__name__}: {error}"
         save_analysis(path, payload, error=message)
         print(f"  ✗ AI commentary: API error ({shown_path(path)}): {message}")
-        return None
+        return {"analysis_file": None, "run_info": None, "validation": f"failed: {message}"}
     save_analysis(path, payload, summary, run_info)
     print(f"  ✓ AI commentary: passed validation ({run_info['attempts']} attempt(s), "
           f"{run_info['input_tokens']} in / {run_info['output_tokens']} out tokens, {run_info['seconds']}s): "
           f"{shown_path(path)}")
-    return path
+    return {"analysis_file": path, "run_info": run_info, "validation": "passed"}
 
 
 def deck_step(workbook_path, config, analysis_file, output_dir):
@@ -127,6 +132,45 @@ def deck_step(workbook_path, config, analysis_file, output_dir):
     if analysis_file is not None and why_unavailable is not None:  # the AI passed, but the deck rejected it
         print(f"      {PLACEHOLDER_TEXT}: {why_unavailable}")
     return why_unavailable
+
+
+def ai_record(ai, analysis_file):
+    """What the manifest says about the AI step: model, prompt wording, tokens, cost, result.
+
+    Everything is None when the AI didn't run, rather than a zero that would read like a real number.
+    """
+    if ai is None:  # --skip-ai
+        return {"model": None, "prompt_version": None, "attempts": None, "input_tokens": None,
+                "output_tokens": None, "seconds": None, "cost_usd": None, "validation": "skipped"}
+    run_info = ai["run_info"] or {}
+    details = analysis_details(analysis_file) if analysis_file else None
+    model, tokens = run_info.get("model"), (run_info.get("input_tokens"), run_info.get("output_tokens"))
+    return {
+        "model": model,
+        "prompt_version": details["prompt_version"] if details else PROMPT_VERSION,
+        "attempts": run_info.get("attempts"),
+        "input_tokens": tokens[0], "output_tokens": tokens[1], "seconds": run_info.get("seconds"),
+        "cost_usd": round(run_cost(model, *tokens), 4) if model and all(tokens) else None,
+        "validation": ai["validation"],
+    }
+
+
+def manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable):
+    """Write output/<company>_manifest.json: where this deck came from, and who has approved it.
+
+    Any approval already recorded is carried over. Whether it still counts is decided by
+    provenance.approval_status, which checks it against today's workbook and thresholds - so a deck
+    goes back to DRAFT on its own once either changes.
+    """
+    path = manifest_path(workbook_path, output_dir)
+    previous = read_manifest(path)
+    manifest = build_manifest(
+        company_name(workbook_path), workbook_path, CONFIG_PATH,
+        deck_path(workbook_path, output_dir).name, ai_record(ai, analysis_file),
+        ai_text=why_unavailable is None, approval=(previous or {}).get("approval"))
+    save_manifest(path, manifest)
+    print(f"  ✓ Manifest: {shown_path(path)} (deck status: {manifest['deck']['status']})")
+    return manifest
 
 
 def ai_status(skip_ai, why_unavailable):
@@ -175,12 +219,15 @@ def run_company(workbook_path, config, skip_ai, client=None, output_dir=OUTPUT_D
     excel_path = save_metrics_workbook(workbook_path, config, output_dir)
     print(f"  ✓ Excel: {shown_path(excel_path)}")
     if skip_ai:
-        analysis_file = None
+        ai, analysis_file = None, None
         print("  - AI commentary: skipped (--skip-ai)")
     else:
-        analysis_file = ai_step(workbook_path, actuals, next_budget, config, output_dir, client)
+        ai = ai_step(workbook_path, actuals, next_budget, config, output_dir, client)
+        analysis_file = ai["analysis_file"]
     why_unavailable = deck_step(workbook_path, config, analysis_file, output_dir)
+    manifest = manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable)
     result["ai"] = ai_status(skip_ai, why_unavailable)
+    result["deck_status"] = manifest["deck"]["status"]
     return result
 
 

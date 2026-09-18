@@ -20,6 +20,8 @@ import main
 from analyze import BoardSummary
 from build_deck import PLACEHOLDER_TEXT
 from main import quarter_mismatch_warning, write_summary_csv
+from provenance import NOT_REVIEWED, file_sha256, git_commit, manifest_path, read_manifest, save_manifest
+from text_fit import TextDoesNotFitError
 
 PROJECT_DIR = Path(__file__).parent.parent
 NORTHWIND = PROJECT_DIR / "data" / "northwind.xlsx"
@@ -188,6 +190,32 @@ def test_unexpected_error_in_the_ai_step_fails_the_company(tmp_path):
     assert not (tmp_path / "northwind_analysis.json").exists()  # the old analysis can't pass for this run's
 
 
+def test_ai_text_too_long_for_the_slides_is_ai_failed_not_a_failed_company(tmp_path):
+    # Review finding 1a, the last line of defence: an analysis that passed when it was made but
+    # doesn't fit the slides still gets a deck, with the placeholder, and the run reads OK (AI failed).
+    long_point = {"title": "Steady base", "detail": "customers " * 45}
+    saved = {"summary": {"headline": "Retention is the main question for the board.",
+                         "wins": [long_point] * 3, "risks": [long_point] * 3,
+                         "questions": ["What drives churn?", "Where is pipeline from?", "How is hiring?"]},
+             "payload": {"company": "Northwind", "latest_quarter": "Q2 2026"}}
+    path = tmp_path / "northwind_analysis.json"
+    path.write_text(json.dumps(saved))
+
+    why_unavailable = main.deck_step(NORTHWIND, main.load_config(), path, tmp_path)
+    assert "does not fit slide 1" in why_unavailable
+    assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
+    assert main.RESULT_TEXTS[main.ai_status(False, why_unavailable)] == "OK (AI failed)"
+
+
+def test_a_text_that_does_not_fit_prints_one_clear_line_not_a_traceback(capsys):
+    # Review finding 2: the message already names the slide and the box, so a traceback (which means
+    # "this is a bug in the code") only makes the real problem harder to see.
+    main.describe_error(TextDoesNotFitError("Slide 4, Risks and flags: text doesn't fit"))
+    printed = capsys.readouterr()
+    assert "Slide 4, Risks and flags" in printed.out
+    assert "Traceback" not in printed.out + printed.err
+
+
 def test_skip_ai_builds_the_placeholder_deck_and_never_calls_claude(tmp_path, monkeypatch):
     def refuse(*args, **kwargs):
         raise AssertionError("--skip-ai called analyze()")
@@ -199,6 +227,87 @@ def test_skip_ai_builds_the_placeholder_deck_and_never_calls_claude(tmp_path, mo
     assert result["error"] is None and main.result_text(result) == "OK (AI skipped)"
     assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
     assert old.read_text() == "an analysis from an earlier run"  # --skip-ai leaves an earlier analysis alone
+
+
+# ---------------------------------------------------------------------------
+# The manifest: where each deck came from (provenance)
+# ---------------------------------------------------------------------------
+
+CONFIG_FILE = PROJECT_DIR / "config.yaml"
+
+
+def northwind_manifest(tmp_path):
+    return read_manifest(manifest_path(NORTHWIND, tmp_path))
+
+
+def test_a_run_writes_a_manifest_for_the_company(tmp_path):
+    client = FakeClient(summary())
+    run_northwind(tmp_path, client=client)
+    saved = northwind_manifest(tmp_path)
+
+    assert saved["company"] == "Northwind"
+    assert saved["input"] == {"file": "northwind.xlsx", "sha256": file_sha256(NORTHWIND)}
+    assert saved["config"] == {"file": "config.yaml", "sha256": file_sha256(CONFIG_FILE)}
+    assert saved["code"] == git_commit()
+    assert saved["ai"]["model"] == analyze.DEFAULT_MODEL
+    assert saved["ai"]["prompt_version"] == analyze.PROMPT_VERSION
+    assert saved["ai"]["validation"] == "passed" and saved["ai"]["attempts"] == 1
+    assert saved["ai"]["input_tokens"] == 100 and saved["ai"]["output_tokens"] == 50
+    assert saved["ai"]["cost_usd"] > 0
+    assert saved["deck"] == {"file": "northwind_board_pack.pptx", "ai_text": True, "status": NOT_REVIEWED}
+    assert saved["approval"] is None  # nobody has reviewed it yet
+    assert saved["run_at"]
+
+
+def test_the_manifest_records_a_skipped_ai_step(tmp_path):
+    run_northwind(tmp_path, skip_ai=True)
+    saved = northwind_manifest(tmp_path)
+    assert saved["ai"]["validation"] == "skipped"
+    assert saved["ai"]["model"] is None and saved["ai"]["cost_usd"] is None
+    assert saved["deck"]["ai_text"] is False
+
+
+def test_the_manifest_records_an_ai_failure_and_that_the_deck_has_the_placeholder(tmp_path):
+    run_northwind(tmp_path, client=FakeClient(summary(headline="ARR grew 555.5% this quarter.")))
+    saved = northwind_manifest(tmp_path)
+    assert saved["ai"]["validation"].startswith("failed") and "555.5" in saved["ai"]["validation"]
+    assert saved["ai"]["attempts"] == analyze.MAX_ATTEMPTS and saved["ai"]["cost_usd"] > 0
+    assert saved["deck"]["ai_text"] is False
+
+
+def test_the_manifest_hash_follows_the_workbook(tmp_path, monkeypatch):
+    # The hash is of the file that was read, so a different workbook can't pass for this one.
+    run_northwind(tmp_path, skip_ai=True)
+    first = northwind_manifest(tmp_path)["input"]["sha256"]
+
+    copy = tmp_path / "northwind.xlsx"
+    copy.write_bytes(NORTHWIND.read_bytes() + b"a change")
+    main.run_batch([copy], main.load_config(), True, output_dir=tmp_path)
+    assert northwind_manifest(tmp_path)["input"]["sha256"] != first
+
+
+def test_a_re_run_keeps_an_approval_that_is_still_valid(tmp_path):
+    run_northwind(tmp_path, skip_ai=True)
+    saved = northwind_manifest(tmp_path)
+    saved["approval"] = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00",
+                         "input_sha256": file_sha256(NORTHWIND), "config_sha256": file_sha256(CONFIG_FILE)}
+    save_manifest(manifest_path(NORTHWIND, tmp_path), saved)
+
+    run_northwind(tmp_path, skip_ai=True)  # same workbook, same thresholds
+    after = northwind_manifest(tmp_path)
+    assert after["approval"]["reviewer"] == "Tyler Ho"
+    assert after["deck"]["status"] == "approved by Tyler Ho on 2026-09-17T15:00:00"
+
+
+def test_a_run_after_the_workbook_changed_drops_back_to_draft(tmp_path):
+    run_northwind(tmp_path, skip_ai=True)
+    saved = northwind_manifest(tmp_path)
+    saved["approval"] = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00",
+                         "input_sha256": "the-hash-of-an-older-workbook", "config_sha256": file_sha256(CONFIG_FILE)}
+    save_manifest(manifest_path(NORTHWIND, tmp_path), saved)
+
+    run_northwind(tmp_path, skip_ai=True)
+    assert northwind_manifest(tmp_path)["deck"]["status"] == NOT_REVIEWED
 
 
 # ---------------------------------------------------------------------------

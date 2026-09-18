@@ -19,13 +19,15 @@ Demo project for a PE AI automation role. Must be clean, explainable, and reliab
 - make_data_common.py    shared checking and writing code for the three make_data scripts
 - clean.py               normalize headers, parse "$1.2M"-style text, handle blanks; stops (with sheet/row/cell) on anything it can't read with certainty
 - metrics.py             every metric, why a value has no number (reasons), flags, data gaps, and the ONE label set (METRIC_LABELS, INPUT_LABELS)
-- analyze.py             Claude API → JSON (headline, 3 wins, 3 risks, 3 mgmt questions); validate schema + sign-aware number check, retry once on failure
+- analyze.py             Claude API → JSON (headline, 3 wins, 3 risks, 3 mgmt questions); validate schema + sign-aware number check + slide-fit check + direction check (a direction word its numbers contradict, a "persistent" trend that isn't), retry once on failure
 - compare_models.py      step 3b: blind Sonnet vs Haiku comparison -> README table
 - excel_output.py        step 4b: output/<company>_metrics.xlsx (Metrics, Flags, Data gaps sheets)
 - make_template.py       builds templates/base.pptx: fictional "Example Capital" brand, navy/gray, 16:9, title + content layouts
-- build_deck.py          step 4: output/<company>_board_pack.pptx on templates/base.pptx; slides: Summary, Key metrics, ARR and cash charts, Risks and flags, Questions. Re-checks the analysis JSON; "AI summary unavailable" if missing or failed
+- build_deck.py          step 4: output/<company>_board_pack.pptx on templates/base.pptx; slides: Summary, Key metrics, ARR and cash charts, Risks and flags, Questions. Re-checks the analysis JSON; "AI summary unavailable" if missing, failed, or too long for slides 1 and 5 (ai_text_problems) - a company is never left without a deck. Footer carries the git commit and model; every slide is watermarked "DRAFT - NOT REVIEWED" until approve.py records a reviewer
 - charts.py              the two matplotlib charts for slide 3 (ARR + net new ARR, ending cash with runway); a blank quarter is a visible gap
 - text_fit.py            measures slide text, shrinks it to a 12 pt floor, then stops naming the slide and box
+- provenance.py          run manifests: input/config SHA-256 hashes, git commit, model + prompt version, tokens, cost; and whether a human approved this deck (approval_status is the only judge)
+- approve.py             `python approve.py northwind [--reviewer NAME]`: records reviewer + time in the manifest, so rebuilding drops the DRAFT watermark. Never builds a deck
 - main.py                CLI: `python main.py data/northwind.xlsx` or `--all` [--skip-ai]; clean -> metrics -> Excel -> AI JSON -> deck per company; summary table + output/batch_summary.csv
 - config.yaml            flag thresholds with investor reasoning in comments (NRR < 100%, burn > 15% over budget, runway < 12 mo)
 - tests/ + pytest.ini    pytest unit tests (`python -m pytest -q`), expected values worked out by hand; tests/test_docs.py keeps README/CLAUDE.md file names real

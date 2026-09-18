@@ -734,3 +734,145 @@ All 4 are logged in LEARNINGS.md.
    - README screenshots aren't taken
    - CLAUDE.md's 2 out-of-date lines
    - running check_main.py replaces the AI decks again (run `build_deck.py` afterwards)
+
+## Task 7: Slide fit and direction claims (review findings 1-3, Task 4's false claims)
+
+### Where this started
+
+The Task 6 review left finding 1 unfixed and waiting on your decision, and Task 4's live run had left 3 false or misleading claims in Claude's text. You chose review finding 1 options (b) + (a), plus findings 2 and 3, and asked for prompt rules and a code check for the direction problem, tests first, then one live run.
+
+### What I built
+
+1. **Slide fit is now part of validation (finding 1b).** `build_deck.ai_text_problems` measures Claude's headline, the wins and risks columns and the questions against the template's real boxes. `analyze.validate_summary` calls it, so text too long for the deck is a validation problem like a wrong number, and the existing one retry handles it. To make sure what is measured is what is drawn, slide 1's boxes now come from one function (`summary_boxes`) that both the fit check and the slide builder use; the same for the two columns (`column_box`) and the questions (`questions_paragraphs`).
+2. **If it still doesn't fit, the deck is still built (finding 1a).** No new path was needed: `load_analysis` already re-runs the validator, so it now rejects over-long text and the deck gets the "AI summary unavailable" placeholder, with the run reading `OK (AI failed)`. A company can no longer fail because Claude wrote a bit more.
+3. **Findings 2 and 3.** `TextDoesNotFitError` is in main.py's `INPUT_ERRORS`, so a fit stop prints one line naming the slide and box instead of a traceback; `shrink_to_fit` stops when the text already starts below 12 pt.
+4. **Two prompt rules (Fix 2).** Call a trend rising, falling, improving or deteriorating only if every step moves that way, and never call one persistent or consistent unless every step does. A flag that passed is a win only if its value is good in itself; if it passes for a bad reason, say so.
+5. **A two-layer direction check in `validate_summary`.** Layer 1 flags a direction word its own two numbers contradict. Layer 2 flags a trend called persistent or consistent when the payload's own series moves the other way in between. Both are deliberately narrow: only numbers carrying a unit are compared, both ends must carry the same unit, the direction word must sit between the previous number and the pair it describes, and layer 2 only runs when the claim names both quarters and exactly one trend matches.
+6. **Tests first, 30 new ones** (442 total, from 412). All three Task 4 claims are fixtures, including the two no code check can catch.
+
+### The live run (run 1 of 2; no second run needed)
+
+All 3 companies `OK`, with Claude's text on every deck. Alderpeak took 2 attempts, Fernhollow and Northwind 1.
+
+| Company | Attempts | Input | Output | Seconds | Cost |
+|---|---|---|---|---|---|
+| Alderpeak | 2 | 11,880 | 7,702 | 73.6 | $0.1008 |
+| Fernhollow | 1 | 6,156 | 7,714 | 74.0 | $0.0895 |
+| Northwind | 1 | 6,115 | 7,087 | 66.0 | $0.0831 |
+| **Total** | 4 | **24,151** | **22,503** | 213.6 | **$0.2733** |
+
+**It cost $0.27, not the ~$0.15 you budgeted.** The two new prompt rules roughly doubled output tokens on every company, retry or not: checking every step of a trend before writing about it is thinking that has to be paid for. Per company that is $0.0911 against Task 4's $0.0466, so 275 companies is about $25.06 a quarter, not $12.81. README's Cost section now says so.
+
+**What improved** (read by hand against each payload, not just the validator's pass):
+- **Alderpeak, both Task 4 errors gone.** "Well above prior-period levels" is now "decelerated every quarter from 53.9% to 47.5%" - which is true, and layer 2 verified it. The "persistent gentle decline" in NRR is gone, and Rule of 40 is now described as "moved between 42.4% and 43.1% over the last four quarters" instead of a "slide" to "arrest". That is the new phrasing the prompt asks for when a figure moves both ways.
+- **Fernhollow, the good-news error gone.** The combo flag is no longer a win: risk 2 says it "only passed because pipeline also fell, from $4,200K to $2,500K". Pipeline had not been mentioned anywhere in Task 4's text.
+- **Northwind** kept what was already right and now says CAC payback is "passing the 24.0 mo threshold" where Task 4's question 3 hadn't.
+- **The old saved Alderpeak analysis is rejected by the new checks**, which is the fix proving itself on real text: before the live run, `load_analysis` refused it with "calls NRR (annualized) persistently falling from Q3 2024 to Q2 2026, but it moves the other way at 4 of 7 steps".
+
+**What did not improve:**
+- **One new error, small:** Northwind's question 1 puts net burn ($2,400K to $3,900K, Q3 2024 to Q2 2026) and net new ARR ($2,330K to $1,660K, Q4 2025 to Q2 2026) "over the same period". They are different periods. Nothing checks a period claim.
+- **Two old prompt-rule slips:** Fernhollow still describes NRR from Q3 2024, the first quarter in the data, rather than from its peak; Northwind wrote pipeline as "9,200" without "$" and "K", a slip v3 had already fixed once.
+
+### Decisions I made that you didn't specify
+
+1. **The fit check covers slide 5 as well as slide 1** (you chose this when I asked). Slide 5 only overflows at about 150 words a question, far past anything Claude writes, but it carries AI text and had the same failure mode.
+2. **"Improved" and "deteriorated" are not in the code check's word lists,** on purpose: an improvement is a smaller burn multiple but a bigger NRR, so their numeric direction depends on the metric. The prompt rule covers them.
+3. **Layer 2 only judges claims that name both quarters** and match exactly one trend. It would otherwise have to guess which series a claim is about.
+4. **I did not weaken check_deck.py** when it began rejecting the old Alderpeak analysis. It was right to reject it, and the live run replaced the text.
+5. **I rebuilt `output/batch_summary.csv` after the checks ran,** from the workbooks and the saved analyses, with no API call. check_main.py's deliberate-break test had left a single "FAILED: Broken" row there, which would have been the first thing anyone opened before a recording. The underlying problem (checks writing into `output/`) is still the `--output-dir` item.
+6. **I kept a copy of the Task 4 analyses** in `output/day_logs/before_direction_fix/`, and this run's terminal output in `output/day_logs/live_run_after_direction_fix.txt`.
+
+### What failed and how I fixed it
+
+Both are logged in LEARNINGS.md.
+
+1. **The direction check failed two claims that were true.** `check_northwind.py`'s hand-written summary ("NRR went from 108.0% to 97.1% while pipeline rose" - "rose" is about pipeline) and then, in the live run itself, Alderpeak's first answer ("Ending ARR rose from $9,000K to $18,450K, with ARR growth YoY ... from 53.9% to 47.5%" - "rose" is about ARR). The check was taking the direction word from anywhere in the sentence. It now has to sit between the previous number and the pair it describes. The second one cost one retry, about $0.03; the answer passed on attempt 2, so no company failed. Both claims are now test fixtures.
+2. **Two of my new fit tests were wrong about how much room a slide has.** I had assumed a 25-word headline and 50-word questions would overflow; measuring showed a headline needs about 60 words and a question about 150. The tests now use those figures and say why they are so far past anything real.
+
+### Unresolved
+
+1. **A claim's periods aren't checked** (Northwind's question 1 above). It would need each number's quarter and a rule that two figures said to move "over the same period" share one. Cheap to try, but it needs a paid run to confirm.
+2. **The cost roughly doubled** and is now the largest number in the README's Cost section. If that matters more than the accuracy, the lever is the prompt rules, not the code checks - the code checks are free.
+3. **`--output-dir` for the check scripts** is still open, and still the reason `output/` needs tidying after a full check run.
+4. **Only 1 run per company again.** The retry path has now run for real once (Alderpeak), on a false positive that no longer exists.
+
+## Task 8: Provenance and the human approval gate
+
+### Where this started
+
+Nothing for this task existed. Task 7's fixes were in and all checks passed, but a finished deck
+still couldn't say where it came from, and nothing stopped an unreviewed one from being sent on.
+You asked for a manifest per run, commit and model in the footer, a prompt version, and a DRAFT
+watermark cleared by `approve.py`. No API calls were made in this task.
+
+### What I built
+
+1. **`provenance.py`** — hashing, the git commit, reading and writing the manifest, and one function
+   (`approval_status`) that decides whether an approval still counts. Everything else asks it, so
+   main.py, build_deck.py and approve.py can never disagree about whether a deck is approved.
+2. **`output/<company>_manifest.json`, written by every run** — company, run time, the workbook and
+   `config.yaml` by SHA-256, the git commit (with `*` for uncommitted edits), model, prompt version,
+   attempts, tokens, seconds, cost, validation result, whether the deck carries AI text, and the
+   approval block.
+3. **`PROMPT_VERSION = "v4"` in analyze.py**, written into every analysis JSON, and a test that pins
+   a checksum of `SYSTEM_PROMPT` to it. Editing the prompt without bumping the version now fails the
+   suite, which is the only way a version constant stays true.
+4. **Footer: commit and model** on every slide, so a printed page is traceable without the manifest.
+5. **The watermark** — `DRAFT - NOT REVIEWED` diagonally across all 5 slides, drawn on top of the
+   content at 25% opacity, until a manifest says a person approved this deck for these exact inputs.
+6. **`approve.py`** — records a reviewer and a time, and refuses when there is nothing to approve or
+   when the workbook or thresholds have changed since the deck was built. It never builds a deck.
+7. **37 new tests** (480 total, from 442), including two new test files.
+
+### Proof it works, end to end
+
+Walked in a temporary folder, with a copy of Northwind:
+
+```
+1. after a run:        5 watermarks | DRAFT - NOT REVIEWED
+2. after approve.py:   5 watermarks (the old deck is untouched) | approved by Tyler Ho on 2026-09-17T11:47:07
+3. after a rebuild:    0 watermarks | approved by Tyler Ho on 2026-09-17T11:47:07
+4. workbook changed:   5 watermarks | the approval is still on file, but no longer counts
+5. approving a deck built from older numbers:
+   Not approved: the workbook has changed since this deck was built - run main.py ... again before approving
+```
+
+### Decisions I made that you didn't specify
+
+1. **Approval is void if `config.yaml` changes too, not only the workbook** (you chose this when I
+   asked). A threshold edit changes which flags trip, so it changes what the reviewer approved.
+2. **The uncommitted-code marker in the footer is `*`, not " + local changes"** — see What failed.
+   The manifest records `"uncommitted_changes": true` in full, because it has the room.
+3. **The watermark is drawn on top, not behind** (you chose this). Slides 2 and 3 are covered by an
+   opaque table and two chart images; underneath them a watermark is invisible.
+4. **A standalone `build_deck.py` rebuild updates the manifest's deck status but never creates one.**
+   It can honestly say whether the deck it just wrote is a draft; it can't fill in tokens or cost.
+5. **The manifest keeps an approval even when it no longer counts,** rather than deleting it. The
+   record of who approved what is the point; `approval_status` decides validity at read time, so
+   restoring the original workbook restores the approval - it really is the same deck.
+6. **`approve.py` takes the reviewer from `git config user.name`** when `--reviewer` isn't given, and
+   stops if neither exists. An approval without a name on it isn't an approval.
+
+### What failed and how I fixed it
+
+Both are in LEARNINGS.md.
+
+1. **The footer broke the build:** `Slide 1, Footer: text doesn't fit even at the 12 pt minimum`. I
+   had measured the new footer at 620 pt against 670 pt of room — on a clean checkout. With
+   uncommitted edits the commit read `678d5e7 + local changes`, taking the line to 715 pt, and the
+   footer box holds 21.6 pt after margins, less than two 12 pt lines. Shortened the marker to `*`
+   (626 pt with the longest company name). The fit rule caught in a second what would otherwise have
+   been a squashed footer on camera.
+2. **A stale manifest:** rebuilding an approved deck after the workbook changed correctly re-stamped
+   it DRAFT, but the manifest still read "approved by Tyler Ho", because only main.py wrote that
+   line. Found by walking the gate by hand, not by a test. `record_deck_status` now updates it
+   whenever a deck is written, with a test.
+
+### Unresolved
+
+1. **Nothing re-runs a stale deck for you.** The manifest can prove a deck is out of date; acting on
+   that is still a person's job.
+2. **The manifest lives in `output/`, which is git-ignored.** For a real audit trail it would belong
+   somewhere kept — a database row, or a committed folder.
+3. **`check_main.py` still overwrites `output/`**, and now the manifests too. The `--output-dir`
+   option is still the fix.

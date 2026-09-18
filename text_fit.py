@@ -95,6 +95,8 @@ def shrink_to_fit(paragraphs, width_pt, height_pt, where):
     TextDoesNotFitError once the smallest size would go below MIN_FONT_PT.
     """
     smallest = min(item["size"] for item in paragraphs)
+    if smallest < MIN_FONT_PT:  # shrinking only makes text smaller, so this can never be made to comply
+        raise TextDoesNotFitError(f"{where}: text starts at {smallest} pt, below the {MIN_FONT_PT} pt minimum")
     for shrink in range(max(smallest - MIN_FONT_PT, 0) + 1):
         sized = [{**item, "size": item["size"] - shrink} for item in paragraphs]
         if text_height_pt(sized, width_pt) <= height_pt:

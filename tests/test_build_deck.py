@@ -12,12 +12,15 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from pptx import Presentation
 
 from analyze import build_payload
-from build_deck import (FICTIONAL_NOTE, PLACEHOLDER_TEXT, build_presentation, collect_deck_data, deck_path,
-                        flag_count_text, gaps_text, load_analysis, threshold_text)
+from build_deck import (FICTIONAL_NOTE, NO_AI_MODEL, PLACEHOLDER_TEXT, build_presentation, collect_deck_data,
+                        deck_path, flag_count_text, gaps_text, load_analysis, save_deck, threshold_text)
 from clean import STANDARD_COLUMNS
 from metrics import CANNOT_EVALUATE, MISSING_INPUT, PASS, TRIP
+from provenance import (NOT_REVIEWED, build_manifest, file_sha256, git_commit, manifest_path, read_manifest,
+                        save_manifest)
 from text_fit import TextDoesNotFitError
 
 NAN = math.nan
@@ -161,6 +164,15 @@ def test_analysis_with_a_number_not_in_todays_data(tmp_path, payload):
     assert summary is None and "12345" in reason
 
 
+def test_analysis_too_long_for_the_slides_gives_the_placeholder(tmp_path, payload):
+    # Decision K: the numbers are valid, so the deck is still built - it just can't carry this text
+    # (review finding 1a). Before this, the build stopped and the company had no deck at all.
+    too_long = summary_dict()
+    too_long["wins"] = [{"title": "Steady base", "detail": "customers " * 45}] * 3
+    summary, reason = load_analysis(write_analysis(tmp_path, too_long), payload)
+    assert summary is None and "does not fit slide 1" in reason
+
+
 def test_analysis_with_two_questions(tmp_path, payload):
     short = summary_dict()
     short["questions"] = short["questions"][:2]
@@ -176,10 +188,10 @@ def all_text(slide):
     return " ".join(s.text_frame.text for s in slide.shapes if s.has_text_frame)
 
 
-def build(tmp_path, summary=None, **data_options):
+def build(tmp_path, summary=None, approval=None, model=None, **data_options):
     from analyze import BoardSummary
     parsed = BoardSummary.model_validate(summary) if summary else None
-    return build_presentation(deck_data(**data_options), parsed, RUN_DATE, tmp_path)
+    return build_presentation(deck_data(**data_options), parsed, RUN_DATE, tmp_path, approval=approval, model=model)
 
 
 def test_five_slides_in_order(tmp_path):
@@ -277,6 +289,86 @@ def test_charts_slide_has_two_pictures(tmp_path):
 def test_text_too_long_for_its_box_fails_loudly(tmp_path):
     with pytest.raises(TextDoesNotFitError, match="Slide 1"):
         build(tmp_path, company="Testco " * 60)
+
+
+# ---------------------------------------------------------------------------
+# Provenance in the footer, and the DRAFT watermark until someone approves
+# ---------------------------------------------------------------------------
+
+APPROVED = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00",
+            "input_sha256": "input-hash", "config_sha256": "config-hash"}
+
+
+def test_the_footer_carries_the_commit_and_the_model(tmp_path):
+    footer = shape(build(tmp_path, model="claude-sonnet-5").slides[0], "Footer").text_frame.text
+    assert git_commit()["commit"] in footer
+    assert "claude-sonnet-5" in footer
+    assert FICTIONAL_NOTE in footer and "testco.xlsx" in footer and RUN_DATE.isoformat() in footer
+
+
+def test_the_footer_says_when_there_is_no_ai_text(tmp_path):
+    assert NO_AI_MODEL in shape(build(tmp_path).slides[0], "Footer").text_frame.text
+
+
+def test_every_slide_is_watermarked_until_the_deck_is_approved(tmp_path):
+    for slide in build(tmp_path).slides:
+        assert shape(slide, "Watermark").text_frame.text == NOT_REVIEWED
+
+
+def test_the_watermark_is_drawn_over_the_content_not_under_it(tmp_path):
+    # Slides 2 and 3 are covered by an opaque table and two chart images, so a watermark added
+    # first would be invisible on exactly the slides that carry the numbers.
+    for slide in build(tmp_path).slides:
+        assert slide.shapes[-1].name == "Watermark"
+
+
+def test_an_approved_deck_has_no_watermark(tmp_path):
+    for slide in build(tmp_path, approval=APPROVED).slides:
+        assert not [item for item in slide.shapes if item.name == "Watermark"]
+
+
+def northwind_manifest(tmp_path, input_sha256=None, config_sha256=None):
+    """A manifest for Northwind in tmp_path, approved against the hashes given (or today's)."""
+    workbook, config = PROJECT_DIR / "data" / "northwind.xlsx", PROJECT_DIR / "config.yaml"
+    approval = {"reviewer": "Tyler Ho", "approved_at": "2026-09-17T15:00:00",
+                "input_sha256": input_sha256 or file_sha256(workbook),
+                "config_sha256": config_sha256 or file_sha256(config)}
+    manifest = build_manifest("Northwind", workbook, config, "northwind_board_pack.pptx", {},
+                              ai_text=False, approval=approval)
+    save_manifest(manifest_path(workbook, tmp_path), manifest)
+    return workbook
+
+
+def watermarks_in(path):
+    return [item.name for slide in Presentation(path).slides for item in slide.shapes if item.name == "Watermark"]
+
+
+def test_rebuilding_an_approved_deck_drops_the_watermark(tmp_path):
+    workbook = northwind_manifest(tmp_path)
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert watermarks_in(path) == []
+
+
+def test_a_rebuilt_deck_updates_what_the_manifest_says_about_it(tmp_path):
+    # The manifest has to describe the deck on disk, or an audit trail is worse than none.
+    workbook = northwind_manifest(tmp_path, input_sha256="the-hash-of-an-older-workbook")
+    save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    saved = read_manifest(manifest_path(workbook, tmp_path))
+    assert saved["deck"]["status"] == NOT_REVIEWED      # it was "approved by Tyler Ho ..." before
+    assert saved["approval"]["reviewer"] == "Tyler Ho"  # the record of the approval is kept
+
+
+def test_a_workbook_changed_since_approval_goes_back_to_draft(tmp_path):
+    # Nobody has reviewed a deck built from numbers that arrived after the approval.
+    workbook = northwind_manifest(tmp_path, input_sha256="the-hash-of-an-older-workbook")
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert len(watermarks_in(path)) == 5
+
+
+def test_changed_thresholds_send_an_approved_deck_back_to_draft(tmp_path):
+    workbook = northwind_manifest(tmp_path, config_sha256="the-hash-of-older-thresholds")
+    path, _ = save_deck(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert len(watermarks_in(path)) == 5
 
 
 def test_deck_path():

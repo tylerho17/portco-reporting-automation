@@ -12,6 +12,7 @@ Portfolio companies send their quarterly KPIs in messy Excel workbooks, and this
 - [Model comparison](#model-comparison-build-step-3b)
 - [Cost](#cost)
 - [Screenshots](#screenshots)
+- [Known limitations](#known-limitations)
 - [Next steps](#next-steps)
 
 ---
@@ -52,6 +53,7 @@ Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK
 | `<company>_board_pack.pptx` | The 5-slide deck: Summary, Key metrics, ARR and cash charts, Risks and flags, Questions for management |
 | `<company>_metrics.xlsx` | Backup workbook: Metrics (every quarter), Flags (latest quarter), Data gaps |
 | `<company>_analysis.json` | Claude's answer, the exact data it was given, tokens, attempts, and any validation problems |
+| `<company>_manifest.json` | Where the deck came from: the workbook and `config.yaml` by SHA-256 hash, the git commit, the model and prompt version, tokens and cost, and who approved it |
 | `batch_summary.csv` | One row per company: latest quarter, flags tripped, data gaps, result |
 
 Results: `OK`, `OK (AI failed)` (deck built with the placeholder), `OK (AI skipped)`, or `FAILED: ...` with the reason. One company failing never stops the batch; the exit code is 1 if any company failed.
@@ -65,6 +67,19 @@ python clean.py data/northwind.xlsx            # print the cleaned table
 python metrics.py data/northwind.xlsx          # print every metric, flag and data gap
 python make_data.py                            # regenerate data/northwind.xlsx (also make_data_alderpeak.py, make_data_fernhollow.py)
 ```
+
+**3. Review the deck, then approve it.** Every deck is stamped **DRAFT - NOT REVIEWED** across all
+5 slides until a person says otherwise. Open it, read it, then:
+
+```bash
+python approve.py northwind                      # your name comes from git config user.name
+python approve.py northwind --reviewer "A Name"  # or give it
+python build_deck.py data/northwind.xlsx         # rebuild: the watermark is gone
+```
+
+The approval is recorded in the manifest against the hashes of the workbook and `config.yaml` it was
+built from. Change either one and the deck goes back to DRAFT on its own the next time it is built,
+because what you reviewed is no longer what the deck says.
 
 **Prove it works (no API calls).**
 
@@ -127,7 +142,9 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 8. **One label set.** Metric and input names are defined once in `metrics.py`, so the printout, Excel, Claude's data and the deck all use the same words.
 9. **Three fictional companies with answer keys prove the flags aren't hard-coded:** Northwind (growing but leaking customers, 6 of 9 flags), Alderpeak (healthy, 0 of 9) and Fernhollow (distressed, 7 of 9 plus one that can't be evaluated because of a blank quarter).
 10. **The model was picked by a blind test with a rule set before running** (below): Sonnet 5 is the default because Haiku 4.5 scored 2.0 of 5 against a required 4.0.
-11. **Text must fit.** `text_fit.py` measures text and shrinks it to a 12 pt floor; if it still doesn't fit, the build stops with the slide and box named. A deck with text running off the slide is worse than no deck.
+11. **Every deck can be traced back to its inputs.** Each run writes `output/<company>_manifest.json`: the workbook and `config.yaml` by SHA-256 hash, the git commit (with a `*` if the code had uncommitted edits), the model and prompt version, the run time, tokens and cost, whether validation passed, and whether the deck carries Claude's text or the placeholder. The deck's footer repeats the commit and the model, so a printed slide is traceable on its own. A hash is the point: two files with the same name can hold different numbers, and only the hash tells them apart.
+12. **A person approves every deck before it counts.** Decks are watermarked DRAFT - NOT REVIEWED until `approve.py` records a reviewer's name and the time. Approval is tied to the hashes it was given, so new data or an edited threshold sends the deck back to DRAFT automatically - a stale approval is worse than none. `approve.py` never builds anything: producing a deck and vouching for it stay two separate acts.
+13. **Text must fit.** `text_fit.py` measures text and shrinks it to a 12 pt floor; if it still doesn't fit, the build stops with the slide and box named. A deck with text running off the slide is worse than no deck.
 
 ---
 
@@ -166,19 +183,19 @@ Blind scores by answer: A claude-haiku-4-5 = 2, B claude-haiku-4-5 = 2, C claude
 
 ## Cost
 
-From one live `python main.py --all` run with claude-sonnet-5 (all 3 companies passed validation on the first attempt). Prices: $2 input / $10 output per million tokens, as of 2026-06-24. The Excel, deck and every metric cost nothing: only the AI step calls the API.
+From the latest live `python main.py --all` run with claude-sonnet-5, after the slide-fit and direction checks were added. Prices: $2 input / $10 output per million tokens, as of 2026-06-24. The Excel, deck and chart steps are free: they are Python, not API calls.
 
-| Company | Input tokens | Output tokens | Seconds | Cost |
-|---|---|---|---|---|
-| Alderpeak (healthy) | 5,335 | 2,368 | 22.5 | $0.0343 |
-| Fernhollow (distressed) | 5,956 | 4,692 | 42.6 | $0.0588 |
-| Northwind (mixed) | 5,915 | 3,472 | 33.1 | $0.0466 |
-| **Average per company** | | | **32.7** | **$0.0466** |
+| Company | Attempts | Input tokens | Output tokens | Seconds | Cost |
+|---|---|---|---|---|---|
+| Alderpeak (healthy) | 2 | 11,880 | 7,702 | 73.6 | $0.1008 |
+| Fernhollow (distressed) | 1 | 6,156 | 7,714 | 74.0 | $0.0895 |
+| Northwind (mixed) | 1 | 6,115 | 7,087 | 66.0 | $0.0831 |
+| **Average per company** | | | | **71.2** | **$0.0911** |
 
-**For 275 companies per quarter: about $12.81** (average × 275).
-- **Range:** $9.45 if every company looked like Alderpeak, $16.18 if every company looked like Fernhollow. Distressed companies cost more because more flags mean more to explain.
-- **Retries:** a company that needs the retry costs roughly double. The model comparison's estimate from Northwind alone was $14.65. Budget $13–15 per quarter.
-- **Time:** about 33 seconds of API time per company, so about 2.5 hours for 275 companies run one after another.
+**For 275 companies per quarter: about $25.06** (average × 275).
+- **Accuracy costs money.** Before the two direction rules were added to the prompt, the same batch cost $0.0466 per company ($12.81 for 275). Asking Claude to check every step of a trend before describing it roughly doubled its output tokens. Budget $25–30 per quarter.
+- **Retries:** a company that needs the retry costs roughly double - Alderpeak did here, which is why it is the dearest of the three.
+- **Time:** about 70 seconds of API time per company, so about 5 hours for 275 companies run one after another (worth running in parallel: see Next steps).
 
 ---
 
@@ -209,6 +226,28 @@ Placeholders: capture each one and replace the line with the image. Before captu
 
 ---
 
+## Known limitations
+
+Things the code does not catch, found by reading Claude's real answers against the data. They are
+why a person still reads every deck, and why the DRAFT watermark exists.
+
+- **Where a trend is described from.** The prompt asks for a trend to be described from its peak or
+  the flag's lookback window. Fernhollow's latest summary still describes NRR "from 98.0%", which is
+  Q3 2024, the first quarter in the data. The figure is real; the starting point flatters it.
+- **Units on money figures.** Money is meant to be quoted as `$12,500K`. Northwind's latest summary
+  writes pipeline as "9,200" and "12,500". The number check only asks whether the number appears in
+  the data, not how it is dressed.
+- **"Over the same period".** Northwind's first question puts net burn ($2,400K to $3,900K, Q3 2024
+  to Q2 2026) and net new ARR ($2,330K to $1,660K, Q4 2025 to Q2 2026) "over the same period". They
+  are different periods, and nothing checks that claim.
+- **Whether a passing flag is genuinely good news.** The direction check reads numbers and trends,
+  but a claim with no numbers in it ("well above prior-period levels") has nothing to compare
+  against. That rests on the prompt rules alone.
+- **A run is only as current as its inputs.** The manifest records hashes at run time; it can tell
+  you a deck is stale, but nothing re-runs it for you.
+
+---
+
 ## Next steps
 
 **Hardening already built** (these started as next steps and are now in the code, with tests):
@@ -219,11 +258,13 @@ Placeholders: capture each one and replace the line with the image. Before captu
 - [x] **Two-KPI-tab check:** `clean.py` stops and names the tabs when two tabs both have a "Quarter" header, rather than picking one that might be a stale copy.
 - [x] **Same-quarter warning:** `main.py` warns when companies in a batch end on different quarters, so they aren't compared side by side by mistake.
 - [x] **Sign-aware number check:** `analyze.py` reads -, − and – as minus signs, so Claude writing "19.0%" for a −19.0% miss fails validation.
+- [x] **Slide-fit check:** `analyze.py` measures Claude's text against slide 1's and slide 5's real boxes, so an answer too long for the deck is caught while a retry can still fix it. If it still doesn't fit, the deck is built with the "AI summary unavailable" placeholder - a company is never left without a deck (`build_deck.ai_text_problems`).
+- [x] **Direction check:** `analyze.py` rejects a claim whose direction word its own numbers contradict ("fell from 97.1% to 108.9%"), and one that calls a trend persistent when the quarter-by-quarter series moves both ways (`analyze.claim_problems`).
 
 **Still to do:**
 
 - [ ] **Power Automate or SharePoint trigger:** when a company drops its workbook into a SharePoint folder, a Power Automate flow starts the run and saves the deck and metrics workbook back next to it, so nobody has to run a command.
 - [ ] **Portfolio rollup:** one view across all companies each quarter (flags tripped by company, data gaps, runway and NRR side by side), built from the per-company metrics that already exist.
-- [ ] **Check the direction of trend claims:** the validator checks that numbers exist, not that "rose" or "fell" matches them. The live run found 3 claims that passed every check but were false or misleading, so a person still reads each deck before it goes to a board.
+- [ ] **Check that a claim is really good news, and that its periods match:** the direction check reads numbers and trends, but it can't tell whether a passing flag is genuinely good, and it can't check a claim with no numbers in it or one that says two figures moved "over the same period" when they didn't. Those rest on the prompt, so a person still reads each deck before it goes to a board.
 - [ ] **An `--output-dir` option:** so the check scripts write to a temporary folder instead of overwriting the real decks in `output/`.
-- [ ] **Run companies in parallel:** one after another, 275 companies take about 2.5 hours.
+- [ ] **Run companies in parallel:** one after another, 275 companies take about 5 hours.

@@ -29,8 +29,13 @@ from clean import clean_workbook
 from metrics import (CANNOT_EVALUATE, INPUT_LABELS, METRIC_LABELS, MISSING_INPUT, PASS, REASON_DISPLAY, TRIP,
                      compute_metrics, data_gaps, display_value, evaluate_flags, flag_status_text, format_value,
                      load_config, metric_reasons, runway_at_next_budget, runway_context_label)
+from text_fit import preview  # the start of a text, for error messages
 
 DEFAULT_MODEL = "claude-sonnet-5"
+# The wording of SYSTEM_PROMPT below. Bump this whenever that text changes, so a saved answer
+# says which instructions produced it. A test pins each version's checksum, so the bump isn't
+# something anyone has to remember (tests/test_analyze.py). v1-v3 are logged in LEARNINGS.md.
+PROMPT_VERSION = "v4"
 MAX_ATTEMPTS = 2           # first try + one retry
 MAX_TOKENS = 16000         # room for thinking + the answer
 MAX_HEADLINE_WORDS = 30    # prompt asks for 25; small buffer before we fail it
@@ -151,7 +156,9 @@ Accuracy of framing:
 - When a flag passed, say so explicitly, quoting its value next to its threshold (for example: "passed, but close to its threshold (value vs threshold) - watch"). Never place a passing metric where it reads as a breach.
 - Describe a trend from its peak, or from the start of the flag's lookback window, not from the first quarter in the data.
 - Never call a quarter a "significant" (or large, major, sharp) miss or beat against budget unless you quote its value and that value is more than 10% away from budget - above +10.0% or below -10.0%. Smaller variances are described plainly, with their value.
-- "runway_if_burn_returns_to_plan" is runway if burn returns to plan. Describe it only in those words. It is not a projection, forecast or improvement."""
+- "runway_if_burn_returns_to_plan" is runway if burn returns to plan. Describe it only in those words. It is not a projection, forecast or improvement.
+- Only call a trend rising, falling, improving or deteriorating if every step in the window moves that way. Check the quarter-by-quarter values before you write it. If the figure moves up and down, say so ("moved between A and B") and quote the start and end values. Never call a trend persistent, consistent or steady unless every step moves the same way.
+- A flag that passed is a win only if its value is good in itself, not merely inside its threshold. If it passes for a bad reason - for example "NRR falling while pipeline rising" passing because pipeline is falling as well - say so and name the figures behind it, rather than presenting it as good news."""
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +205,210 @@ def find_ungrounded_numbers(summary, payload_text):
     return sorted(used - allowed)
 
 
+# ---------------------------------------------------------------------------
+# Does the text fit the slides? (review finding 1)
+# ---------------------------------------------------------------------------
+
+def slide_fit_problems(summary):
+    """Problems if the text is too long for slides 1 and 5, even at the 12 pt floor.
+
+    build_deck is imported inside the function, not at the top of the file, because build_deck
+    imports this module: importing both ways at load time would fail.
+    """
+    from build_deck import ai_text_problems
+    return ai_text_problems(summary)
+
+
+# ---------------------------------------------------------------------------
+# Does the text agree with the direction of the data? (Task 4)
+# ---------------------------------------------------------------------------
+
+# Words saying which way a figure moved. "Improved" and "deteriorated" are deliberately absent: an
+# improvement is a smaller burn multiple but a bigger NRR, so they have no direction of their own.
+DIRECTION_WORDS = {
+    "rising": {"rose", "rise", "rises", "rising", "grew", "grow", "grows", "growing", "increased",
+               "increase", "increases", "increasing", "climbed", "climbs", "climbing", "up"},
+    "falling": {"fell", "fall", "falls", "falling", "declined", "decline", "declines", "declining",
+                "dropped", "drops", "dropping", "decreased", "decrease", "decreases", "decreasing",
+                "shrank", "shrunk", "shrinking", "slipped", "slips", "slipping", "eased", "eases",
+                "easing", "down"},
+}
+# Words claiming a whole run of quarters moved one way, not just the two ends.
+PERSISTENCE_WORDS = {"persistent", "persistently", "consistent", "consistently", "steady", "steadily",
+                     "continued", "continuous", "continuously", "uninterrupted", "straight", "every", "each"}
+
+# A number carrying a unit: 97.1%, 2.35x, 11.0 mo, $27,470K. Without a unit it could be a year or a
+# quarter number, so "Q3 2024" is never read as a value to compare.
+UNIT_NUMBER_PATTERN = re.compile(r"(?:(?<![0-9A-Za-z])([-−–]))?(\$)?(\d[\d,]*(?:\.\d+)?)\s?(%|x|mo|K)?(?![A-Za-z])")
+QUARTER_PATTERN = re.compile(r"Q[1-4] \d{4}")
+TOLERANCE = 1e-9  # two formatted values count as the same number within this
+
+
+def words_in(text):
+    """Every word in a text, lower-cased, as a set."""
+    return {word.lower() for word in re.findall(r"[A-Za-z]+", text)}
+
+
+def unit_numbers(text):
+    """Every number in `text` that carries a unit, as dicts of value, unit and where it sits."""
+    found = []
+    for match in UNIT_NUMBER_PATTERN.finditer(text):
+        sign, dollar, digits, unit = match.groups()
+        if not dollar and not unit:
+            continue  # no unit: it could be a year, a quarter number or a count
+        value = float(digits.replace(",", ""))
+        found.append({"value": -value if sign else value, "unit": (dollar or "") + (unit or ""),
+                      "start": match.start(), "end": match.end()})
+    return found
+
+
+def from_to_pairs(sentence):
+    """Pairs written as "from A ... to B", or "to B from A", each as (start number, end number).
+
+    Only neighbouring numbers are paired, and both must carry the same unit, so a second claim in
+    the same sentence can't be read as the other half of the first one. "to B from A" is read only
+    when "from" comes straight after B: with other words in between, which number belongs to which
+    claim would be a guess.
+    """
+    numbers = unit_numbers(sentence)
+    pairs = []
+    for first, second in zip(numbers, numbers[1:]):
+        if first["unit"] != second["unit"]:
+            continue
+        before = re.findall(r"[A-Za-z]+", sentence[:first["start"]])
+        between = re.findall(r"[A-Za-z]+", sentence[first["end"]:second["start"]])
+        if before[-1:] == ["from"] and "to" in between:
+            pairs.append((first, second))
+        elif before[-1:] == ["to"] and between[:1] == ["from"]:
+            pairs.append((second, first))
+    return pairs
+
+
+def direction_of(text):
+    """"rising", "falling", or None - which also covers text using both words, which is ambiguous."""
+    words = words_in(text)
+    senses = [sense for sense, sense_words in DIRECTION_WORDS.items() if words & sense_words]
+    return senses[0] if len(senses) == 1 else None
+
+
+def direction_of_pair(sentence, pair, numbers):
+    """The direction word governing a pair, or None.
+
+    Only the words introducing the pair count: from the number before it up to the pair itself. A
+    sentence usually makes more than one claim, and each claim's word belongs to its own numbers:
+    - "NRR went from 108.0% to 97.1% while pipeline rose" - "rose" is about pipeline, after the pair
+    - "Ending ARR rose from $9,000K to $18,450K, with ARR growth YoY moderating from 53.9% to 47.5%"
+      - "rose" is about ARR, in the clause before the pair
+    Reading either as the pair's direction would fail a true claim, so both are left alone.
+    """
+    first_in_sentence = min(pair, key=lambda number: number["start"])
+    earlier_ends = [number["end"] for number in numbers if number["end"] <= first_in_sentence["start"]]
+    return direction_of(sentence[max(earlier_ends, default=0):first_in_sentence["start"]])
+
+
+def quarter_after(text, number, numbers):
+    """The quarter named just after a number ("110.0% (Q3 2024)"), before the next number, or None."""
+    later = [other["start"] for other in numbers if other["start"] > number["start"]]
+    found = QUARTER_PATTERN.search(text, number["end"], min(later, default=len(text)))
+    return found.group() if found else None
+
+
+def series_value(text):
+    """One value from a trend as a number, or None when it isn't a single number ("data missing")."""
+    if not isinstance(text, str):
+        return None
+    found = NUMBER_PATTERN.findall(text)
+    if len(found) != 1:
+        return None
+    sign, digits = found[0]
+    value = float(digits.replace(",", ""))
+    return -value if sign else value
+
+
+def is_value(text, value):
+    """True if a trend's formatted value is this number ("$9,000K" in the text is 9,000 in the data)."""
+    found = series_value(text)
+    return found is not None and abs(found - value) < TOLERANCE
+
+
+def matching_series(trends, start, end, start_quarter, end_quarter):
+    """The one trend holding both of the claim's values at both of its quarters, or None.
+
+    None when no trend matches, or when several do: the check stays quiet rather than guess.
+    """
+    matches = [label for label, series in trends.items()
+               if isinstance(series, dict)
+               and is_value(series.get(start_quarter), start["value"])
+               and is_value(series.get(end_quarter), end["value"])]
+    return matches[0] if len(matches) == 1 else None
+
+
+def steps_against(series, start_quarter, end_quarter, direction):
+    """(steps moving the other way, steps in total) between two quarters, or None if a value is missing."""
+    quarters = list(series)
+    window = quarters[quarters.index(start_quarter):quarters.index(end_quarter) + 1]
+    values = [series_value(series[quarter]) for quarter in window]
+    if any(value is None for value in values) or len(values) < 2:
+        return None  # a quarter with no number in between: nothing can be proven either way
+    steps = [later - earlier for earlier, later in zip(values, values[1:])]
+    wrong_way = [step for step in steps if (step > 0 if direction == "falling" else step < 0)]
+    return len(wrong_way), len(steps)
+
+
+def contradiction_problem(sentence, direction, start, end):
+    """Layer 1: the direction word and its own two numbers disagree."""
+    goes_up = end["value"] > start["value"]
+    if (direction == "rising") == goes_up or end["value"] == start["value"]:
+        return None
+    return (f"'{preview(sentence)}': says the figure is {direction}, but its numbers go from "
+            f"{start['value']:g} to {end['value']:g}")
+
+
+def persistence_problem(sentence, direction, start, end, trends):
+    """Layer 2: a trend called persistent that moves the other way somewhere in between."""
+    numbers = unit_numbers(sentence)
+    start_quarter = quarter_after(sentence, start, numbers)
+    end_quarter = quarter_after(sentence, end, numbers)
+    if not start_quarter or not end_quarter:
+        return None  # no quarters named, so there is no series to look up
+    label = matching_series(trends, start, end, start_quarter, end_quarter)
+    if label is None:
+        return None
+    counted = steps_against(trends[label], start_quarter, end_quarter, direction)
+    if counted is None or counted[0] == 0:
+        return None
+    wrong_way, total = counted
+    return (f"'{preview(sentence)}': calls {label} persistently {direction} from {start_quarter} to "
+            f"{end_quarter}, but it moves the other way at {wrong_way} of {total} steps")
+
+
+def claim_problems(text, trends):
+    """Problems with the direction claims in one piece of Claude's text. Empty list = nothing to say."""
+    problems = []
+    for sentence in re.split(r"(?<=[.!?])\s+", text.strip()):
+        persistent = bool(words_in(sentence) & PERSISTENCE_WORDS)  # can be said after the numbers
+        numbers = unit_numbers(sentence)
+        for start, end in from_to_pairs(sentence):
+            direction = direction_of_pair(sentence, (start, end), numbers)
+            if direction is None:
+                continue
+            problem = contradiction_problem(sentence, direction, start, end)
+            if problem is None and persistent:
+                problem = persistence_problem(sentence, direction, start, end, trends)
+            if problem:
+                problems.append(problem)
+    return problems
+
+
+def direction_problems(summary, payload_text):
+    """Direction problems anywhere in Claude's answer, checked against the payload's own trends."""
+    try:
+        trends = json.loads(payload_text).get("trends_by_quarter") or {}
+    except (json.JSONDecodeError, AttributeError):
+        trends = {}  # not our payload shape: the step-by-step check has nothing to read
+    return [problem for text in summary_texts(summary) for problem in claim_problems(text, trends)]
+
+
 def validate_summary(summary, payload_text):
     """Return a list of problems with Claude's answer. Empty list = pass."""
     problems = []
@@ -220,6 +431,8 @@ def validate_summary(summary, payload_text):
     if ungrounded:
         problems.append("these numbers are not in the data (rounded or calculated?): "
                         + ", ".join(f"{n:g}" for n in ungrounded))
+    problems += direction_problems(summary, payload_text)
+    problems += slide_fit_problems(summary)
     return problems
 
 
@@ -324,6 +537,7 @@ def save_analysis(path, payload, summary=None, run_info=None, error=None):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {"summary": summary.model_dump() if summary else None, "run_info": run_info,
+              "prompt_version": PROMPT_VERSION,  # which wording wrote this, for the run manifest
               "error": error, "payload": payload}
     path.write_text(json.dumps(record, indent=2, ensure_ascii=False))
     return path
