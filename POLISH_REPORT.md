@@ -374,3 +374,93 @@ Northwind's slide 4 as built:
   check in clean.py would fix both; I left clean.py alone.
 - **The live AI path (a real Claude call from the page) has not run**, by this task's rules. It
   reuses `main.ai_step`, which the live batch runs have exercised, and it's tested with a fake client.
+
+---
+
+## Task 4: INTERVIEW_PREP.md
+
+### What I built
+
+- **INTERVIEW_PREP.md: 39 questions in 6 groups, in the order an interviewer tends to ask them:**
+  1. The project (Q1–Q4)
+  2. Design decisions (Q5–Q16)
+  3. The AI layer (Q17–Q25)
+  4. What broke (Q26–Q31)
+  5. Scale and risk (Q32–Q36)
+  6. Working method (Q37–Q39)
+  - Then **"When you can't recall a detail"**: how to answer honestly (never invent a number, give
+    the shape instead of a made-up precision, explain the method, be clear what you specified versus
+    what Claude Code wrote, correct yourself out loud), plus a table of the numbers worth knowing cold.
+- **All 30 study guide questions are in it**, with their answers and Point to lines, each tagged with
+  its old number ("(guide Q5)").
+- **New questions for every item you listed:** why Python computes and Claude interprets (Q5,
+  expanded from the guide's Q3), re-validation at deck build (Q26), the blind model comparison and
+  its rule (Q24), the direction-claim failures and the two-layer check (Q21), what the direction rules
+  cost (Q23), provenance and the approval gate (Q34), what breaks at 275 companies (Q35), how you work
+  with Claude Code (Q37) including unattended task queues (Q38), and what you'd build next (Q36).
+- **Three more I added:** why fake data at all (Q4), whether the direction check ever got it wrong
+  (Q22), and how you know Claude Code didn't just write tests that pass (Q39).
+- **tests/test_docs.py, 3 new tests** (written first; all 3 failed until the file existed):
+  - every file INTERVIEW_PREP.md names exists (.py, .md, .yaml/.yml, .toml, .command, .ini, .txt,
+    .xlsx; a bare test file name counts if it's in tests/)
+  - every `module.function`, constant, and `tests/file.py::test_name` it points to exists (49 of
+    them today)
+  - the six groups and the honesty section appear in that order
+- **Pointers:** a CLAUDE.md architecture line, and a note at the top of STUDY_GUIDE.md section 5.
+- pytest: 522 passed (519 before, +3). No API call; no pipeline code, config.yaml or output/ file changed.
+
+### Decisions you didn't specify
+
+1. **I updated stale facts in the guide's answers instead of copying them word for word.** "Keep
+   their answers" and "don't say false things in an interview" conflicted in four places. Each changed
+   answer is marked "updated" or "replaced":
+   - Q2 cost: $12.81 → about $25 per quarter (the direction rules doubled it).
+   - Q18 limits: wrong direction is now partly caught; the answer points to Q21.
+   - Q32 test count: 415 → "over 500", so it doesn't go stale with the next test.
+   - Q36 next steps (guide Q25): the slide-fit and trend checks it listed are built, so it's rewritten.
+   - Smaller edits: Q1 and Q16 mention the direction/fit checks inside validation; Q24 adds why the
+     rule was written first; Q26 adds the reconciliation analogy.
+   The study guide itself is left as it was, with a pointer to the new file.
+2. **Grouping of the guide's questions.** The guide had a separate "The deck" group; its questions
+   went to Design decisions (Q13–Q16), except re-validation, which went to What broke (Q26) because
+   it's a guard against a stale file. The direction-claim questions went to the AI layer, not What
+   broke, because the fix is part of the AI layer.
+3. **"Point to" for LEARNINGS rows uses the row's subject**, not a row number ("LEARNINGS.md
+   duplicate-quarter row"). The table isn't numbered and grows, so numbers would drift.
+4. **The cost answer (Q23) uses the two real live runs**, not an estimate: about 3,500 → 7,500 output
+   tokens per company, $0.047 → $0.091, $12.81 → $25.06 per quarter at 275, so about 1.1M extra output
+   tokens and $12 more per quarter. It says openly that part of the rise was one retry caused by a
+   since-fixed false positive, and that the companies that passed first time still roughly doubled.
+5. **The doc test ignores files under output/.** They're made by a run and git ignores them, so a
+   fresh clone would fail the test for no real reason. INTERVIEW_PREP.md names output/ files only in
+   prose anyway.
+6. **The doc test also checks function names**, not only files (you asked for files). A renamed
+   function is the more likely way this file goes wrong, and the study guide already has the same check.
+7. **I didn't run the check scripts.** No pipeline code changed, and check_main.py overwrites the real
+   manifests in output/ (Task 1, Unresolved), so running it would have cost the manifests' AI records
+   for nothing. No deck needed rebuilding.
+
+### What failed and how I fixed it
+
+- **Four stale guide answers** (decision 1), found by checking each against LEARNINGS, README and the
+  code before reusing it. Logged in LEARNINGS.md.
+- **My first function-name pattern was wrong**: it would have read "`metrics.py`" as a function
+  called `py`, and failed constants like `analyze.SYSTEM_PROMPT`. Fixed before it ran; proved on a
+  throwaway text that a made-up file, function and test name are each reported. Logged.
+- **Two commands were refused and one search timed out** while looking for the task-queue runner
+  (outside the project folder). Logged. See Unresolved.
+
+### Unresolved
+
+- **Q38 (unattended task queues) is written only from what this repo shows**: the reports, the task
+  rules, the check scripts running after each task, and the refused commands in LEARNINGS.md. The
+  runner lives outside the project, where this session can't read. Check that the wording matches how
+  you actually run it (what starts it, what stops it) before you say it in an interview.
+- **The honesty section's "Numbers worth knowing" table** repeats figures from README and the study
+  guide. If a future live run changes the cost, update both places (the test only checks names, not
+  numbers).
+- **STUDY_GUIDE.md section 5 still has the four stale answers**; it now points to INTERVIEW_PREP.md.
+  Worth updating them or cutting section 5 down to the pointer; your call.
+- **Still open from Task 1:** CLAUDE.md's build_deck.py line says every slide is watermarked until
+  approval, but since Task 1 the watermark is opt-in (`--draft`) and the footer carries the review
+  status. INTERVIEW_PREP.md Q34 describes the current behavior.
