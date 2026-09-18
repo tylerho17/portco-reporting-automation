@@ -799,3 +799,72 @@ replaying saved analyses (fixtures) through the checks. Nothing below is built.
   they use changed (only `eval/`, tests, `pytest.ini` and docs), and `check_main.py` would put the AI
   placeholder on the real decks. `check_northwind.py`, `check_companies.py`, the eval and all 764
   tests pass.
+
+---
+
+## Task 7: batch resilience (main.py, resilience.py)
+
+This section was written at the start of Task 8. The Task 7 session ended after its code commit
+(078d9a7) with its last tests and docs uncommitted and this section unwritten. Task 8 checked that
+work, reran the proofs, closed one hole they found, and committed it.
+
+### What I built
+
+- **`main.py` options:** `--resume` (skip a company whose outputs are up to date), `--max-cost`
+  (start no more companies once the AI spend reaches the ceiling), `--timeout` (give up on a
+  company after that many seconds), `--workers` (companies side by side, default 1).
+- **`resilience.py`:** rate-limit retries (`RateLimitRetry`: what the API's retry-after header asks,
+  else 5, 10, 20, 40 s, never more than 60 s at once, then give up), the `--resume` check
+  (`resume_problem`: workbook, config.yaml and mapping hashes, every file present, the same AI and
+  `--draft` choice, no approval since), the private folder per company and the move into `output/`
+  (`commit_stage`, manifest last), and the batch's cost meter.
+- **All or nothing per company:** each company is built in `output/.staging/<company>_xxxx` and moved
+  into `output/` only on success. A failure or timeout leaves last quarter's files as they were.
+- **Every skip, timeout, stop and failure is recorded** in the company's manifest (`batch_events`,
+  the last 100 kept), the summary table (a Notes column; the CSV also gains the AI cost) and
+  `output/batch_manifest.json`.
+- **Charts drawn without pyplot** (`Figure()` directly), so workers can draw at the same time.
+- **Tests: 51 new, 815 in all,** in `tests/test_batch.py`, with fake clients (scripted, hanging,
+  counting calls in flight) and a guard that fails any test creating a real client.
+- **Proof:** `output/task7_mutations.py` planted 35 bugs one at a time in temporary copies. Rerun in
+  full in Task 8: **34 of 35 caught** after one fix (below), control passes. All 7 check scripts and
+  the eval pass in a temporary copy (`output/task7_run_checks.py`).
+
+### Decisions you didn't specify
+
+1. **Only rate limits are retried.** Any other API error would fail the same way again, so that
+   company's deck gets the placeholder at once, like any AI failure.
+2. **`--max-cost` is checked before each company starts**, so the batch can pass the ceiling by what
+   the companies already running spend, never more. A spend exactly at the ceiling stops it.
+3. **Failed attempts count toward the spend**: Claude charged for them.
+4. **An up-to-date company is skipped, not stopped,** even past the ceiling: it costs nothing.
+5. **A `--resume` rebuild reuses the saved analysis** when the numbers didn't change (free).
+6. **A timeout or a stop makes the exit code 1**, like a failure: the batch didn't produce everything.
+7. **A failed company keeps its old analysis** (it used to be deleted). The old rule protected
+   against an old analysis beside a new deck, which the private folder now rules out.
+8. **The manifest is moved last**, so a run killed during the move leaves a manifest that describes
+   the older files, and `--resume` rebuilds that company.
+9. **Default 1 worker**, so a plain run behaves as before.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **Four existing tests broke** on the new CSV columns, the manifest's `draft` and the kept
+   analysis; each was updated and the reason written in the test.
+2. **A test wrote `output/batch_manifest.json` into the real output folder**; tests that call
+   `main()` now replace that writer too.
+3. **A fake answer with 0 output tokens had no cost**, because 0 tokens means "not counted". The fake
+   now has 1.
+4. **A planted bug was caught for the wrong reason** (a bare `AnthropicError` has no response); the
+   test now raises a real HTTP 500 error as well.
+5. **Found in Task 8's rerun:** "a timed-out company reports no error" survived: the exit-code test
+   used a hand-typed result, so nothing checked the real one. The timeout test now checks the error
+   text; the bug is caught.
+
+### Unresolved
+
+- **One planted bug survives, and can't be caught from outside:** "a company that finishes after its
+  timeout moves its files into output/". The company's own thread already throws its private folder
+  away when it was given up on, before the batch sees it, so the batch's second check has nothing
+  left to move. Two guards for one case, like Task 6's budget guards.
+- **`--workers` hasn't been run against the real API,** so how many workers a rate limit allows is
+  unmeasured. A timeout stops waiting, not the work (README limitations).

@@ -92,10 +92,14 @@ class ScriptedClient:
 
 
 class HangingClient:
-    """Answers at once, except for one company: that call waits until the test sets `release`."""
+    """Answers at once, except for one company: that call waits until the test sets `release`.
 
-    def __init__(self, company):
-        self.company, self.release, self.calls = company, threading.Event(), []
+    release_when: another company whose call sets `release` itself, so the hung call wakes while the
+    batch is still running.
+    """
+
+    def __init__(self, company, release_when=None):
+        self.company, self.release_when, self.release, self.calls = company, release_when, threading.Event(), []
         self.messages = self
 
     def parse(self, **kwargs):
@@ -103,6 +107,9 @@ class HangingClient:
         self.calls.append(company)
         if company == self.company:
             self.release.wait(60)
+        elif company == self.release_when:
+            self.release.set()
+            time.sleep(1)   # give the woken company time to finish its work before this one does
         return answer()
 
 
@@ -178,10 +185,17 @@ def test_rate_limit_gives_up_after_the_last_retry():
     assert fake.calls == resilience.MAX_RATE_LIMIT_RETRIES + 1   # the first try and every retry
 
 
-def test_other_api_errors_are_not_retried():
+def server_error():
+    """The error the SDK raises for HTTP 500 (after its own quick retries)."""
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    return anthropic.InternalServerError("server error", response=httpx2.Response(500, request=request), body=None)
+
+
+@pytest.mark.parametrize("error", [anthropic.AnthropicError("simulated outage"), server_error()])
+def test_other_api_errors_are_not_retried(error):
     waited = []
-    fake = ScriptedClient(anthropic.AnthropicError("simulated outage"))
-    with pytest.raises(anthropic.AnthropicError):
+    fake = ScriptedClient(error)
+    with pytest.raises(type(error)):
         resilience.RateLimitRetry(fake, wait=waited.append).messages.parse(model="m")
     assert waited == [] and fake.calls == 1
 
@@ -224,6 +238,20 @@ def test_resume_skips_a_company_whose_outputs_are_up_to_date(tmp_path):
     assert events(tmp_path) == [("skipped", "outputs match the workbook and config.yaml (--resume)")]
     after.pop("northwind_manifest.json"), before.pop("northwind_manifest.json")   # only the event was added
     assert after == before
+
+
+def test_every_skip_is_kept_not_only_the_last(tmp_path):
+    batch(tmp_path, skip_ai=True)
+    batch(tmp_path, skip_ai=True, resume=True)
+    batch(tmp_path, skip_ai=True, resume=True, timeout=TIMEOUT_SECONDS)   # skipped before any timeout applies
+    assert [event for event, _ in events(tmp_path)] == ["skipped", "skipped"]
+
+
+def test_the_batch_events_are_kept_when_the_company_is_built_again(tmp_path):
+    batch(tmp_path, skip_ai=True)
+    batch(tmp_path, skip_ai=True, resume=True)       # skipped: recorded
+    batch(tmp_path, skip_ai=True)                    # built again: the record of the skip stays
+    assert [event for event, _ in events(tmp_path)] == ["skipped"]
 
 
 def test_without_resume_an_up_to_date_company_is_built_again(tmp_path):
@@ -313,6 +341,12 @@ def test_the_batch_stops_once_the_spend_reaches_the_ceiling(tmp_path):
     assert events(tmp_path, FERNHOLLOW) == [("stopped", stop)]
 
 
+def test_a_spend_exactly_at_the_ceiling_stops_the_batch(tmp_path):
+    client = ScriptedClient(answer(input_tokens=100_000, output_tokens=50_000))
+    results = batch(tmp_path, paths=[NORTHWIND, ALDERPEAK, FERNHOLLOW], client=client, max_cost=1.40)
+    assert [result["outcome"] for result in results] == [main.BUILT, main.BUILT, main.STOPPED]
+
+
 def test_the_spend_below_the_ceiling_lets_every_company_run(tmp_path):
     client = ScriptedClient(answer(input_tokens=100_000, output_tokens=50_000))
     results = batch(tmp_path, paths=[NORTHWIND, ALDERPEAK], client=client, max_cost=1.50)
@@ -352,6 +386,7 @@ def test_a_company_past_its_timeout_is_given_up_and_the_next_one_still_runs(tmp_
     results = batch(tmp_path, paths=[NORTHWIND, ALDERPEAK], client=client, timeout=TIMEOUT_SECONDS)
     assert time.perf_counter() - start < TIMEOUT_SECONDS + 10
     assert results[0]["outcome"] == main.TIMED_OUT
+    assert results[0]["error"] == f"timed out after {TIMEOUT_SECONDS} s"   # so the batch exits 1
     assert main.result_text(results[0]) == (f"TIMED OUT after {TIMEOUT_SECONDS} s: earlier outputs left as they "
                                             f"were")
     assert main.result_text(results[1]) == "OK"
@@ -374,6 +409,32 @@ def wait_for_empty_staging(tmp_path, seconds=20):
             return
         time.sleep(0.1)
     raise AssertionError(f"files still in {staging}")
+
+
+def test_a_company_that_wakes_after_its_timeout_while_the_batch_runs_on_lands_nothing(tmp_path):
+    batch(tmp_path, skip_ai=True)
+    before = output_files(tmp_path)
+    client = HangingClient("Northwind", release_when="Alderpeak")
+    results = batch(tmp_path, paths=[NORTHWIND, ALDERPEAK, FERNHOLLOW], client=client, timeout=TIMEOUT_SECONDS)
+    assert [result["outcome"] for result in results] == [main.TIMED_OUT, main.BUILT, main.BUILT]
+    wait_for_empty_staging(tmp_path)
+    after = output_files(tmp_path)
+    after.pop("northwind_manifest.json"), before.pop("northwind_manifest.json")
+    assert after == before
+
+
+def test_the_manifest_is_moved_into_the_output_folder_last(tmp_path, monkeypatch):
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    for name in ("northwind_manifest.json", "northwind_board_pack.pptx", "northwind_metrics.xlsx"):
+        (stage / name).write_text(name)
+    moved = []
+    real_replace = resilience.os.replace
+    monkeypatch.setattr(resilience.os, "replace", lambda source, target: moved.append(Path(target).name)
+                        or real_replace(source, target))
+    resilience.commit_stage(stage, tmp_path / "out")
+    assert len(moved) == 3 and moved[-1] == "northwind_manifest.json"
+    assert not stage.exists()
 
 
 def test_a_timed_out_company_with_no_earlier_run_leaves_no_outputs(tmp_path):

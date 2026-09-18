@@ -37,11 +37,22 @@ python main.py --all --skip-ai         # no API call and no key needed: decks sa
 python main.py --all --draft           # also stamp DRAFT - NOT REVIEWED across every slide of an unreviewed deck
 ```
 
+For a long batch (275 companies at about 70 seconds each):
+
+```bash
+python main.py --all --resume          # skip companies whose outputs match today's workbook and config.yaml
+python main.py --all --max-cost 30     # start no more companies once the AI spend reaches $30
+python main.py --all --timeout 300     # give up on a company after 300 s; its earlier outputs stay as they were
+python main.py --all --workers 4       # 4 companies side by side (default 1)
+```
+
+A rate-limited API call waits and tries again on its own (what the API asks, else 5, 10, 20, 40 s). Every skip, timeout and stop is in the company's manifest, the summary table and `output/batch_manifest.json`.
+
 For each company it prints a ✓ line per step, then a summary table:
 
 ```
-Company     Flags tripped              Data gaps                          Result
-----------  -------------------------  ---------------------------------  ------
+Company     Flags tripped              Data gaps                          Result  Notes
+----------  -------------------------  ---------------------------------  ------  -----
 Alderpeak   0 of 9                     none                               OK
 Fernhollow  7 of 9, 1 cannot evaluate  20 metrics/flags (blank: Q2 2025)  OK
 Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK
@@ -56,7 +67,8 @@ Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK
 | `<company>_metrics.xlsx` | Backup workbook: Metrics (every quarter), Flags (latest quarter), Data gaps |
 | `<company>_analysis.json` | Claude's answer, the exact data it was given, tokens, attempts, and any validation problems |
 | `<company>_manifest.json` | Where the deck came from: the workbook, `config.yaml` and any confirmed column mapping by SHA-256 hash, the git commit, the model and prompt version, tokens and cost, and who approved it |
-| `batch_summary.csv` | One row per company: latest quarter, flags tripped, data gaps, result |
+| `batch_summary.csv` | One row per company: latest quarter, flags tripped, data gaps, result, AI cost, notes (rate-limit retries, why `--resume` rebuilt it) |
+| `batch_manifest.json` | The last batch: when, which commit, the options, the total AI spend, and every company's outcome (built, skipped, timed out, stopped, failed) |
 
 Results: `OK`, `OK (AI failed)` (deck built with the placeholder), `OK (AI skipped)`, or `FAILED: ...` with the reason. One company failing never stops the batch; the exit code is 1 if any company failed.
 
@@ -184,6 +196,7 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 14. **One brand, defined once.** `theme.py` holds every color, the font and the type sizes (title 28, section 20, body 15, caption 13, table 14); a test fails if any other code file types a color. The brand is the fictional "Example Capital" in navy and grays. Red and green mean a flag's status and nothing else, so no button is ever red or green. The metrics workbook keeps Excel's own red and green fills, which people who live in Excel already read at a glance.
 15. **A new header gets a proposal, never a guess.** A company that writes "Opening ARR" or "Plan Burn" used to stop the run until someone edited `HEADER_ALIASES` in the code. Now `mapping.py` proposes the standard column each unknown header most likely means, from its name (word overlap after dropping filler like "Total" and swapping the usual synonyms, "Opening" for starting, "Plan" for budget; plus letter-by-letter similarity, so a typo still matches) and from its values (a value in the budget-only row rules out every actual column; ARR and cash must roll forward; gross profit can't exceed revenue). It shows a confidence and the reason. However high the confidence, the run stops until a person confirms or changes each one, in the web page's Review mapping step or with `python mapping.py <workbook> --confirm`; the answer is saved to `mappings/<company>.yaml`, so the next quarter runs unattended. The mapping file's hash goes into the manifest like the workbook's, so changing a mapping makes the files out of date and voids an approval. Heuristics only, no API call: tested on copies of the three companies with their headers renamed (16, 6 and 7 headers), every proposal is right and the metrics after confirming are identical to the originals'.
 16. **Edge cases have their own answer keys.** The three demo companies tell stories; 12 more in `eval/` test cases: exactly at every threshold (all pass, and a 1-point NRR drop counts as falling), a blank first, second-to-last and last quarter, zero revenue, a negative budget, NRR and pipeline both falling, 2 quarters of history, and a repeated or missing row that must stop. `python eval/run_eval.py` scores clean, metrics, flags and gaps for each against a hand-typed answer key and names every mismatch. 24 bugs planted on purpose were each caught by the company built for them.
+17. **A long batch fails one company at a time, never all at once, and never half-way.** Each company is built in a private folder and moved into `output/` only when it succeeds, so a failure or a timeout leaves last quarter's deck exactly as it was rather than a new deck beside an old memo. `--resume` skips a company only when rebuilding it would give the same files (same workbook, thresholds and mapping by hash, every file present, the same AI and `--draft` choice, no approval since), and a rebuild of unchanged numbers reuses the saved analysis for free. `--max-cost` is checked before each company starts, so the batch can pass the ceiling by what the companies already running spend, never more; a company that is up to date is skipped, not stopped. Rate limits are retried with growing waits; any other API error is not, because it would fail the same way again. Every skip, timeout, stop and failure is written down where someone auditing the run would look: the company's manifest and the batch manifest.
 
 ---
 
@@ -234,7 +247,7 @@ From the latest live `python main.py --all` run with claude-sonnet-5, after the 
 **For 275 companies per quarter: about $25.06** (average × 275).
 - **Accuracy costs money.** Before the two direction rules were added to the prompt, the same batch cost $0.0466 per company ($12.81 for 275). Asking Claude to check every step of a trend before describing it roughly doubled its output tokens. Budget $25–30 per quarter.
 - **Retries:** a company that needs the retry costs roughly double - Alderpeak did here, which is why it is the dearest of the three.
-- **Time:** about 70 seconds of API time per company, so about 5 hours for 275 companies run one after another (worth running in parallel: see Next steps).
+- **Time:** about 70 seconds of API time per company, so about 5 hours for 275 companies run one after another; `--workers 4` should bring that to about 1.5 hours, if the account's rate limit allows (not yet measured against the real API). `--max-cost` caps the bill.
 
 ---
 
@@ -292,6 +305,11 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
   help most (FINAL_REPORT.md, Task 5).
 - **A run is only as current as its inputs.** The manifest records hashes at run time; it can tell
   you a deck is stale, but nothing re-runs it for you.
+- **A timeout stops waiting, not the work.** Python can't stop a running step from outside, so a
+  company given up on by `--timeout` carries on in the background until its current step ends (an
+  API call can take up to the SDK's own 10-minute limit), then stops. Nothing it builds reaches
+  `output/`, and what that call cost still counts toward `--max-cost`. `--workers` hasn't been run
+  against the real API yet, so how many workers an account's rate limit allows is unmeasured.
 
 ---
 
@@ -310,6 +328,7 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
 
 - [x] **Column mapping:** an unknown header gets a proposed column with a confidence, reason and sample values; nothing runs until a person confirms it, and the confirmed mapping is saved to `mappings/<company>.yaml` for next quarter (`mapping.py`, the web page's Review mapping step).
 - [x] **Evaluation set:** 12 edge-case companies with answer keys, scored by `eval/run_eval.py` (clean, metrics, flags, gaps) and run by the tests.
+- [x] **Batch resilience:** `main.py --resume`, `--max-cost`, `--timeout` and `--workers` (companies in parallel), and rate-limit retries with backoff (`resilience.py`).
 
 **Still to do:**
 
@@ -319,5 +338,4 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
 - [ ] **Portfolio rollup:** one view across all companies each quarter (flags tripped by company, data gaps, runway and NRR side by side), built from the per-company metrics that already exist.
 - [ ] **Check that a claim is really good news, and that its periods match:** the direction check reads numbers and trends, but it can't tell whether a passing flag is genuinely good, and it can't check a claim with no numbers in it or one that says two figures moved "over the same period" when they didn't. Those rest on the prompt, so a person still reads each deck before it goes to a board.
 - [ ] **An `--output-dir` option:** so the check scripts write to a temporary folder instead of overwriting the real decks in `output/`.
-- [ ] **Run companies in parallel:** one after another, 275 companies take about 5 hours.
 - [ ] **A model call for column mapping:** send Claude the unknown headers, their sample values and the 16 column definitions, and ask for a proposal with a reason, checked against the same value rules. It would read "Cash Burn" and "Bookings" as a person does. The confirmation step stays.

@@ -401,10 +401,24 @@ failed the company built for it. It also found a hole in itself: at first only t
 were value-checked, so a wrong revenue YoY slipped through. The healthy company now checks all 19.
 *Point to:* `eval/make_eval_data.py`, `eval/run_eval.py`; `tests/test_eval.py::test_every_company_matches_its_answer_key`.
 
+**Q34d. A 275-company batch runs overnight. What stops it going wrong?** (new, Task 7)
+Five switches. `--workers 4` runs four companies side by side, because the time is all waiting for
+Claude. A rate limit waits and tries again: what the API asks for, else 5, 10, 20, 40 seconds, then
+gives up and that deck gets the placeholder, like any AI failure. `--timeout` gives up on a company
+that hangs and moves on. `--max-cost` starts no more companies once the spend reaches the ceiling.
+And `--resume` skips any company whose outputs were built from exactly today's workbook and
+thresholds, checked by hash, so a rerun after a crash only redoes what's missing. The part I care
+most about: each company is built in a private folder and moved into output only if it succeeds, so
+a failure or a timeout leaves last quarter's deck untouched, never a new deck beside an old memo.
+Every skip, timeout and stop is written into that company's manifest, the summary table and a batch
+manifest. I proved it with fake clients (one that hangs, one that's rate limited, one that counts how
+many calls are in flight) and by planting bugs in throwaway copies.
+*Point to:* `main.run_batch`, `resilience.RateLimitRetry`, `resilience.resume_problem`, `resilience.commit_stage`; `tests/test_batch.py::test_a_company_past_its_timeout_is_given_up_and_the_next_one_still_runs`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
-1. **Time.** About 70 s of API time per company, so 5 hours one at a time. The fix is running
-   companies in parallel, within the API's rate limits.
+1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs
+   companies in parallel (Q34d); how many the account's rate limit allows is still to be measured.
 2. **Formats.** Three companies prove three kinds of mess. 275 real workbooks will have header
    spellings and layouts clean.py has never seen, and it's built to stop rather than guess. New
    header spellings now get a proposed column to confirm once per company (`mapping.py`), so that
@@ -420,7 +434,8 @@ Not the math: Python is instant. Five things would:
 
 **Q36. What would you build next?** (guide Q25, replaced: the slide-fit and trend checks it listed are now built)
 In order:
-1. **Run companies in parallel**, because 5 hours is the first thing a fund would notice.
+1. **Measure `--workers` against the real API**: parallel runs are built (Q34d), but how many
+   workers the rate limit allows, and the real time for 275, are guesses until one live run.
 2. **An output folder per run**, so a test run can never overwrite a real deck or manifest.
 3. **A SharePoint or Power Automate trigger**: a company drops its workbook in a folder, the run
    starts, and the deck lands next to it, so nobody has to run a command.
