@@ -19,7 +19,7 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
    2. VS Code with `CLAUDE.md` open and the Claude Code panel beside it
    3. a terminal in the project folder, with the final line of `python -m pytest -q` already showing
    4. `output/northwind_board_pack.pptx` in PowerPoint, on slide 1
-   5. the web page: double-click `run_app.command` (it starts `app.py` and opens the browser), then drag `data/northwind.xlsx` onto it, AI box unticked, so the flags and metrics are already showing
+   5. the web page: double-click `run_app.command` (it starts `app.py` and opens the browser), then click Northwind in the portfolio table, AI box unticked, so its flags and metrics are already showing
 4. **Don't show Alderpeak's or Fernhollow's slide 4:** Claude's text there has claims that passed validation but are misleading (LEARNINGS.md, Task 4 live run). The walk-through uses Northwind only.
 
 ---
@@ -38,7 +38,7 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 **Say:**
 > "Here's a fictional company's workbook: odd headers, money typed as text, and a quarter that's blank."
 
-**Show, 0:22 – 0:35:** VS Code. Scroll `CLAUDE.md` to **Rules** and **Metric definitions**, then the Claude Code panel, then the terminal's test line (`532 passed`).
+**Show, 0:22 – 0:35:** VS Code. Scroll `CLAUDE.md` to **Rules** and **Metric definitions**, then the Claude Code panel, then the terminal's test line (`609 passed`).
 
 **Say:**
 > "I build it in VS Code with Claude Code. CLAUDE.md holds the spec: every metric definition and the rules. I work in small steps: plan, tests first, then code. Each step ends with over 500 tests passing."
@@ -79,10 +79,10 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 
 ## 1:45 – 2:00 The web page, and next steps (~30 words)
 
-**Show, 1:45 – 1:52:** the web page, with Northwind's flags and the two download buttons.
+**Show, 1:45 – 1:52:** the web page's portfolio table (three companies, their flags and deck status), then Northwind's page with its flags and download buttons.
 
 **Say:**
-> "Colleagues who don't use a terminal get a web page: drag in the workbook, download the deck."
+> "Colleagues who don't use a terminal get a web page: every company in one table, click Generate, download the deck."
 
 **Show, 1:52 – 2:00:** README.md, **Next steps**.
 
@@ -100,7 +100,7 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 | NRR 97.1%, below 100% | Slide 1, NRR row; threshold from `config.yaml` (`nrr_min`) | `metrics.nrr` |
 | Runway 11 months vs 12-month floor | Slide 1, Runway row; `config.yaml` (`runway_min_months`) | `metrics.runway_months` |
 | Q1 2025 blank | Northwind's blank quarter | `make_data.py` (`BLANK_QUARTER`) |
-| Over 500 tests | `python -m pytest -q` (575 today) | — |
+| Over 500 tests | `python -m pytest -q` (609 today) | — |
 | Haiku scored 2 of 5 | README model comparison (needed 4.0) | `compare_models.py` |
 
 ## Timing check

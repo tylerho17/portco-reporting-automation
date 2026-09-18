@@ -141,3 +141,124 @@ what failed and how it was fixed, and anything unresolved.
   rebuilt the decks and memos from the saved analyses afterwards, so output/ shows the AI text; the
   manifests' `ai` part says "skipped" until the next real run.
 - **The web page (app.py) doesn't offer the memo yet.** Task 2 asks for a "Download memo" button.
+
+---
+
+## Task 2: the web page's home page (app.py, portfolio.py, main.py)
+
+### What I built
+
+- **`app.py` is now two pages.**
+  - **Portfolio** (the first page): one row per company in `data/` with its name, latest quarter,
+    flags tripped ("6 of 9 flags tripped"), data gaps ("19 metrics/flags (blank: Q1 2025)"), last run
+    and deck status, and per row **Generate**, **Download deck**, **Download memo** and **Download
+    Excel**. A search box narrows the table; a name with no workbook shows 'No KPI workbook found for
+    "Bluefin". Upload one under "Add a company".' **Generate all** runs every company under a progress
+    bar and reports each one. **Add a company** takes an .xlsx upload and a company name.
+  - **Company** (click the company's name on its row): the flags table with value, threshold and
+    status (the reason is in the status: "Cannot evaluate: missing input"), runway at next quarter's
+    budget as context, the data gaps, the metrics table in the Excel red / green / gray, both charts
+    (the deck's own `charts.py` functions), the AI commentary when present (headline, risks and
+    questions, as on slide 4), and the buttons Generate, Download deck, Download memo (PDF and Word),
+    Download Excel, and **Approve** with a reviewer-name box.
+  - The AI box states the typical cost: "Ask Claude for AI commentary when no saved analysis matches
+    (typically about $0.09 and 70 seconds per company)".
+- **`portfolio.py`** (new) holds everything behind the buttons, with no Streamlit in it, so it is all
+  tested without a browser. It reuses `main.run_company` (Generate: Excel, AI, deck, memo, manifest,
+  exactly as `python main.py`), `main.write_summary_csv` (Generate all writes batch_summary.csv),
+  `approve.approve` (Approve), `provenance.approval_status` / `deck_status` (the status column),
+  `build_deck` text helpers, and `memo.no_em_dash`.
+- **`main.py`:** `run_company(..., reuse_saved=True)` uses a saved analysis made from exactly these
+  numbers before skipping or calling Claude, and records it in the manifest as "reused a saved analysis
+  of exactly these numbers (no API call)" with no tokens and no cost. `reusable_analysis` moved here
+  from app.py. The command line never passes `reuse_saved`, so `main.py` behaves as before.
+- **Never a traceback, never an invented number:** a workbook clean.py can't read shows clean.py's
+  own message (under its row, on its page, from Generate, and from Add a company) and "-" in place of
+  every number; a non-Excel file gets the existing plain message; a bug gets "Something unexpected went
+  wrong ..." with its traceback in the Terminal window only. Every loop over companies catches per
+  company, so one failure never stops the others.
+- **No API call anywhere in this task.** Tests use fake clients plus a guard that fails any test that
+  creates a real Anthropic client, and every page test uses temporary data/ and output/ folders.
+- **Tests:** `tests/test_portfolio.py` (32, new), `tests/test_app.py` rewritten for the two pages (20,
+  including Streamlit AppTest runs that click Generate, Generate all, a company name and Approve),
+  4 new in `tests/test_main.py`. 609 tests in all.
+- **Docs:** README (how the page works, the file list, screenshot list), STUDY_GUIDE (app.py section
+  rewritten, new portfolio.py section, main.py rows, test tables, counts), LOOM_SCRIPT and
+  INTERVIEW_PREP web page lines, 5 LEARNINGS rows.
+
+### Decisions you didn't specify
+
+1. **Generate writes to `output/`.** The old page built in a temporary folder and never touched
+   `output/`. A portfolio whose last run and deck status come from manifests, with an Approve button,
+   has to work on the same files as `main.py` and `approve.py`, so it does. The protection moved
+   elsewhere (decision 3).
+2. **A saved analysis is reused even with the AI box unticked.** It costs nothing and passes every
+   check against today's numbers, and without this, Generate would have rebuilt the three decks
+   without their validated AI text. Unticked never calls the API; ticked calls Claude only when no
+   saved analysis matches. The box was renamed to say exactly that.
+3. **Out-of-date files are never offered.** If the workbook or config.yaml has changed since the last
+   run (hashes in the manifest), the status reads "Out of date: the workbook has changed since the last
+   run. Generate again." and the download buttons and Approve are greyed out. A file with no manifest
+   is treated as not generated.
+4. **Flags, gaps and latest quarter are worked out from the workbook when the page draws**, not read
+   from the last run's summary, so they are never stale. Last run and deck status come from the
+   manifest, as you specified.
+5. **"Row click" is the company's name as a button.** Streamlit's tables can't hold buttons, so each
+   row is a line of columns; clicking the name opens the company page, and "Back to portfolio"
+   returns.
+6. **Download memo gives the PDF** on the portfolio row (fixed layout, and Word's layout is still
+   unseen, Task 1); the company page offers both the PDF and the Word file.
+7. **Approve needs a typed name** and files built from today's workbook. approve.py falls back to
+   git's user name; a web page shouldn't, because whoever is at the browser must say who they are.
+   Approving builds nothing (as approve.py): the message says to click Generate so the footers say
+   reviewed.
+8. **Add a company:** the name is typed (suggested from the file name), must start with a letter and
+   use only letters, digits, spaces and hyphens (at most 40), and becomes `data/<name in lower
+   case>.xlsx` ("Blue River" → `data/blue river.xlsx`, shown as "Blue River"). The upload is checked
+   in a temporary folder first and saved only if clean.py can read it. An existing company is replaced
+   only if "Replace its workbook" is ticked; its old files then show as out of date. Adding doesn't
+   generate: the row appears with "Not generated yet".
+9. **AI commentary on the company page** shows only when a saved analysis was made from exactly
+   today's numbers and still passes, and shows what slide 4 shows (headline, risks, questions; no
+   wins). Em dashes in any text, including Claude's, are shown as colons, and `$` is kept as a dollar
+   sign (markdown would read two of them as a formula).
+10. **The deck status shows the manifest's own words** ("DRAFT - NOT REVIEWED", "approved by Tyler Ho
+    on 2026-09-17T22:33:47"), so the page, the manifest and approve.py read the same.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **Regenerating would have thrown away Claude's text** (decision 2): main.py had no reuse path.
+   Fixed with `reuse_saved` and tests.
+2. **Breaking code on purpose showed two weak tests.** A script (`output/task2_mutations.py`,
+   git-ignored) copies the project to a temporary folder, breaks one thing there, and runs the tests
+   for that file. The first run missed 2 of the first 2 I checked closely: `download()` ignoring "out
+   of date" (the test only asked before any file existed) and removing the page's own "files must be
+   current" check before Approve (approve.py refuses too, with a message that also says "changed").
+   Both tests were strengthened. Final result: **18 of 18 breakages caught**, each by the test
+   meant to catch it.
+3. **Small slips:** the AppTest element for a chart is "image", not "imgs"; a README line with the
+   literal "DRAFT" status tripped the watermark doc test; two test files got a literal em dash (now
+   `chr(0x2014)`); the STUDY_GUIDE doc test failed until `reusable_analysis` was listed under main.py.
+4. **Refused commands:** starting the Streamlit server, `sed -i`, `ps`, a long heredoc and `grep`
+   chains. I rendered the real page (real data/ and output/, no clicks) with AppTest instead: all
+   three companies listed, Fernhollow's page with its AI commentary, no error and no em dash.
+
+### Unresolved
+
+- **CLAUDE.md's Architecture line for app.py is now wrong** ("drag in an xlsx ... builds in a temp
+  folder, never touches output/"), and portfolio.py isn't listed. I didn't edit CLAUDE.md (the task
+  didn't say to). Suggested lines: "app.py: Streamlit web page, two pages. Portfolio: every company in
+  data/ (latest quarter, flags, gaps, last run, deck status from manifests), per-row Generate and
+  downloads, search, Generate all with progress, Add a company. Company: flags, gaps, colored metrics,
+  charts, AI commentary, Generate, downloads, Approve. Writes to output/ like main.py; never offers
+  out-of-date files" and "portfolio.py: the work behind app.py's buttons (no Streamlit): rows, search,
+  generate, add a company, approve".
+- **I haven't seen the page in a browser.** Starting the server was refused. AppTest proves every
+  element is drawn with the right text and state, but not the layout: ten columns per row may wrap
+  the button labels on a narrow window. Worth a look, and the README screenshots are still to take.
+- **Speed at scale:** the table re-reads every workbook each time the page redraws (a click or a
+  letter in the search box). Fine for 3 companies (well under a second); for 275 it would want caching.
+- **One user at a time.** Two people clicking Generate on the same company at once would write the
+  same files. It's a local tool, so I didn't add locking.
+- **The live output/ manifests** were not changed by this task (no page button was clicked on the
+  real folders), so Task 1's note about check_main.py's "skipped" AI records still stands.

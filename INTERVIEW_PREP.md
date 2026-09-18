@@ -35,7 +35,8 @@ headline, risks and questions for management. Code then checks that Claude used 
 the data, pointed them the right way, and fits the slide. `build_deck.py` puts it all on a 4-slide
 deck: key metrics table, ARR and cash charts, risks and flags with data gaps, and the AI commentary
 (marked as AI-drafted). `main.py` runs it for one company or a whole folder, and still builds the
-deck if the AI step fails. There's also a web page (`app.py`) where you drag in a workbook.
+deck if the AI step fails. There's also a web page (`app.py`): every company in one table with its flags and deck status,
+Generate and download buttons, a page per company, and Approve.
 *Point to:* STUDY_GUIDE.md section 2; README.md "Data flow".
 
 **Q2. Why would a PE fund want this?** (guide Q2)

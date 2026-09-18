@@ -25,7 +25,7 @@ from provenance import NOT_REVIEWED, manifest_path, read_manifest
 
 PROJECT_DIR = Path(__file__).parent.parent
 COMPANIES = ["alderpeak", "fernhollow", "northwind"]
-EM_DASH = "—"
+EM_DASH = chr(0x2014)   # by its Unicode number, so this file shows none
 TIMEOUT = 120   # seconds: Generate builds a deck, a memo and a workbook
 
 

@@ -111,8 +111,9 @@ def headline_on_deck(folders):
 # ---------------------------------------------------------------------------
 
 def test_plain_replaces_every_em_dash():
-    assert portfolio.plain("Cannot evaluate — missing input") == "Cannot evaluate: missing input"
-    assert "—" not in portfolio.plain("a—b")
+    em_dash = chr(0x2014)   # by its Unicode number, so this file shows none
+    assert portfolio.plain(f"Cannot evaluate {em_dash} missing input") == "Cannot evaluate: missing input"
+    assert em_dash not in portfolio.plain(f"a{em_dash}b")
 
 
 def test_last_run_is_shown_to_the_minute():
@@ -292,8 +293,17 @@ def test_downloads_are_offered_only_for_current_files(folders):
     assert name == "northwind_board_pack.pptx" and data == (folders[1] / name).read_bytes()
     assert portfolio.download(workbook, folders[1], "memo", current=True)[0] == "northwind_board_memo.pdf"
     assert portfolio.download(workbook, folders[1], "excel", current=True)[0] == "northwind_metrics.xlsx"
+    assert portfolio.download(workbook, folders[1], "deck", current=False) is None   # there, but out of date
     (folders[1] / "northwind_metrics.xlsx").unlink()
     assert portfolio.download(workbook, folders[1], "excel", current=True) is None
+
+
+def test_a_changed_workbook_takes_its_old_files_off_the_download_buttons(folders):
+    generate(folders)
+    shutil.copy(PROJECT_DIR / "data" / "alderpeak.xlsx", folders[0] / "northwind.xlsx")
+    row = rows_by_company(folders)["Northwind"]
+    for kind in ("deck", "memo", "memo_docx", "excel"):
+        assert portfolio.download(row["workbook"], folders[1], kind, row["current"]) is None
 
 
 # ---------------------------------------------------------------------------
@@ -368,12 +378,14 @@ def test_approve_needs_a_typed_name(folders):
     assert read_manifest(manifest_path(folders[0] / "northwind.xlsx", folders[1]))["approval"] is None
 
 
-def test_approve_before_generate_or_after_a_change_is_refused(folders):
-    assert approve(folders, "Dana")["ok"] is False                        # nothing generated yet
+def test_approve_before_generate_or_after_a_change_is_refused_in_the_pages_words(folders):
+    # approve.py would refuse too, but its words are for the command line ("run main.py ... again").
+    assert approve(folders, "Dana") == {"ok": False, "message": portfolio.NOT_APPROVABLE.format(
+        status=portfolio.NOT_GENERATED)}
     generate(folders)
     shutil.copy(PROJECT_DIR / "data" / "alderpeak.xlsx", folders[0] / "northwind.xlsx")
     outcome = approve(folders, "Dana")
-    assert outcome["ok"] is False and "changed" in outcome["message"]
+    assert outcome["ok"] is False and "changed" in outcome["message"] and "main.py" not in outcome["message"]
     assert read_manifest(manifest_path(folders[0] / "northwind.xlsx", folders[1]))["approval"] is None
 
 
