@@ -8,6 +8,10 @@ Main entry point: clean_workbook(path) -> (actuals, next_budget)
 Nothing here guesses or fills in numbers. If something can't be read with
 certainty, the script stops with an error that says what and where.
 
+A header that is neither a standard column nor in HEADER_ALIASES is looked up in the company's
+confirmed mapping (mappings/<company>.yaml, written by mapping.py once a person confirmed it). If it
+isn't there either, the script stops with mapping.py's proposal for it (UnconfirmedMappingError).
+
 Run directly to print the clean table:  python clean.py data/northwind.xlsx
 """
 
@@ -71,6 +75,24 @@ LABEL_HEADER = "quarter"
 # Small helpers
 # ---------------------------------------------------------------------------
 
+class UnknownHeadersError(ValueError):
+    """Headers that are neither a standard column, an alias nor a confirmed mapping.
+
+    Carries what mapping.py needs to propose a column for each: `unknown` (their positions) and
+    `known` ({position: name} for the headers that were recognised).
+    """
+    def __init__(self, message, unknown, known):
+        super().__init__(message)
+        self.unknown, self.known = unknown, known
+
+
+class UnconfirmedMappingError(ValueError):
+    """The stop for an unknown header: names each one and mapping.py's proposal. `proposals` is for the web page."""
+    def __init__(self, message, proposals):
+        super().__init__(message)
+        self.proposals = proposals
+
+
 def is_blank(value):
     """True for an empty cell: missing (None/NaN) or text that is only spaces."""
     if isinstance(value, str):
@@ -83,13 +105,19 @@ def normalize_header(text):
     return re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
 
 
-def standard_column(header):
-    """Map a messy header to its standard column name, or stop if it's unknown."""
+def standard_column(header, confirmed=None):
+    """Map a messy header to its standard column name, or stop if it's unknown.
+
+    confirmed = {normalized header: column} from the company's mapping file (mapping.confirmed_aliases).
+    A standard name or HEADER_ALIASES entry always wins, so a saved line can't redefine a known header.
+    """
     name = normalize_header(header)
     name = HEADER_ALIASES.get(name, name)  # use the alias if there is one, else keep as is
     if name not in STANDARD_COLUMNS:
-        raise ValueError(f"Unknown column header {header!r} - if it means one of the {len(STANDARD_COLUMNS)} "
-                         f"input columns, add it to HEADER_ALIASES in clean.py; otherwise delete the column")
+        name = (confirmed or {}).get(name, name)
+    if name not in STANDARD_COLUMNS:
+        raise ValueError(f"Unknown column header {header!r}: if it means one of the {len(STANDARD_COLUMNS)} "
+                         f"input columns, confirm a mapping with mapping.py; otherwise delete the column")
     return name
 
 
@@ -231,36 +259,43 @@ def check_no_error_cells(path, sheet_name):
         workbook.close()  # read-only mode keeps the file open until closed
 
 
-def header_name(header):
+def header_name(header, confirmed=None):
     """'Quarter' -> 'quarter' (the label column); any other header -> its standard column name."""
     if normalize_header(header) == LABEL_HEADER:
         return LABEL_HEADER
-    return standard_column(header)
+    return standard_column(header, confirmed)
 
 
-def name_headers(headers, header_row):
-    """Return {position: name} for every filled header. Stops on an unknown or repeated meaning."""
-    names = {}
+def name_headers(headers, header_row, confirmed=None):
+    """Return {position: name} for every filled header. Stops on a repeated meaning, then on unknown headers.
+
+    Every unknown header is gathered before stopping (UnknownHeadersError), so one message can list
+    them all, each with mapping.py's proposal.
+    """
+    names, unknown, first_error = {}, [], None
     for position, header in headers.items():
         if is_blank(header):
             continue
-        cell = f"{excel_column(position)}{excel_row(header_row)}"
         try:
-            name = header_name(header)
+            name = header_name(header, confirmed)
         except ValueError as error:
-            raise ValueError(f"cell {cell} (header): {error}") from None
+            unknown.append(position)
+            first_error = first_error or f"cell {excel_column(position)}{excel_row(header_row)} (header): {error}"
+            continue
         if name in names.values():  # e.g. "Beginning ARR" and "Starting ARR": which one is right?
             first = next(p for p, n in names.items() if n == name)
             raise ValueError(f"row {excel_row(header_row)} (header): columns {excel_column(first)} "
                              f"({headers[first]!r}) and {excel_column(position)} ({header!r}) both mean "
                              f"{name!r} - keep one and delete the other")
         names[position] = name
+    if unknown:
+        raise UnknownHeadersError(first_error, unknown, names)
     return names
 
 
-def map_columns(headers, header_row):
+def map_columns(headers, header_row, confirmed=None):
     """Return (label_position, {position: standard name}) from the header row. Stops if a column is missing."""
-    names = name_headers(headers, header_row)
+    names = name_headers(headers, header_row, confirmed)
     missing = [c for c in STANDARD_COLUMNS if c not in names.values()]
     if missing:
         raise ValueError(f"row {excel_row(header_row)} (header) is missing columns: {', '.join(missing)}")
@@ -301,9 +336,14 @@ def parse_row(label, row_index, raw_row, column_map):
     return row
 
 
+def is_budget_label(label):
+    """True for a label naming the budget-only forecast row, e.g. 'Q3 2026 (Budget)' or 'Q3 2026 Plan'."""
+    return any(word in label.lower() for word in BUDGET_LABEL_WORDS)
+
+
 def is_budget_only_row(label, row_index, row, column_map):
     """True for the forecast row, e.g. 'Q3 2026 (Budget)'. Stops if that row also has actuals."""
-    if not any(word in label.lower() for word in BUDGET_LABEL_WORDS):
+    if not is_budget_label(label):
         return False
     filled_actuals = [f"{excel_column(position)}{excel_row(row_index)} ({name})"
                       for position, name in column_map.items()
@@ -332,9 +372,12 @@ def check_budget_row_is_next_quarter(label, budget_row_number, last_actual_label
                          f"label, or keep only next quarter's budget")
 
 
-def clean_sheet(sheet, header_row):
-    """Turn the raw KPI tab into (actuals, next_budget). Errors say which row, column or cell to fix."""
-    label_position, column_map = map_columns(sheet.iloc[header_row], header_row)
+def clean_sheet(sheet, header_row, confirmed=None):
+    """Turn the raw KPI tab into (actuals, next_budget). Errors say which row, column or cell to fix.
+
+    confirmed = the company's confirmed header mappings (see standard_column).
+    """
+    label_position, column_map = map_columns(sheet.iloc[header_row], header_row, confirmed)
     check_no_headerless_values(sheet, header_row, [label_position, *column_map])
 
     actual_rows, row_numbers = {}, {}  # quarter label -> parsed row, quarter label -> Excel row number
@@ -369,16 +412,25 @@ def clean_sheet(sheet, header_row):
     return actuals, next_budget
 
 
-def clean_workbook(path):
+def clean_workbook(path, mappings_dir=None):
     """Read a messy KPI workbook and return (actuals, next_budget).
 
     Every problem in the KPI tab stops with a message that starts with the sheet name, e.g.
     "Sheet 'KPI Tracker', cell F7 (Q2 2025, revenue): Can't read 'n/a' as a number ..."
+    Headers are also matched against the company's confirmed mapping (mappings/<company>.yaml; a
+    test passes its own mappings_dir). An unknown header stops with mapping.py's proposal for it.
     """
+    import mapping   # here, not at the top of the file: mapping.py imports this file
+
     sheet_name, sheet, header_row = find_kpi_sheet(path)
     try:
+        confirmed = mapping.confirmed_aliases(path, mappings_dir)
         check_no_error_cells(path, sheet_name)
-        return clean_sheet(sheet, header_row)
+        return clean_sheet(sheet, header_row, confirmed)
+    except UnknownHeadersError as error:
+        proposals = mapping.propose(sheet, header_row, error.unknown, error.known)
+        raise UnconfirmedMappingError(f"Sheet {sheet_name!r}, {mapping.stop_message(proposals, path)}",
+                                      proposals) from None
     except ValueError as error:
         raise ValueError(f"Sheet {sheet_name!r}, {error}") from None
 

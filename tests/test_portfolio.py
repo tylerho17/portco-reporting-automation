@@ -72,9 +72,12 @@ def folders(tmp_path):
 
 
 def unreadable_workbook_bytes(tmp_path):
-    """A real .xlsx that clean.py stops on (no budget columns), and clean.py's own message for it."""
+    """A real .xlsx that clean.py stops on (no budget columns), and clean.py's own message for it.
+
+    Its one column has a known header: an unknown one would stop at the mapping step instead (Task 5).
+    """
     book = Workbook()
-    book.active.append(["Quarter", "ARR"])
+    book.active.append(["Quarter", "Starting ARR"])
     book.active.append(["Q1 2025", 100])
     path = tmp_path / "bad.xlsx"
     book.save(path)
