@@ -80,6 +80,12 @@ def test_rewriting_the_comparison_keeps_the_rest_of_the_readme(tmp_path, monkeyp
     assert after.split(end, 1)[1] == before.split(end, 1)[1]        # everything below the block
 
 
+def test_the_evaluation_set_is_listed_with_the_other_checks():
+    # README's "Prove it works" block and the study guide's command list both run it.
+    for doc in (README, STUDY_GUIDE):
+        assert "python eval/run_eval.py" in doc.read_text(), doc.name
+
+
 def test_readme_names_only_files_that_exist():
     missing = [name for name in python_files_named(README.read_text()) if not (PROJECT_DIR / name).exists()]
     assert missing == []
@@ -233,9 +239,11 @@ def code_strings(path):
 def test_no_string_in_the_project_code_has_an_em_dash():
     # Every .py file in the project folder: app.py, build_deck.py, memo.py, main.py, analyze.py and
     # metrics.py (the task's list) and every other file whose text reaches a user (Excel, the check
-    # scripts' messages, clean.py's stop messages). tests/ is left out: tests may hold one to look for it.
-    code = sorted(PROJECT_DIR.glob("*.py"))
-    assert {"app.py", "build_deck.py", "memo.py", "main.py", "analyze.py", "metrics.py"} <= {p.name for p in code}
+    # scripts' messages, clean.py's stop messages), and the evaluation set in eval/ (its scorecard).
+    # tests/ is left out: tests may hold one to look for it.
+    code = sorted(PROJECT_DIR.glob("*.py")) + sorted((PROJECT_DIR / "eval").glob("*.py"))
+    assert {"app.py", "build_deck.py", "memo.py", "main.py", "analyze.py", "metrics.py",
+            "make_eval_data.py", "run_eval.py"} <= {p.name for p in code}
     found = {path.name: [s.strip()[:60] for s in code_strings(path) if EM_DASH in s] for path in code}
     assert {name: strings for name, strings in found.items() if strings} == {}
 

@@ -34,6 +34,7 @@ It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build st
   python -m pytest -q                        # 500+ unit tests
   python check_companies.py                  # end-to-end proof for all 3 companies
   python check_deck.py                       # end-to-end proof for the 3 decks
+  python eval/run_eval.py                    # the evaluation set: 12 edge-case companies vs their answer keys
   ```
 
   **These DO call the API and cost money:** `python main.py` **without** `--skip-ai` (about $0.09 per company), `python analyze.py ...` and `python compare_models.py run`. You don't need them to study: the analyses from the live run are already saved in `output/`.

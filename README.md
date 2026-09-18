@@ -115,6 +115,7 @@ python check_excel_output.py # the metrics workbook matches metrics.py
 python check_deck.py         # 4 slides, slide 1 numbers match the metrics workbook, no text overflows
 python check_main.py         # the batch survives a broken workbook; --skip-ai never calls Claude
 python check_memo.py         # every number in each memo (Word and PDF) is in that company's metrics workbook
+python eval/run_eval.py      # 12 edge-case companies (thresholds, blanks, zero revenue ...) vs their answer keys
 ```
 
 Note: `check_main.py` runs `main.py --all --skip-ai` into `output/`, so afterwards the decks and memos show the AI placeholder and `batch_summary.csv` holds its broken-workbook test row. `python build_deck.py data/<company>.xlsx` and `python memo.py data/<company>.xlsx` put the saved AI text back without an API call (the saved analyses aren't touched).
