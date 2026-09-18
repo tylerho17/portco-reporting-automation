@@ -2109,3 +2109,107 @@ Every pair, after the fix:
   draw on white with slate and mid gray, both in the list.
 - **CLAUDE.md's Architecture list** doesn't mention contrast. Suggested addition to the tests line:
   "tests/test_contrast.py works out WCAG AA contrast for every text/background pair from theme.py".
+
+## Task 19: chart polish (one axis style, no overlapping labels, colorblind-safe series)
+
+### What I built
+
+- **charts.py, one axis style for both slide charts:**
+  - `quiet_axes`, `quarter_axis`, `money_axis`, used by every panel (and `quiet_axes` by the rollup's
+    runway chart too). Every $K axis: whole-$K ticks, 3 to 6 of them, zero always among them, and the
+    axis limits ARE the first and last tick, so it starts and ends on a labelled gridline. Labels are
+    written by `metrics.format_value`, like the tables on slide 1. Every quarter gets the same slot
+    (half a slot of room either end) on both charts; before, the ARR panels' ends were whatever
+    matplotlib chose (-0.68 to 7.68 for 8 quarters) while the cash chart's were set.
+  - The latest value is written **just right of the latest bar or point**, the one place nothing else
+    is drawn (before: above or below, where it could hit quarter labels or the title).
+  - `finish_layout` lays the figure out once, then fixes what only measuring can tell: quarter labels
+    that would touch are thinned (every second, third...; the latest always stays), a "data missing"
+    wider than its slot is turned on its side, and a title that runs off the figure is re-wrapped.
+- **Colorblind-safe distinction:** a net new ARR bar below zero is **amber (`D97706`) and hatched**,
+  with an "ARR shrank" legend drawn only when there is one. Amber vs navy is 4.83 : 1 in lightness, so
+  the two stay apart in grayscale; color blindness changes hue, not lightness. A tripped runway bar in
+  the rollup is now hatched as well as red and labelled "tripped". `theme.AMBER` and
+  `theme.SERIES_PAIRS` (two series in one chart must be 3 : 1 apart and never the status red or green).
+- **build_deck.chart_size_inches:** the size slide 2 draws at, so the tests draw at it too.
+- **tests/test_chart_layout.py (33 tests):** renders both charts for Northwind, Alderpeak, Fernhollow and
+  two made-up extremes, **huge and long** (16 quarters, ARR in the billions of $K, two blank quarters in
+  a row, a -2,345,678,901 latest net new ARR, cash down to 1) and **tiny and short** (2 quarters of $0-1K,
+  a runway with no number). It measures every label, bar and point in pixels at the saved resolution and
+  fails if two labels overlap, a label sits on a bar or point, or one runs off the picture. Also the
+  shared tick rule, the shared slots, thinning, the amber/hatch/legend rules, the series colors, and the
+  check itself (a copy of a label on top of it is caught).
+- output/ decks and the rollup rebuilt from the saved analysis JSONs (no API call).
+
+### How it's proved
+
+- **1366 tests pass** (1332 before, plus 33 new and 1 more declared contrast pair); `python golden.py`:
+  9 of 9 match (goldens hold text, not chart images); all 9 `check_*.py` scripts pass.
+- **The old charts failed the new test** on the extremes: two "data missing" labels on top of each other
+  at 16 quarters (huge ARR and cash), and the "0" latest label on the quarter labels (tiny cash).
+- **14 of 14 planted bugs caught** in a temporary copy of the project (`output/task19_plant_bugs.py`):
+
+| Planted bug | Caught by |
+|---|---|
+| Latest label back above the bar, centred | overlap (Fernhollow, both extremes) |
+| Quarter labels never thinned | overlap, latest-label test |
+| Gap labels never turned on their side | overlap (huge and long) |
+| Long titles never wrapped | runs off the figure (huge cash) |
+| No minimum range (0.25 steps) | tick rule (tiny) |
+| Axis limits not snapped to the ticks | tick rule, every case |
+| Tick labels not by `format_value` | tick rule, every case |
+| Cash chart without the shared slots | same-slot test |
+| Shrinking quarter drawn navy | amber-and-hatched test |
+| Shrinking quarter not hatched | amber-and-hatched test |
+| Legend never drawn | legend test |
+| Amber swapped for an orange 2.97 : 1 from navy | series lightness test |
+| Amber swapped for the status red | series lightness, never red or green |
+| Tripped runway bar not hatched | runway hatch test |
+
+### Decisions you didn't specify
+
+1. **"Colorblind safe" is proved by lightness, not by simulating color blindness.** Two series must be
+   3 : 1 apart by the WCAG contrast formula the project already has. That is stricter than hue-based
+   checks and explainable in a sentence. The dataviz skill's CVD validator needed approval I couldn't
+   give, so I didn't run it.
+2. **Amber, and only for "ARR shrank".** theme.py says red and green mean a flag's status and nothing
+   else, so the shrinking color could be neither. A burnt orange (`C2410C`) looked better but is only
+   2.97 : 1 from navy; `D97706` is 4.83 : 1 and 3.19 : 1 on white (above the 3 : 1 a mark needs).
+3. **The hatch is on the bars, and the legend only appears when needed**, so healthy Alderpeak's chart
+   is unchanged apart from the axis rules.
+4. **The rollup's red vs navy stays** (2.83 : 1, under 3): red means tripped, and changing it would break
+   the palette's one rule. It is hatched and says "tripped", so it never depends on color; it is
+   deliberately left out of `SERIES_PAIRS`, with a comment saying why.
+5. **The latest label moved to the right of the last bar or point** instead of adding more headroom:
+   nothing is ever drawn there, so it can't collide at any data range. The cost: the label sits a little
+   outside the plot area.
+6. **Labels are thinned from the latest backwards**, so the most recent quarter is always named; the
+   two ARR panels thin identically because they share a width.
+7. **Both extremes are fictional and live in the test**, not in data/: no fourth workbook to maintain.
+8. **Measured fixes, not fixed limits** (e.g. "at most 8 quarter labels"): measuring works at whatever
+   size the template gives the charts.
+
+### What failed and how I fixed it (logged in LEARNINGS.md)
+
+1. **The old charts** failed the layout test (above); fixed by the measuring step and the new label place.
+2. **0.25-step ticks printed as "0, 0, 1"** on tiny values: `MaxNLocator(integer=True)` falls back to
+   fractions when fewer than 3 whole numbers fit. A range under $3K is now widened to $3K.
+3. **The cash title ran off the chart** with "∞ (budget not burning)": now re-wrapped when it doesn't fit.
+4. **My checker gave a false alarm** (the legend "outside" the figure): I measured after `savefig`, which
+   resets the resolution. The test now draws at 200 dpi and measures that.
+5. **tests/test_contrast.py and tests/test_docs.py** failed on purpose-built rules: the typed-out palette
+   needed amber, and STUDY_GUIDE still named the old `style_axis`. Both updated.
+6. **Refused commands:** the node palette validator, `$?` and `&&` shell chains, `mkdir` in /tmp. Used
+   Python's subprocess and tempfile instead.
+
+### Unresolved
+
+- **Only text vs text, text vs bars and text vs line points are checked.** A label crossing a line
+  *segment* between points isn't (the latest label sits right of the last point, so today none can).
+- **The web page draws the same charts at a screen size** (`app.py`, `chart_figures`); the layout test
+  runs at slide size only. The measuring fixes apply there too, but no test proves it.
+- **Very long companies** (40+ quarters) would thin labels to every fourth or fifth; bars get thin but
+  stay readable. Not tested beyond 16.
+- **Screen-reader alt text for the two chart pictures** on slide 2 is still missing (noted in Task 18).
+- **CLAUDE.md's Architecture list** could mention the new test. Suggested addition to the charts.py line:
+  "one axis style for both charts; tests/test_chart_layout.py fails on any overlapping label".

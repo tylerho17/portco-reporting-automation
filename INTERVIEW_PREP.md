@@ -556,6 +556,18 @@ decks. I planted 12 bad colors in a copy of the project and all 12 were caught. 
 on color alone either: every cell also says "Tripped" or "Passed".
 *Point to:* `theme.contrast_ratio`, `theme.TEXT_PAIRS`; `tests/test_contrast.py::test_every_colored_text_on_every_slide_passes_aa`.
 
+**Q34p. How do you know a chart won't be unreadable next quarter?** (new, Task 19)
+Because a test draws it at data it hasn't seen. The charts now share one set of rules: round whole-$K
+ticks, zero always shown, every quarter the same width, and the latest value written just right of the
+last bar, where nothing else is. Then a test renders both charts for the three companies and two made-up
+extremes, 16 quarters in the billions and 2 quarters of under $1K, measures every label in pixels and
+fails if any two touch. The old charts failed it: "data missing" labels ran into each other and a "0"
+landed on the quarter labels. The fixes measure too: crowded quarter labels are thinned, a gap label
+that won't fit is turned on its side. For color blindness, a quarter where ARR shrank is amber and
+striped, and amber is far lighter than navy, so it reads even in grayscale. I planted 14 chart bugs in a
+copy of the project and all 14 were caught.
+*Point to:* `charts.finish_layout`, `charts.money_axis`; `tests/test_chart_layout.py::test_no_text_overlaps_anything_on_either_chart`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs
