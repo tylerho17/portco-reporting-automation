@@ -372,14 +372,30 @@ not reviewed by itself: a stale approval is worse than none. And `approve.py` ne
 making a deck and vouching for it stay two separate acts.
 *Point to:* `provenance.build_manifest`, `provenance.approval_status`, `approve.approve`, `build_deck.record_deck_status`; `tests/test_approve.py`.
 
+**Q34b. A new company's workbook says "Opening ARR" and "Plan Burn". What happens?** (new, Task 5)
+clean.py doesn't know those headers, so the run stops, but not with a bare error. `mapping.py`
+proposes what each header means: "Opening ARR" becomes starting ARR from its words ("opening" is a
+synonym for starting), and "Plan Burn" becomes budgeted net burn because of its words and because it
+has a value in the budget-only row, which only budget columns may. Each proposal carries a
+confidence and a reason, and the page shows the first few values under the header. A person
+confirms or changes each one; only then is it saved, to `mappings/<company>.yaml`, and next
+quarter's workbook runs without asking. Nothing is used on confidence alone, even at 99%: a wrong
+column would put the wrong number on a board slide with nothing to show it. The mapping file is
+hashed into the manifest, so changing it voids an approval. The proof: all three companies' workbooks
+with their headers renamed get every proposal right and identical metrics after confirming. It's
+heuristics, not a model, and I'd add a Claude call next, for headers like "Cash Burn" whose name
+fits two columns.
+*Point to:* `mapping.propose`, `clean.clean_workbook`, `app.review_mapping`; `tests/test_mapping.py`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. The fix is running
    companies in parallel, within the API's rate limits.
 2. **Formats.** Three companies prove three kinds of mess. 275 real workbooks will have header
-   spellings and layouts clean.py has never seen, and it's built to stop rather than guess. So early
-   runs will produce a queue of "fix this workbook" messages. That's the right failure, but someone
-   has to own it, and the header list has to grow.
+   spellings and layouts clean.py has never seen, and it's built to stop rather than guess. New
+   header spellings now get a proposed column to confirm once per company (`mapping.py`), so that
+   queue is a review, not a code change. New layouts (no "Quarter" column, quarters across instead
+   of down) still stop, and someone has to own that queue.
 3. **Review.** A person reads every deck, and 275 decks a quarter is the real bottleneck. I'd sort
    the review queue by flags tripped, and let the healthy companies get a lighter read.
 4. **Output folder.** Everything goes to one output/ folder, and today the check scripts overwrite
@@ -435,7 +451,7 @@ never copied from the code. The one time that rule was broken, a wrong formula p
 (Q27). Second, a new test has to fail on the old code before it counts: twice a new test passed
 against the old behavior, which meant it proved nothing, and it was rewritten. Third, the code is
 broken on purpose to see whether the tests notice: 35 of 36 deliberate breaks were caught in one
-round, 18 of 18 in another.
+round, 18 of 18 in another, and 22 of 22 for the column mapping.
 *Point to:* LEARNINGS.md rows on the font-size test and the "old analysis" test; OVERNIGHT_REPORT.md.
 
 ---

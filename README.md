@@ -55,7 +55,7 @@ Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK
 | `<company>_board_memo.docx` and `.pdf` | The board memo, 1 to 2 pages: title and quarter, AI headline, key metrics table, flags with values and thresholds, data gaps, AI questions for management, and the same footer as the deck. "AI commentary unavailable" when there's no valid analysis; every computed number is there either way |
 | `<company>_metrics.xlsx` | Backup workbook: Metrics (every quarter), Flags (latest quarter), Data gaps |
 | `<company>_analysis.json` | Claude's answer, the exact data it was given, tokens, attempts, and any validation problems |
-| `<company>_manifest.json` | Where the deck came from: the workbook and `config.yaml` by SHA-256 hash, the git commit, the model and prompt version, tokens and cost, and who approved it |
+| `<company>_manifest.json` | Where the deck came from: the workbook, `config.yaml` and any confirmed column mapping by SHA-256 hash, the git commit, the model and prompt version, tokens and cost, and who approved it |
 | `batch_summary.csv` | One row per company: latest quarter, flags tripped, data gaps, result |
 
 Results: `OK`, `OK (AI failed)` (deck built with the placeholder), `OK (AI skipped)`, or `FAILED: ...` with the reason. One company failing never stops the batch; the exit code is 1 if any company failed.
@@ -68,6 +68,8 @@ python memo.py data/northwind.xlsx             # rebuild one memo (Word + PDF) f
 python excel_output.py data/northwind.xlsx     # rebuild one metrics workbook (no API call)
 python analyze.py data/northwind.xlsx          # AI step only (calls the API): prints the commentary, saves the JSON
 python clean.py data/northwind.xlsx            # print the cleaned table
+python mapping.py data/acme.xlsx               # headers clean.py doesn't know: the proposed column for each, with confidence and reason
+python mapping.py data/acme.xlsx --confirm     # confirm (Enter) or change each one; saved to mappings/acme.yaml for next quarter
 python metrics.py data/northwind.xlsx          # print every metric, flag and data gap
 python make_data.py                            # regenerate data/northwind.xlsx (also make_data_alderpeak.py, make_data_fernhollow.py)
 ```
@@ -76,13 +78,14 @@ python make_data.py                            # regenerate data/northwind.xlsx 
 
 The page has two parts:
 
-1. **Portfolio** (the first page): one row per company in `data/`, with its latest quarter, flags tripped, data gaps, when it was last generated and its deck status (read from `output/<company>_manifest.json`: not generated yet, not reviewed, approved by NAME, or out of date because the workbook changed). Each row has **Generate** (builds the deck, memo and metrics workbook into `output/`, exactly as `python main.py` does) and **Download**, which opens Download deck / memo / Excel (greyed out until there are files built from today's workbook). A search box narrows the table, and a name with no workbook says so. **Generate all** runs every company under a progress bar; one company failing never stops the others. **Add a company** takes a new workbook, and adds it to `data/` only if it can be read (otherwise it shows clean.py's message saying what to fix).
+1. **Portfolio** (the first page): one row per company in `data/`, with its latest quarter, flags tripped, data gaps, when it was last generated and its deck status (read from `output/<company>_manifest.json`: not generated yet, not reviewed, approved by NAME, or out of date because the workbook changed). Each row has **Generate** (builds the deck, memo and metrics workbook into `output/`, exactly as `python main.py` does) and **Download**, which opens Download deck / memo / Excel (greyed out until there are files built from today's workbook). A search box narrows the table, and a name with no workbook says so. **Generate all** runs every company under a progress bar; one company failing never stops the others. **Add a company** takes a new workbook, and adds it to `data/` only if it can be read (otherwise it shows clean.py's message saying what to fix). If some of its headers aren't ones clean.py knows, a **Review mapping** step comes first (below).
 2. **Company** (click a company's name): its flags with thresholds and reasons, the data gaps, the metrics table in the status colors (red = tripped, green = passed, gray = data missing or cannot evaluate), both charts, the AI commentary when a saved analysis matches these numbers, and the buttons Generate, the downloads and **Approve** (type your name: it records you as the reviewer, as `approve.py` does; click Generate afterwards so the footers say reviewed).
 
 - **The AI box** ("Ask Claude for AI commentary when no saved analysis matches") is off by default; its label gives the typical cost (about $0.09 and 70 seconds per company, from the [Cost](#cost) table). Either way, Generate first looks in `output/` for a saved analysis made from exactly the same numbers and reuses it for free. Only with the box ticked, and no such analysis, does it call Claude (this needs the key in `.env`).
 - **A workbook it can't read** shows `clean.py`'s own message (which sheet, row and cell, and what to fix), never a traceback, and gets "-" instead of numbers.
+- **Review mapping.** A workbook whose headers clean.py doesn't know ("Opening ARR" instead of "Beginning ARR") shows, on its company page and in Add a company, each header with the column `mapping.py` proposes, how sure it is (e.g. "85% (high)") and why, and the first values under it. Each pair has **Change** (pick another column) and **Confirm**. Nothing is used until every pair is confirmed; then the mapping is saved to `mappings/<company>.yaml`, but only if the workbook reads with it, so next quarter's workbook with the same headers runs without asking.
 - **The look** comes from `theme.py`, like the deck's and the memo's: one column about 1100 px wide, white cards, tables with a navy header, Arial. Each page has one navy (primary) button, Generate all or Generate; every other button is white with a navy border. No button is red or green: those colors mean a flag's status.
-- **The page writes to `output/`**, the same files and manifest as `python main.py`, so the table, `approve.py` and the command line always agree. Old files are never offered for download once the workbook or `config.yaml` has changed.
+- **The page writes to `output/`**, the same files and manifest as `python main.py`, so the table, `approve.py` and the command line always agree. Old files are never offered for download once the workbook, `config.yaml` or the column mapping has changed.
 
 **3. Review the deck, then approve it.** The footer on every slide ends with the review status. A
 new deck says `AI-drafted | not reviewed` until a person says otherwise. Open it, read it, then:
@@ -96,7 +99,8 @@ python build_deck.py data/northwind.xlsx         # rebuild: the footer now says 
 The approval is recorded in the manifest against the hashes of the workbook and `config.yaml` it was
 built from, with the documents it covers: the deck, and the memo if that run built one (then rebuild
 it too: `python memo.py data/northwind.xlsx`). An approval recorded before memos existed covers the
-deck only, so the memo's footer keeps saying "not reviewed" until someone approves again. Change either one and the footer goes back to "not reviewed" on its own the next time the
+deck only, so the memo's footer keeps saying "not reviewed" until someone approves again. Change either one, or the
+company's confirmed column mapping, and the footer goes back to "not reviewed" on its own the next time the
 deck is built, because what you reviewed is no longer what the deck says.
 
 Want it louder while a deck circulates for review? Build with `--draft` (`python build_deck.py data/northwind.xlsx --draft`, or `python main.py --all --draft`) and every slide of an unreviewed deck also carries a see-through DRAFT - NOT REVIEWED watermark. `--draft` never stamps an approved deck, and without `--draft` there is no watermark.
@@ -129,6 +133,8 @@ clean.py        clean_workbook()           finds the KPI tab, maps messy headers
                                            "$14.3M" -> 14300 ($K), blank stays blank; stops on anything unclear
                   ├─▶ actuals              8 quarters × 16 inputs
                   └─▶ next_budget          the budget-only row for next quarter
+mapping.py      a header clean.py doesn't know: proposes the column it means (name + values), with a confidence;
+                clean.py stops until a person confirms it; confirmed -> mappings/<company>.yaml, used from then on
                               │
                               ▼
 metrics.py      compute_metrics()          every metric, every quarter (ratios as decimals)
@@ -164,7 +170,7 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 1. **Python computes every number; Claude only interprets.** A language model can slip on arithmetic, and one wrong number in a board deck undermines all the others. Math in Python can be unit-tested; a prompt can't.
 2. **Claude's answer is checked by code before anyone sees it.** It must match a fixed JSON shape (headline, exactly 3 wins, 3 risks, 3 questions), fit length limits, and every number in it must appear in the data it was given, sign included ("missed by 19.0%" fails when the data says −19.0%). If a check fails, Claude gets one retry with the problems listed. The deck re-runs the same check against today's numbers, so a stale or edited analysis can't reach a slide.
 3. **The deck is always built, even if the AI fails.** Its numbers come from Python, so they're valid either way. Slide 4 (AI commentary) says "AI summary unavailable" and the batch result reads `OK (AI failed)`.
-4. **Stop, don't guess.** `clean.py` stops with the sheet, row and cell whenever it can't read something with certainty: text like "TBD" in a number cell, two tabs that both look like the KPI table, footnote rows under the table, or a budget row labelled for the wrong quarter.
+4. **Stop, don't guess.** `clean.py` stops with the sheet, row and cell whenever it can't read something with certainty: text like "TBD" in a number cell, two tabs that both look like the KPI table, footnote rows under the table, a budget row labelled for the wrong quarter, or a header it doesn't know (with a proposal, below).
 5. **Never fill in a missing number.** A blank quarter stays blank, spreads to every metric that uses it, and is listed on the Risks and flags slide as a data gap. A flag that depends on it says "cannot evaluate: missing input", never pass or fail.
 6. **Three reasons a value has no number, and they never look alike:** "data missing" (a blank input, the only kind that counts as a data gap), "n/a (no prior period)" (e.g. YoY growth in year 1), and "n/m" (not meaningful, e.g. burn vs a budget of zero, which shows the $K figures instead).
 7. **Thresholds live in `config.yaml`, each with the investor reason beside it** (NRR below 100% means the base shrinks without new sales). Changing a threshold needs no code change.
@@ -172,9 +178,10 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 9. **Three fictional companies with answer keys prove the flags aren't hard-coded:** Northwind (growing but leaking customers, 6 of 9 flags), Alderpeak (healthy, 0 of 9) and Fernhollow (distressed, 7 of 9 plus one that can't be evaluated because of a blank quarter).
 10. **The model was picked by a blind test with a rule set before running** (below): Sonnet 5 is the default because Haiku 4.5 scored 2.0 of 5 against a required 4.0.
 11. **Every deck can be traced back to its inputs.** Each run writes `output/<company>_manifest.json`: the workbook and `config.yaml` by SHA-256 hash, the git commit (with a `*` if the code had uncommitted edits), the model and prompt version, the run time, tokens and cost, whether validation passed, and whether the deck carries Claude's text or the placeholder. The deck's footer repeats the commit and the model, so a printed slide is traceable on its own. A hash is the point: two files with the same name can hold different numbers, and only the hash tells them apart.
-12. **A person approves every deck before it counts.** Every slide's footer says `AI-drafted | not reviewed` until `approve.py` records a reviewer's name and the time; then it says `AI-drafted | reviewed by NAME on DATE`. The footer is quiet enough to leave on a deck that goes to a board, where a diagonal stamp across the numbers would not be; the DRAFT - NOT REVIEWED watermark is still there for anyone who wants it, with `--draft`. Approval is tied to the hashes it was given, so new data or an edited threshold sends the footer back to "not reviewed" automatically - a stale approval is worse than none. `approve.py` never builds anything: producing a deck and vouching for it stay two separate acts.
+12. **A person approves every deck before it counts.** Every slide's footer says `AI-drafted | not reviewed` until `approve.py` records a reviewer's name and the time; then it says `AI-drafted | reviewed by NAME on DATE`. The footer is quiet enough to leave on a deck that goes to a board, where a diagonal stamp across the numbers would not be; the DRAFT - NOT REVIEWED watermark is still there for anyone who wants it, with `--draft`. Approval is tied to the hashes it was given, so new data, an edited threshold or a changed column mapping sends the footer back to "not reviewed" automatically - a stale approval is worse than none. `approve.py` never builds anything: producing a deck and vouching for it stay two separate acts.
 13. **Text must fit.** `text_fit.py` measures text and shrinks it to a 12 pt floor; if it still doesn't fit, the build stops with the slide and box named. A deck with text running off the slide is worse than no deck.
 14. **One brand, defined once.** `theme.py` holds every color, the font and the type sizes (title 28, section 20, body 15, caption 13, table 14); a test fails if any other code file types a color. The brand is the fictional "Example Capital" in navy and grays. Red and green mean a flag's status and nothing else, so no button is ever red or green. The metrics workbook keeps Excel's own red and green fills, which people who live in Excel already read at a glance.
+15. **A new header gets a proposal, never a guess.** A company that writes "Opening ARR" or "Plan Burn" used to stop the run until someone edited `HEADER_ALIASES` in the code. Now `mapping.py` proposes the standard column each unknown header most likely means, from its name (word overlap after dropping filler like "Total" and swapping the usual synonyms, "Opening" for starting, "Plan" for budget; plus letter-by-letter similarity, so a typo still matches) and from its values (a value in the budget-only row rules out every actual column; ARR and cash must roll forward; gross profit can't exceed revenue). It shows a confidence and the reason. However high the confidence, the run stops until a person confirms or changes each one, in the web page's Review mapping step or with `python mapping.py <workbook> --confirm`; the answer is saved to `mappings/<company>.yaml`, so the next quarter runs unattended. The mapping file's hash goes into the manifest like the workbook's, so changing a mapping makes the files out of date and voids an approval. Heuristics only, no API call: tested on copies of the three companies with their headers renamed (16, 6 and 7 headers), every proposal is right and the metrics after confirming are identical to the originals'.
 
 ---
 
@@ -276,6 +283,11 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
 - **Whether a passing flag is genuinely good news.** The direction check reads numbers and trends,
   but a claim with no numbers in it ("well above prior-period levels") has nothing to compare
   against. That rests on the prompt rules alone.
+- **Column mapping is word lists and arithmetic, not understanding.** A header like "Cash Burn" is
+  as close to ending cash as to net burn by name; the values and the other headers settle it, and
+  the confidence says so (64%, medium). A header whose meaning is in a comment or a colleague's head
+  gets no useful proposal. That is why a person confirms every mapping, and where a model call would
+  help most (FINAL_REPORT.md, Task 5).
 - **A run is only as current as its inputs.** The manifest records hashes at run time; it can tell
   you a deck is stale, but nothing re-runs it for you.
 
@@ -294,6 +306,8 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
 - [x] **Slide-fit check:** `analyze.py` measures Claude's text against slide 4's real boxes, so an answer too long for the deck is caught while a retry can still fix it. If it still doesn't fit, the deck is built with the "AI summary unavailable" placeholder - a company is never left without a deck (`build_deck.ai_text_problems`).
 - [x] **Direction check:** `analyze.py` rejects a claim whose direction word its own numbers contradict ("fell from 97.1% to 108.9%"), and one that calls a trend persistent when the quarter-by-quarter series moves both ways (`analyze.claim_problems`).
 
+- [x] **Column mapping:** an unknown header gets a proposed column with a confidence, reason and sample values; nothing runs until a person confirms it, and the confirmed mapping is saved to `mappings/<company>.yaml` for next quarter (`mapping.py`, the web page's Review mapping step).
+
 **Still to do:**
 
 - [ ] **Power Automate or SharePoint trigger:** when a company drops its workbook into a SharePoint folder, a Power Automate flow starts the run and saves the deck and metrics workbook back next to it, so nobody has to run a command.
@@ -301,3 +315,4 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
 - [ ] **Check that a claim is really good news, and that its periods match:** the direction check reads numbers and trends, but it can't tell whether a passing flag is genuinely good, and it can't check a claim with no numbers in it or one that says two figures moved "over the same period" when they didn't. Those rest on the prompt, so a person still reads each deck before it goes to a board.
 - [ ] **An `--output-dir` option:** so the check scripts write to a temporary folder instead of overwriting the real decks in `output/`.
 - [ ] **Run companies in parallel:** one after another, 275 companies take about 5 hours.
+- [ ] **A model call for column mapping:** send Claude the unknown headers, their sample values and the 16 column definitions, and ask for a proposal with a reason, checked against the same value rules. It would read "Cash Burn" and "Bookings" as a person does. The confirmation step stays.

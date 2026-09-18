@@ -379,6 +379,8 @@ what failed and how it was fixed, and anything unresolved.
   were rebuilt from the saved analyses afterwards, but the manifests' `ai` part stays "skipped" until
   the next real run.
 
+---
+
 ## Task 4: no em dashes
 
 ### What I built
@@ -465,3 +467,169 @@ what failed and how it was fixed, and anything unresolved.
   left the prompt alone.
 - **Task 3's Unresolved note about em dashes in the slide titles and the shared "Cannot evaluate"
   and "None" labels is now done.**
+
+
+---
+
+## Task 5: column mapping (mapping.py, clean.py, the web page's Review mapping step)
+
+### What I built
+
+- **`mapping.py` (new).** For every header that is neither a standard column nor in
+  `clean.HEADER_ALIASES`, it proposes the standard column the header most likely means, with a
+  confidence (shown as "85% (high)", "64% (medium)", "41% (low)"), a reason in plain words, the
+  first 4 values under the header as written, and the list of columns it could mean. Heuristics only:
+  1. **Candidates:** only the columns no known header already has.
+  2. **Name:** the header's words, with filler dropped ("Total", "$K") and the usual FP&A synonyms
+     swapped ("Opening" to starting, "Plan" to budget, "GP" to gross profit, "FTEs" to headcount),
+     against each column's own words and its HEADER_ALIASES spellings. The score is the better of word
+     overlap and letter-by-letter similarity (Python's `difflib`), so the typo "Revenu" scores 92%.
+  3. **Values:** a value in the budget-only row rules out all 13 actual columns (clean.py would stop
+     on them); ARR and cash must roll forward with the column in place; gross profit can't be above
+     revenue; the only column left for the only unknown header gets points. A check that fits adds
+     points, one that breaks takes them off.
+  4. **Assignment:** strongest (header, column) pair first, no column proposed twice; below 40%, no
+     proposal and the person chooses.
+- **Nothing is guessed silently.** `clean.clean_workbook` now gathers every unknown header and stops
+  with `UnconfirmedMappingError`: one line per header naming it, its cell, the proposal, the
+  confidence and the reason, then how to confirm. This happens however high the confidence is: a 99%
+  proposal stops too, and a test pins that.
+- **Confirmed mappings are saved to `mappings/<company>.yaml`** (the header as written, the column,
+  the company and the time, and a comment saying what the file is). `clean_workbook` reads the
+  company's file on every run, so main.py, the deck, the memo, the Excel workbook and the web page
+  all use a confirmed mapping with no change of their own, and next quarter's workbook with the same
+  headers runs unattended.
+- **Two places to confirm:**
+  - the web page's **Review mapping** step, on a company's page and in Add a company: each pair
+    shows the header and cell, the proposal and its confidence, the sample values, **Change** (a
+    list of the columns it could mean, the proposal preselected) and **Confirm**, with the reason
+    underneath. Save mapping (or Add company) stays greyed out until every pair is confirmed, and
+    changing a column clears that pair's tick;
+  - `python mapping.py data/acme.xlsx` lists the proposals; `--confirm` asks about each one (Enter
+    accepts, or type another column; a typo is asked again; `q` stops and saves nothing).
+- **A mapping is saved only if the workbook reads with it** (tried first on a temporary mappings
+  folder). An upload is added to `data/` together with its mapping, or neither is saved.
+- **The mapping is an input like the workbook.** The manifest records the mapping file and its
+  SHA-256 hash; a changed mapping makes the portfolio row "Out of date: the column mapping has
+  changed", takes the old files off the download buttons, stops `approve.py`, and sends an approved
+  deck back to "not reviewed" (`provenance.approval_status` takes a fourth hash).
+- **Tests (77 new, 728 in all, written before the code):** `tests/test_mapping.py` (55) uses copies
+  of the three companies with their headers renamed to words clean.py doesn't know: all 16 of
+  Northwind's ("Opening ARR", "Upsell ARR", "Downgrades", "GP", "Cash Burn", "Plan Burn" ...), 6 of
+  Alderpeak's ("BoP ARR", "Churn", "ARR Target" ...) and 7 of Fernhollow's ("Expansion", "Gross
+  Margin $", "Burn", "Pipe ($K)" ...). It proves:
+  - **proposal:** every one of the 29 renamed headers is proposed as the column it came from;
+  - **required confirmation:** each copy stops naming every header and its proposal; nothing is
+    saved on the way; a partial confirmation still stops;
+  - **identical metrics:** after confirming, each copy's cleaned numbers, budget row, metrics and
+    flags equal the original's exactly; next quarter's workbook runs unasked; Change saves the
+    person's column, not the proposal.
+  Plus 12 in test_portfolio.py, 5 in test_app.py (AppTest clicks Confirm, Change and Save mapping),
+  3 in test_provenance.py and 2 in test_approve.py.
+- **Proof the tests work:** `output/task5_mutations.py` made 22 breakages in temporary copies of the
+  project, and every one was caught (**22 of 22**; the control, a comment edit, passes). They cover
+  clean.py using the proposals silently, or only the high-confidence ones; the stop message without
+  the proposal; a saved line overriding a known header; a second confirmation forgetting the first;
+  saved headers not normalized; a bad column accepted; the budget row not ruling anything out; one
+  column proposed twice; no synonyms; a broken roll-forward counted as support; filler kept; the
+  approval, approve.py, the manifest and the portfolio row each ignoring the mapping; a mapping saved
+  before it's tried; an unchosen header let through; the page showing the command-line message;
+  Change not clearing Confirm; Save mapping enabled early; the review step not drawn.
+- **Rebuilt, no API call:** all 6 check scripts pass, and the three decks and memos were rebuilt
+  from their saved analyses (slide 4 carries AI text on all three).
+- **Docs:** README (commands, the page, data flow, design decision 15, a known limitation, next
+  steps), STUDY_GUIDE (a mapping.py section with every function, the new clean.py, portfolio.py,
+  app.py and provenance.py rows, test counts, `mappings/`), INTERVIEW_PREP (new Q34b, Q35 and Q39
+  updated), LOOM_SCRIPT (test count). CLAUDE.md is not edited (see Unresolved).
+
+### Where a model call would improve it
+
+The heuristics are word lists and arithmetic. A Claude call would help in four places, and each
+would still end in a person's confirmation:
+1. **A name that fits two columns.** "Cash Burn" is 59% like net burn and 50% like ending cash by
+   name; it is proposed correctly only because "Closing Cash Balance" took ending cash first
+   (64%, medium). A model reads "burn" as a flow, not a balance.
+2. **Words not in the synonym list.** "Bookings", "Logos Lost", "Net Retention $", "Opex - S&M",
+   another language: each needs a line added to `SYNONYMS` today. A model knows the vocabulary
+   without the list.
+3. **Meaning in the values, not the name.** A model could look at the sample values and say "these
+   are percentages, so 'Gross Margin' here is the ratio, not gross profit dollars", which the
+   gross-profit-below-revenue check only half covers.
+4. **The reason text.** A model can explain a proposal the way an analyst would ("the cash balance
+   falls by exactly this amount every quarter"), where today's reasons list the checks that passed.
+
+The design for it: send the unknown headers, their sample values and the 16 column definitions from
+CLAUDE.md; ask for JSON (header, column, reason); then run the same value checks in Python, so a
+proposal that breaks the budget-row rule or a roll-forward is marked down whatever the model says.
+Python keeps the final say on anything checkable, and a person on everything else, as with the
+commentary.
+
+### Decisions you didn't specify
+
+1. **The hook is inside `clean.clean_workbook`**, so every file that calls it (main.py, the deck,
+   the memo, the Excel workbook, the web page, the check scripts) picks up confirmed mappings with no
+   change. `clean.py` imports `mapping.py` inside that one function, not at the top,
+   because `mapping.py` imports `clean.py` (the comment says so).
+2. **Confidence informs, it never decides.** There is no level at which a proposal is used without a
+   person. The levels (high from 80%, medium from 55%, low below) and the 40% floor for making a
+   proposal at all are my choices; the scores are not probabilities.
+3. **Only columns still without a header are candidates, and a column the budget row rules out is
+   not offered under Change.** Mapping onto a column another header already has would stop anyway
+   ("both mean ..."), and so would an actual column with a value in the budget-only row.
+4. **All unknown headers stop at once.** clean.py used to stop at the first one. With a proposal for
+   each, one review covers them all.
+5. **A known header always wins over a saved line.** A hand-edited `mappings/<company>.yaml` can't
+   redefine "Revenue".
+6. **The file is keyed by the workbook's name** (`data/acme.xlsx` gives `mappings/acme.yaml`), holds
+   headers as written, and matches them as clean.py matches HEADER_ALIASES (case, spaces and symbols
+   ignored). Later confirmations are added to earlier ones. `mappings/` is not git-ignored: a
+   confirmed mapping is a decision like config.yaml, worth keeping in history. It's empty today.
+7. **No "not an input, ignore it" choice.** An extra column still has to be deleted from the
+   workbook, as before: an ignored column would be data dropped without a trace in the numbers.
+8. **The mapping's hash voids an approval**, as the workbook's and config.yaml's do. An approval
+   from before this task has no mapping hash and still holds while the company has no mapping file,
+   so Northwind's existing approval is unaffected.
+9. **Confirm is a checkbox and Change a dropdown**, with one Save mapping button (secondary: the page
+   keeps its one navy button). The checkbox's key includes the chosen column, which is what makes a
+   change clear the tick.
+10. **The page shows standard names** ("starting_arr"), the names in CLAUDE.md's input list and in
+    clean.py's messages. Display names would mean adding 14 input labels to metrics.py's one label
+    set for this screen alone; I left that for you to decide.
+11. **Three different rename sets**, so the proposals can't pass by fitting one list, and Northwind
+    renamed completely (every value check that needs a known neighbour is then unavailable, the
+    hardest case).
+12. **`--confirm` is all or nothing**: stopping halfway saves nothing, so a file never holds half a
+    review.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **NaN in a flag made identical flags compare unequal** (my test): compared as tables instead.
+2. **"headcount headcount" in a reason**: an alias plus its synonym gave the same word twice; found
+   by reading the printed proposals, fixed in `header_words`.
+3. **Change listed columns clean.py would stop on**: removed, two tests updated, one added.
+4. **5 existing tests failed** on the new stop: a pinned hint, and two fixtures whose "ARR" header
+   now gets a proposal instead of the missing-columns stop they were written for. Updated.
+5. **The web page would have shown a temporary file's path** in the command-line hint: the page has
+   its own wording now.
+6. **Two value checks aren't needed on these three companies.** Breaking the roll-forward and the
+   filler list failed only their unit tests: every renamed header's name already decides its column
+   once the others are taken. The checks are proved to work, not proved to matter here.
+7. **Refused commands and one slip of mine** (a `git add` pathspec error skipped a commit; an edit
+   script stopped halfway): scripts in `output/`, finished and checked before committing.
+
+### Unresolved
+
+- **CLAUDE.md doesn't list `mapping.py` or `mappings/`.** You said not to edit it. Suggested line
+  for Architecture: "mapping.py: a header clean.py doesn't know gets a proposed column (name +
+  values) with a confidence and reason; nothing runs until a person confirms it (web page Review
+  mapping, or `python mapping.py <workbook> --confirm`); saved to mappings/<company>.yaml".
+- **Not looked at in a browser.** The Review mapping step is tested with AppTest (it draws, Change
+  and Confirm work, Save stays greyed out), but no one has seen it. Four columns per pair in a
+  1100 px column should fit; worth a look.
+- **A renamed "Quarter" header still stops without a proposal.** clean.py finds the KPI tab by that
+  header, so "Period" means "no tab has a 'Quarter' header". Other layouts (quarters across the top)
+  are out of scope too.
+- **Renaming a company's workbook loses its mapping** (the file follows the workbook's name). The
+  review then simply asks again; nothing wrong is used.
+- **The synonym list is hand-written** from ordinary FP&A vocabulary. It will need lines for real
+  companies' spellings until a model call replaces it (above).
