@@ -516,6 +516,20 @@ started when it finished), so there's now a test for it, and I planted 43 bugs i
 the tests catch what they claim.
 *Point to:* `run_log.CompanyLog.step`, `main.log_whole_company`, `run_log.recent_runs`; `tests/test_run_log.py::test_a_failing_step_is_logged_with_its_error_and_no_later_step_runs`.
 
+**Q34m. An analyst runs this at 11pm and it says FAILED. What do they see?** (new, Task 16)
+A sentence that says what's wrong, where, and what to do next, like "Sheet 'KPI Tracker', row 3
+(header) is missing columns: pipeline - add a column headed with each name". I audited every message
+the core files raise against those three things. Most already named the sheet and cell; what was
+missing was usually the "what next", and in a few places the reader got the library's words instead
+of mine: "ValueError:" in front of every failure, pandas' "you must specify an engine manually" for a
+file that isn't a workbook, "AuthenticationError: Error code: 401" for a bad key, a YAML parser
+error for a typo in a mappings file. Now each says what to do. The one place I kept the Python name
+is a real bug, because the person fixing it needs it; it's labelled "probably a bug in this tool
+rather than the workbook" so the analyst doesn't go hunting in their spreadsheet. The tests pin
+each message's "what to do next", and I undid each fix one at a time in a copy to prove the tests
+notice.
+*Point to:* `run_log.error_text`, `analyze.api_error_text`, `clean.check_is_workbook`; `tests/test_error_messages.py::test_api_errors_say_what_happened_and_what_to_do`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs

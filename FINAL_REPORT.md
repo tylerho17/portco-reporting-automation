@@ -1794,3 +1794,95 @@ test_demo_reset.py for the reset's two):
 - **CLAUDE.md's Architecture list** doesn't name run_log.py. Suggested line: "run_log.py  output/logs/
   run_<timestamp>.jsonl, a line per step per company (seconds, result, error); read back by the web
   page's Recent runs card".
+
+## Task 16: error message audit
+
+### What I built
+
+I read every message raised in clean.py, metrics.py, analyze.py, build_deck.py, memo.py, mapping.py
+and main.py and checked each for three things: what is wrong, where, and what to do next, in plain
+words. **metrics.py and memo.py raise nothing**: a value with no number gets a reason ("data
+missing", "n/a", "n/m"), never a stop, so there was nothing to fix there. Of the rest, most already
+named the sheet, row or cell; what fell short:
+
+| Where | Before | Now |
+|---|---|---|
+| Any failed company (main.py's FAILED line, Result column, batch CSV, run log, web page's CSV) | `FAILED: ValueError: Sheet ...` | `FAILED: Sheet ...` (`run_log.error_text`). A bug keeps its name: "unexpected problem, probably a bug in this tool rather than the workbook (KeyError: ...): the Terminal window shows where it happened" |
+| A missing workbook | `FileNotFoundError: [Errno 2] No such file or directory: 'data/nope.xlsx'` | "Can't find data/nope.xlsx: check the file name and folder, then run again" |
+| A text file or a .pptx named .xlsx (command line) | pandas: "Excel file format cannot be determined, you must specify an engine manually" | "notes.xlsx isn't a readable Excel workbook: open it in Excel, save it as an Excel Workbook (.xlsx), then run again" |
+| A locked file | `PermissionError: [Errno 13] ...` | "can't open or save output/...pptx: if it's open in Excel, PowerPoint or Word, close it, then run again" |
+| No KPI tab | "(tabs: ['Notes', 'KPI Tracker'])", no fix, the full temp path | "No tab in broken.xlsx ... (tabs checked: 'Notes', 'KPI Tracker'): add a 'Quarter' header above the column of quarter labels, like 'Q2 2026'" |
+| Three KPI tabs | "Tabs 'A', 'B' and 'C' both have ..." | "... all have ..." |
+| A note under the table | "Can't read quarter label 'Source: ...' (expected e.g. 'Q2 2026')" | "... - write the label like that, or if the row is a note, move it to another tab" |
+| Missing columns / budget row with actuals / header with no quarters | said what, not what to do | each ends with the fix (add the column; move the actuals or take "budget" out of the label; add a row per quarter) |
+| Every API error | `AuthenticationError: Error code: 401 - {...}` | "Claude's API didn't accept the key (ANTHROPIC_API_KEY in .env): check the key, or build without AI text (--skip-ai). The numbers, deck and memo are still built, without AI text. Details: ..." Seven kinds, in `analyze.API_ERROR_ADVICE` |
+| Failed validation | "Claude's answer failed validation twice:" | "... so it isn't used: run again for a fresh answer, or build without AI text (--skip-ai). What was wrong:" |
+| analyze.py's own command line | a traceback for a broken workbook or no key | one line each, exit 1 |
+| mappings/<company>.yaml | a YAML library error for a typo; "expected a 'columns:' list"; a wrong column with no fix | the file and line; what the file needs; each ends "fix it, or delete it and confirm again with python mapping.py data/acme.xlsx --confirm" |
+| The slide template | python-pptx's "Package not found" (treated as a bug, with a traceback); "missing a placeholder - run python make_template.py" | "The slide template base.pptx is missing: build it with python make_template.py, then run again"; the layout one names the layout |
+| `--max-cost abc`, `--workers 0` | "'abc' is not a number" | "... : give one above 0, e.g. 2.5"; "... : give a whole number, e.g. 4" |
+
+- **Tests:** `tests/test_error_messages.py` (37, written before the code; each expected text typed by
+  hand), and about a dozen older assertions updated from the old wording (test_bad_inputs, test_batch,
+  test_main, test_portfolio, test_run_log, check_main.py). **1289 tests pass.** No test
+  calls the API: API errors are built by hand, and analyze.py's command line is tested with the API
+  made unusable and .env never read.
+- **Docs:** README decision 25, STUDY_GUIDE (the new functions in their files' tables, the moved
+  `is_excel_workbook`, the tests table and count), INTERVIEW_PREP Q34m, LEARNINGS (4 rows).
+
+### How it's proved
+
+33 bugs planted one at a time in a temporary copy of the project (`output/task16_plant_bugs.py`,
+logs `output/task16_plant_bugs.log` and `_rerun.log`), each undoing one fix, run against
+test_error_messages.py, test_bad_inputs.py, test_run_log.py and the page's Generate all test:
+
+| Result | Bugs |
+|---|---|
+| Caught from the start (31) | clean.py: no missing-file check, no workbook check, the tabs a Python list, "both" for three tabs, and the fix dropped from each of the five stops. The Python name back in the log, the FAILED line, the Result column and the page's Result column; a locked or missing file not explained; a bug losing its name, or reading like a workbook problem. No hint on `--max-cost` or `--workers`. An API error its Python name again; a broad API error listed first (so every refused request said "bad key"); a lost connection given the generic words; failed validation without what next; analyze.py's traceback for a broken workbook, and no key check. mapping.py: broken YAML as a YAML error, no line number, and the fix dropped twice. build_deck.py: no missing-template check, the template fix dropped |
+| Passed at first, caught after new tests (2) | Any zip counted as a workbook (my test's "zip" wasn't a real one; now a .pptx part in a real zip); the deck step opening the template without the check (the test called the helper only; now a whole batch) |
+| Control (nothing changed) | passed |
+
+### Decisions you didn't specify
+
+1. **The Python error name goes for a workbook problem and stays for a bug.** The analyst needs
+   "what to do"; the person fixing a bug needs "KeyError". A bug is labelled "probably a bug in this
+   tool rather than the workbook" so nobody hunts through their spreadsheet for it.
+2. **API errors keep the API's own words at the end** ("Details: ..."). A low credit balance or a
+   retired model is only explained there, and hiding it would make the plain part guesswork.
+3. **`error_text` and `INPUT_ERRORS` live in run_log.py**, the lowest module main.py and the web page
+   both import (the run log writes the error first, before main.py sees it). No new file.
+4. **`is_excel_workbook` moved from portfolio.py to clean.py**, so the command line gets the web
+   page's check; portfolio.py imports it.
+5. **Column names in messages stay as the standard names** ("missing columns: pipeline"), not the
+   deck's labels ("Pipeline ($K)"): the name is exactly what the header has to say, and clean.py
+   can't import metrics.py's labels (metrics.py imports clean.py).
+6. **Each message keeps its old start**, so the fix is added after it: every older test that checked
+   a message's start still passes, and a person who learned the old wording still recognises it.
+7. **"Claude's API"** rather than "the Anthropic API" in the messages: the reader knows the tool uses
+   Claude; the key's name (ANTHROPIC_API_KEY) is given where it matters.
+8. **The validation problems themselves** (fed back to Claude on the retry, then saved) weren't
+   reworded: they are written for Claude first, and changing them could change what the retry does.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **Probing the old messages by hand** (`python main.py data/nope.xlsx`) overwrote
+   `output/batch_summary.csv` and the batch manifest and added two run logs. `demo_reset.py` put
+   output/ back, with no API call.
+2. **Two planted bugs escaped** (table above); both now have tests.
+3. **My YAML test** failed on a correct message because pytest's temp folder name contains "yaml".
+4. **`httpx` isn't importable here**; the SDK's copy is `httpx2`, as test_batch.py already used.
+5. **Refused commands** (a `sed -i`, a heredoc with braces, `tee`, a shell `until` loop): the Edit tool,
+   output redirected to a file, and a Python wait loop instead.
+
+### Unresolved
+
+- **config_schema.py's messages** (a bad config.yaml) weren't in the list of files, so I didn't audit
+  them; they were written in Task 13 to the same standard and have their own tests.
+- **app.py and portfolio.py's own messages** weren't in the list either. The page already had its
+  own plain wording; I only changed portfolio.py where it put the Python name in front of it.
+- **"--skip-ai" in the API messages** is main.py's option, but the web page shows the same saved
+  reason after Generate ("AI summary unavailable: the AI step failed: ... or build without AI text
+  (--skip-ai) ..."), where the page's own words would be "untick Include AI commentary". Fixing it
+  means the message knowing where it will be read; say if you want it.
+- **CLAUDE.md's Architecture list** doesn't mention `run_log.error_text`. Suggested addition to the
+  run_log line (once it has one): "; error_text: every failure in plain words, a bug keeps its Python name".
