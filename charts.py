@@ -21,7 +21,9 @@ import math
 import matplotlib
 
 matplotlib.use("Agg")  # draw to files only; no window (must be set before importing pyplot)
-import matplotlib.pyplot as plt  # noqa: E402
+# Figures are made with Figure(), not pyplot: pyplot keeps one shared list of open figures, which
+# isn't safe when several companies draw charts at the same moment (main.py --workers).
+from matplotlib.figure import Figure  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from metrics import INPUT_LABELS, METRIC_LABELS, MISSING_INPUT, REASON_DISPLAY, format_value  # noqa: E402
@@ -97,8 +99,8 @@ def bar_panel(axis, quarters, values, column):
 
 def arr_chart(quarters, ending_arr, net_new_arr, size_inches):
     """Figure with two panels: ending ARR bars (taller) above net new ARR bars."""
-    figure, (arr_axis, net_new_axis) = plt.subplots(
-        2, 1, figsize=size_inches, gridspec_kw={"height_ratios": [3, 2]}, constrained_layout=True)
+    figure = Figure(figsize=size_inches, constrained_layout=True)
+    arr_axis, net_new_axis = figure.subplots(2, 1, gridspec_kw={"height_ratios": [3, 2]})
     bar_panel(arr_axis, quarters, list(ending_arr), "ending_arr")
     bar_panel(net_new_axis, quarters, list(net_new_arr), "net_new_arr")
     return figure
@@ -106,7 +108,8 @@ def arr_chart(quarters, ending_arr, net_new_arr, size_inches):
 
 def cash_chart(quarters, ending_cash, runway_text, size_inches):
     """Figure with ending cash as a line that breaks at a blank quarter, and runway in the title."""
-    figure, axis = plt.subplots(figsize=size_inches, constrained_layout=True)
+    figure = Figure(figsize=size_inches, constrained_layout=True)
+    axis = figure.subplots()
     values = list(ending_cash)
     # plot() gets the NaN too: matplotlib leaves a gap there instead of joining the neighbours.
     axis.plot(range(len(values)), values, color=NAVY_HEX, linewidth=LINE_WIDTH, marker="o", markersize=MARKER_SIZE)
@@ -126,7 +129,9 @@ def cash_chart(quarters, ending_cash, runway_text, size_inches):
 
 
 def save_chart(figure, path):
-    """Save a figure as PNG at its own size (so 12 pt in the figure is 12 pt on the slide) and free its memory."""
+    """Save a figure as PNG at its own size (so 12 pt in the figure is 12 pt on the slide).
+
+    The figure isn't registered with pyplot, so there's nothing to close: Python frees it once unused.
+    """
     figure.savefig(path, dpi=DPI, facecolor=WHITE_HEX)
-    plt.close(figure)
     return path

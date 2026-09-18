@@ -286,7 +286,7 @@ def test_generate_all_carries_on_past_a_failure_and_reports_progress(folders, tm
     assert progress == [(0, 4, "Alderpeak"), (1, 4, "Broken"), (2, 4, "Fernhollow"), (3, 4, "Northwind"),
                         (4, 4, None)]
     with open(output_dir / "batch_summary.csv", newline="") as file:
-        results = [row[-1] for row in csv.reader(file)][1:]
+        results = [row["Result"] for row in csv.DictReader(file)]
     assert results[0] == "OK (AI skipped)" and results[1].startswith("FAILED: ValueError")
 
 

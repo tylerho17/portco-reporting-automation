@@ -749,8 +749,8 @@ def build_presentation(data, summary, run_date, chart_dir, approval=None, model=
     return presentation
 
 
-def record_deck_status(workbook_path, output_dir, approval, ai_text):
-    """Update the manifest to describe the deck just written: reviewed or not, AI text or not.
+def record_deck_status(workbook_path, output_dir, approval, ai_text, draft=False):
+    """Update the manifest to describe the deck just written: reviewed or not, AI text or not, --draft or not.
 
     Only if a manifest is already there. main.py writes the full one (hashes, tokens, cost); this
     keeps it true when the deck is rebuilt on its own - otherwise the file could say "approved by"
@@ -760,7 +760,7 @@ def record_deck_status(workbook_path, output_dir, approval, ai_text):
     manifest = read_manifest(path)
     if manifest is None:
         return None
-    manifest["deck"] = {**manifest.get("deck", {}), "ai_text": ai_text, "status": deck_status(approval)}
+    manifest["deck"] = {**manifest.get("deck", {}), "ai_text": ai_text, "status": deck_status(approval), "draft": draft}
     return save_manifest(path, manifest)
 
 
@@ -803,7 +803,7 @@ def save_deck(workbook_path, config, analysis_file=None, run_date=None, output_d
     presentation = build_presentation(data, summary, run_date or datetime.date.today(), chart_dir,
                                       approval=approval, model=details["model"] if details else None, draft=draft)
     presentation.save(path)
-    record_deck_status(workbook_path, output_dir, approval, ai_text=summary is not None)
+    record_deck_status(workbook_path, output_dir, approval, ai_text=summary is not None, draft=draft)
     return path, why_unavailable
 
 

@@ -56,11 +56,12 @@ def test_summary_csv_has_one_row_per_company(tmp_path):
         rows = list(csv.reader(file))
     assert rows == [
         ["Company", "Latest quarter", "Flags tripped", "Flags total", "Cannot evaluate", "Data gaps",
-         "Blank quarters", "Result"],
-        ["Northwind", "Q2 2026", "6", "9", "0", "19", "Q1 2025", "OK"],
-        ["Fernhollow", "Q2 2026", "7", "9", "1", "20", "Q2 2025", "OK (AI failed)"],
-        ["Alderpeak", "Q2 2026", "0", "9", "0", "0", "", "OK (AI skipped)"],
-        ["Broken", "", "", "", "", "", "", "FAILED: ValueError: row 3 (header) is missing columns: pipeline"],
+         "Blank quarters", "Result", "AI cost (USD)", "Notes"],
+        ["Northwind", "Q2 2026", "6", "9", "0", "19", "Q1 2025", "OK", "", ""],
+        ["Fernhollow", "Q2 2026", "7", "9", "1", "20", "Q2 2025", "OK (AI failed)", "", ""],
+        ["Alderpeak", "Q2 2026", "0", "9", "0", "0", "", "OK (AI skipped)", "", ""],
+        ["Broken", "", "", "", "", "", "", "FAILED: ValueError: row 3 (header) is missing columns: pipeline", "",
+         ""],
     ]
 
 
@@ -234,9 +235,12 @@ def test_api_error_is_ai_failed_not_a_failed_company(tmp_path):
 def test_unexpected_error_in_the_ai_step_fails_the_company(tmp_path):
     # A bug (not a validation failure or an API error) must not hide behind "AI failed".
     run_northwind(tmp_path, client=FakeClient(summary()))  # an old, good analysis from an earlier run
+    old_analysis = (tmp_path / "northwind_analysis.json").read_bytes()
     result = run_northwind(tmp_path, client=FakeClient(error=KeyError("simulated bug")))
     assert result["error"] == "KeyError: 'simulated bug'"
-    assert not (tmp_path / "northwind_analysis.json").exists()  # the old analysis can't pass for this run's
+    # Task 7: a failed company's files never reach output/, so the old analysis stays beside the old
+    # deck it belongs to (before, it was deleted and the old deck stayed without it).
+    assert (tmp_path / "northwind_analysis.json").read_bytes() == old_analysis
 
 
 def test_ai_text_too_long_for_the_slides_is_ai_failed_not_a_failed_company(tmp_path):
@@ -352,7 +356,8 @@ def test_a_run_writes_a_manifest_for_the_company(tmp_path):
     assert saved["ai"]["validation"] == "passed" and saved["ai"]["attempts"] == 1
     assert saved["ai"]["input_tokens"] == 100 and saved["ai"]["output_tokens"] == 50
     assert saved["ai"]["cost_usd"] > 0
-    assert saved["deck"] == {"file": "northwind_board_pack.pptx", "ai_text": True, "status": NOT_REVIEWED}
+    assert saved["deck"] == {"file": "northwind_board_pack.pptx", "ai_text": True, "status": NOT_REVIEWED,
+                             "draft": False}
     assert saved["approval"] is None  # nobody has reviewed it yet
     assert saved["run_at"]
 
@@ -457,6 +462,7 @@ def test_draft_is_passed_from_the_command_line_to_the_batch(monkeypatch):
     seen = {}
     monkeypatch.setattr(main, "run_batch", lambda *args, **kwargs: seen.update(kwargs) or [])
     monkeypatch.setattr(main, "write_summary_csv", lambda results: PROJECT_DIR / "output" / "batch_summary.csv")
+    monkeypatch.setattr(main, "save_batch_manifest", lambda *args: PROJECT_DIR / "output" / "batch_manifest.json")
     main.main(["--all", "--skip-ai", "--draft"])
     assert seen["draft"] is True
     main.main(["--all", "--skip-ai"])
@@ -489,4 +495,5 @@ def test_skip_ai_never_needs_a_key(monkeypatch):
     monkeypatch.setattr(main, "api_key_problem", lambda: pytest.fail("--skip-ai looked for an API key"))
     monkeypatch.setattr(main, "run_batch", lambda *args, **kwargs: [])
     monkeypatch.setattr(main, "write_summary_csv", lambda results: PROJECT_DIR / "output" / "batch_summary.csv")
+    monkeypatch.setattr(main, "save_batch_manifest", lambda *args: PROJECT_DIR / "output" / "batch_manifest.json")
     assert main.main(["--all", "--skip-ai"]) == 0
