@@ -65,6 +65,7 @@ from build_deck import (PLACEHOLDER_TEXT, analysis_details, analysis_path, colle
                         deck_path, load_analysis, save_deck, slide_number)
 from clean import clean_workbook
 from compare_models import run_cost
+from config_schema import ConfigError
 from diff_runs import HEADING, baseline, move_settings, report_for, run_results, summary_text
 from excel_output import save_metrics_workbook
 from mapping import mapping_record
@@ -752,6 +753,11 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    try:
+        config = load_config()   # checked first: a bad setting stops the run before any company, in plain words
+    except ConfigError as error:
+        print(error)
+        return 1
     paths = find_workbooks() if args.all else [Path(args.workbook)]
     if not paths:
         print(f"No .xlsx workbooks found in {DATA_DIR}")
@@ -763,7 +769,7 @@ def main(argv=None):
     options = {"resume": args.resume, "max_cost": args.max_cost, "timeout": args.timeout, "workers": args.workers,
                "skip_ai": args.skip_ai, "draft": args.draft}
     spend = SpendMeter()
-    results = run_batch(paths, load_config(), args.skip_ai, draft=args.draft, resume=args.resume,
+    results = run_batch(paths, config, args.skip_ai, draft=args.draft, resume=args.resume,
                         max_cost=args.max_cost, timeout=args.timeout, workers=args.workers, spend=spend)
     print_summary(results)
     if not args.skip_ai or args.max_cost is not None:

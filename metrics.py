@@ -16,9 +16,9 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-import yaml
 
 from clean import clean_workbook
+from config_schema import check_config, read_config
 
 CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
@@ -367,24 +367,18 @@ COMBO_FLAG_NAME = "NRR falling while pipeline rising"
 
 
 def validate_config(config):
-    """Stop with a clear message if the combo settings can't work."""
-    lookback = config.get("combo_lookback_quarters")
-    if not isinstance(lookback, int) or isinstance(lookback, bool) or lookback < 2:
-        # With 1 quarter there are no steps to compare, and "every step fell" would be true of nothing.
-        raise ValueError(f"config.yaml: combo_lookback_quarters must be a whole number of at least 2 "
-                         f"(got {lookback!r}) - the combo rule needs at least one quarter-to-quarter step")
-    drop = config.get("combo_min_nrr_drop")
-    if not isinstance(drop, (int, float)) or isinstance(drop, bool) or drop < 0:
-        raise ValueError(f"config.yaml: combo_min_nrr_drop must be a number of 0 or more "
-                         f"(got {drop!r}), e.g. 0.01 for 1 point")
+    """Stop (ConfigError) if a setting the flags use is missing, the wrong type or out of range.
+
+    For a config built in code: only the settings the flags need (config_schema.py). The file
+    itself gets the full check, unknown keys included, in load_config.
+    E.g. a combo lookback of 1 has no steps to compare, and "every step fell" would be true of nothing.
+    """
+    check_config(config, whole_file=False)
 
 
-def load_config(path=CONFIG_PATH):
-    """Read the thresholds from config.yaml into a dictionary, and check the combo settings."""
-    with open(path) as file:
-        config = yaml.safe_load(file)
-    validate_config(config)
-    return config
+def load_config(path=None):
+    """Read config.yaml (or path) into a dictionary, checked against the schema in config_schema.py."""
+    return read_config(path or CONFIG_PATH)   # CONFIG_PATH read here, not at import, so tests can point elsewhere
 
 
 def check_threshold(value, threshold, kind):

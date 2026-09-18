@@ -472,8 +472,8 @@ def test_check_combo_earlier_quarter():
     ({"combo_lookback_quarters": 1}, "combo_lookback_quarters must be a whole number of at least 2"),
     ({"combo_lookback_quarters": 0}, "combo_lookback_quarters must be a whole number of at least 2"),
     ({"combo_lookback_quarters": 2.5}, "combo_lookback_quarters must be a whole number of at least 2"),
-    ({"combo_min_nrr_drop": -0.01}, "combo_min_nrr_drop must be a number of 0 or more"),
-    ({"combo_min_nrr_drop": None}, "combo_min_nrr_drop must be a number of 0 or more"),
+    ({"combo_min_nrr_drop": -0.01}, "combo_min_nrr_drop must be a decimal from 0 to 1"),
+    ({"combo_min_nrr_drop": None}, "combo_min_nrr_drop must be a decimal from 0 to 1"),
 ])
 def test_validate_config_stops_on_bad_combo_settings(change, expected_in_message):
     # Old code: a lookback of 1 has no steps to compare, and all() of nothing is True, so the combo always tripped.
