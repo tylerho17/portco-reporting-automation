@@ -14,8 +14,11 @@ otherwise with the placeholder), open the saved file, and check:
 6. Nothing overflows: every text box and table cell is re-measured from the saved file
    (text_fit.py), every font is at least 12 pt, and every shape sits inside the slide.
    The overflow check is itself proven by breaking a deck on purpose.
-7. A footer on every slide: fictional-data note, source file, today's date.
-Plus: a tampered analysis (one number changed) or a stale one (another quarter) gets the placeholder.
+7. A footer on every slide: fictional-data note, source file, today's date, and the review status
+   read from output/<company>_manifest.json ("AI-drafted | reviewed by NAME on DATE" or
+   "AI-drafted | not reviewed"), measured to fit one line. No DRAFT watermark by default.
+Plus: a tampered analysis (one number changed) or a stale one (another quarter) gets the placeholder;
+--draft stamps every slide of an unreviewed deck and never an approved one.
 
 No API calls. Run: python check_deck.py  -> prints "All checks passed" or stops at the first failure.
 """
@@ -25,6 +28,7 @@ import datetime
 import json
 import math
 import re
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -38,8 +42,9 @@ from check_companies import COMPANIES
 from clean import clean_workbook
 from excel_output import save_metrics_workbook
 from make_template import FOOTER_RULE
-from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, TRIP, compute_metrics, load_config
-from text_fit import MIN_FONT_PT, paragraph, text_height_pt
+from metrics import CANNOT_EVALUATE, COMBO_FLAG_NAME, CONFIG_PATH, TRIP, compute_metrics, load_config
+from provenance import NOT_REVIEWED, approval_status, file_sha256, manifest_path, read_manifest
+from text_fit import MIN_FONT_PT, paragraph, text_height_pt, text_width_pt
 
 PROJECT_DIR = Path(__file__).parent
 LATEST, PRIOR, FIRST = "Q2 2026", "Q1 2026", "Q3 2024"
@@ -227,12 +232,32 @@ def check_risks_slide(slide, company, table_flags, gap_labels):
         assert "None — every metric and flag has the data it needs" in text, f"{company['name']}: gaps should say None"
 
 
-def check_footers(slides, source_name, name):
+def expected_review(workbook, output_dir):
+    """What the footer must end with, worked out here from the manifest (not from build_deck's code)."""
+    manifest = read_manifest(manifest_path(workbook, output_dir))
+    approval, _ = approval_status(manifest, file_sha256(workbook), file_sha256(CONFIG_PATH))
+    if approval is None:
+        return "AI-drafted | not reviewed"
+    return f"AI-drafted | reviewed by {approval['reviewer']} on {approval['approved_at'][:10]}"
+
+
+def check_footers(slides, source_name, name, review):
+    """Every footer: the note, source file, today's date, ends with the review status, and fits one line."""
     today = datetime.date.today().isoformat()
     for number, slide in enumerate(slides, start=1):
-        footer = shape(slide, "Footer").text_frame.text
+        box = shape(slide, "Footer")
+        footer = box.text_frame.text
         for part in (FICTIONAL_NOTE, source_name, today):
             assert part in footer, f"{name}: slide {number} footer lacks {part!r}: {footer!r}"
+        assert footer.endswith(" | " + review), f"{name}: slide {number} footer should end {review!r}: {footer!r}"
+        room = Emu(box.width - box.text_frame.margin_left - box.text_frame.margin_right).pt
+        width = text_width_pt(footer, MIN_FONT_PT)
+        assert width <= room, f"{name}: slide {number} footer is {width:.0f} pt wide, one line holds {room:.0f} pt"
+    return width, room
+
+
+def watermark_count(slides):
+    return sum(item.name == "Watermark" for slide in slides for item in slide.shapes)
 
 
 # ---------------------------------------------------------------------------
@@ -327,11 +352,13 @@ def check_company(company, config, output_dir):
     check_charts(slides[2], company)
     gap_labels = [label for (quarter, label), text in table.items() if text == "data missing"]
     check_risks_slide(slides[3], company, table_flags, sorted(set(gap_labels)))
-    check_footers(slides, workbook.name, name)
+    review = expected_review(workbook, output_dir)
+    width, room = check_footers(slides, workbook.name, name, review)
+    assert watermark_count(slides) == 0, f"{name}: a DRAFT watermark without --draft"
     check_no_overflow(presentation, name)
     ai = "AI text from the JSON" if summary else f"placeholder ({why_unavailable})"
     print(f"✓ {name}: 5 slides, {ai}, {count}; {numbers} distinct numbers on slide 2 all in the metrics table; "
-          f"nothing overflows")
+          f"nothing overflows; footer '{review}' on one line ({width:.0f} of {room:.0f} pt); no watermark")
     return deck
 
 
@@ -363,6 +390,30 @@ def check_bad_analysis_gets_placeholder(config, folder):
         print(f"✓ Northwind with a tampered analysis ({change.__name__}) shows the placeholder: {why_unavailable[:70]}...")
 
 
+def check_draft_option(config, folder):
+    """--draft: an unreviewed deck gets the watermark on all 5 slides; an approved one gets none.
+
+    Built in a temporary folder, so output/ keeps its default (unwatermarked) decks. Approved means
+    a copy of a manifest that approve.py signed, for the same workbook and thresholds.
+    """
+    folder = Path(folder)
+    for company in COMPANIES:
+        workbook = Path(company["answer_key"].OUTPUT_PATH)
+        real_manifest = manifest_path(workbook, PROJECT_DIR / "output")
+        if real_manifest.exists():
+            shutil.copy(real_manifest, manifest_path(workbook, folder))
+        review = expected_review(workbook, folder)
+        deck, _ = save_deck(workbook, config, None, output_dir=folder, draft=True)
+        slides = Presentation(deck).slides
+        count = watermark_count(slides)
+        expected = 0 if "reviewed by" in review else len(slides)
+        assert count == expected, f"{company['name']} --draft: {count} watermarks, expected {expected} ({review})"
+        if count:
+            assert shape(slides[0], "Watermark").text_frame.text == NOT_REVIEWED
+        check_footers(slides, workbook.name, company["name"], review)
+        print(f"✓ {company['name']} with --draft: {count} of {len(slides)} slides watermarked ('{review}')")
+
+
 def main():
     config = load_config()
     decks = [check_company(company, config, PROJECT_DIR / "output") for company in COMPANIES]
@@ -370,6 +421,8 @@ def main():
     print("✓ The overflow check fails on a deck broken on purpose (long headline; font below the floor)")
     with tempfile.TemporaryDirectory() as folder:
         check_bad_analysis_gets_placeholder(config, folder)
+    with tempfile.TemporaryDirectory() as folder:
+        check_draft_option(config, folder)
     print("All checks passed")
 
 
