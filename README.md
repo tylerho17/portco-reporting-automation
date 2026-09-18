@@ -6,6 +6,7 @@ Portfolio companies send their quarterly KPIs in messy Excel workbooks, and this
 
 ## Contents
 
+- [Quick start (no command line)](#quick-start-no-command-line)
 - [How to run it](#how-to-run-it)
 - [Data flow](#data-flow)
 - [Key design decisions](#key-design-decisions)
@@ -14,6 +15,19 @@ Portfolio companies send their quarterly KPIs in messy Excel workbooks, and this
 - [Screenshots](#screenshots)
 - [Known limitations](#known-limitations)
 - [Next steps](#next-steps)
+
+---
+
+## Quick start (no command line)
+
+For anyone who wants a company's board deck and memo without typing a command. You need a Mac with Python 3 installed ([python.org/downloads](https://www.python.org/downloads/)).
+
+1. **Double-click `run_app.command`** in the project folder in Finder. A Terminal window opens: leave it open while you work, and close it when you're done. The first time only, it spends a few minutes setting itself up (it needs internet). Your browser then opens the Board Pack Generator.
+2. **Pick a company.** The first page, Portfolio, lists every company with its latest quarter, how many flags tripped and any data it didn't send. Click a company's name to see its flags, metrics and charts first, or type part of its name in the search box.
+3. **Click Generate.** On the company's page it is the navy button; on the Portfolio page, each row has its own. It takes a few seconds, and a green line says when the deck, memo and metrics workbook are ready. Leave the AI box unticked: the AI commentary saved from an earlier run of the same numbers is used for free, and nothing is sent to Claude.
+4. **Download the deck and memo.** On the company's page: **Download deck** (PowerPoint) and **Download memo (PDF)** or **Download memo (Word)**. On the Portfolio page: that row's **Download** button, then **Download deck** and **Download memo**. The files go to your browser's usual downloads folder. A download button stays grey until there is a file built from today's workbook, so you can't download a stale one.
+
+Every slide's footer says "not reviewed" until someone signs it off: type your name under **Approve** on the company's page, then click **Generate** again. Something wrong? A red box says what, in plain words, and what to do next. More about the page is [below](#how-to-run-it) ("Or use the web page"), and [DEMO.md](DEMO.md) walks through it click by click.
 
 ---
 
@@ -156,7 +170,7 @@ Want it louder while a deck circulates for review? Build with `--draft` (`python
 **Prove it works (no API calls).**
 
 ```bash
-python -m pytest -q          # 500+ unit tests, expected values worked out by hand
+python -m pytest -q          # 1,300+ unit tests, expected values worked out by hand
 python check_northwind.py    # cleaned data and metrics vs Northwind's answer key
 python check_companies.py    # the same for Alderpeak and Fernhollow, plus each company's story
 python check_excel_output.py # the metrics workbook matches metrics.py
@@ -252,6 +266,16 @@ theme.py       the one palette, font (Arial) and type sizes: the template, deck,
 config.yaml    flag thresholds, each with the investor reason in a comment
 config_schema.py   the rules config.yaml must follow, checked every time it is read: a missing key, a wrong
                    type, an out of range value or an unknown key stops with the key, the problem and an example
+
+Around the chain:
+rollup.py      one deck and one workbook across every company: ranked by flags, by status, runway by company
+diff_runs.py   what changed since the last run (read from the manifest): flags flipped, metrics moved, gaps
+resilience.py  what keeps a long batch going: --resume, --max-cost, --timeout, --workers, rate-limit retries
+run_log.py     output/logs/run_<timestamp>.jsonl: a line per step per company, read by the web page
+cache.py       each workbook is cleaned once per run and its metrics worked out once (keyed by SHA-256)
+golden.py      an approved text copy of every deck, memo and metrics workbook in tests/golden/
+eval/          12 edge-case companies with answer keys: eval/make_eval_data.py writes them, eval/run_eval.py scores
+demo_reset.py  before a demo: output/ back to a known good state, saved AI analyses kept
 ```
 
 The walk-through with Northwind's real numbers, a glossary, and exercises are in [STUDY_GUIDE.md](STUDY_GUIDE.md).
