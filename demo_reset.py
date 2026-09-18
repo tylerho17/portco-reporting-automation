@@ -14,7 +14,8 @@ built with --skip-ai or --draft, exports, a rollup, a half-finished batch. This 
    unavailable". The API is never called: the client passed in refuses any use.
 5. Checks the result: every company's files match today's workbook, nobody has approved them, the
    demo company (Northwind) has AI text and something to compare with. Prints "Ready for the demo." or
-   what to fix, and exits 1 if not ready.
+   what to fix, and exits 1 if not ready. Notes (not problems): another company without AI text,
+   a workbook added in practice, code with uncommitted changes (every footer's commit then has a "*").
 
 Deleting the manifests clears approvals and the batch history on purpose: the demo starts with
 "not reviewed" so it can show approving. Everything deleted is rebuilt from data/ and the saved analyses.
@@ -41,7 +42,7 @@ from main import BATCH_MANIFEST_PATH, DATA_DIR, OUTPUT_DIR, SUMMARY_CSV_PATH, co
 from memo import memo_paths
 from metrics import load_config
 from portfolio import generate_all, run_state
-from provenance import NOT_REVIEWED, manifest_path, read_manifest
+from provenance import NOT_REVIEWED, git_commit, manifest_path, read_manifest
 from resilience import STAGING_FOLDER
 from rollup import rollup_paths
 
@@ -188,6 +189,17 @@ def company_readiness(workbook, output_dir):
     return problems, notes
 
 
+def code_note(commit):
+    """A note when the code had uncommitted changes (provenance.git_commit's answer), else None.
+
+    Every slide's footer then shows the commit with a "*", which a viewer may ask about.
+    """
+    if not commit["uncommitted_changes"]:
+        return None
+    return (f"The code has uncommitted changes, so every footer shows {commit['commit']}*: commit, then run "
+            f"python demo_reset.py again for a clean footer.")
+
+
 def readiness(outcomes, data_dir, output_dir):
     """(problems, notes): every company that failed to build, then each built company's own check."""
     problems = [outcome["message"] for outcome in outcomes if not outcome["ok"]]
@@ -224,7 +236,8 @@ def reset(data_dir=DATA_DIR, output_dir=OUTPUT_DIR):
         changed = changed_analyses(before, analysis_hashes(output_dir))
         copy_files(copies, output_dir, changed)   # put back any the rebuild touched
     problems, notes = readiness(outcomes, data_dir, output_dir)
-    problems += [f"{name} changed during the reset: the copy taken before it was put back" for name in changed]
+    notes += [note for note in [code_note(git_commit())] if note]
+    problems +=[f"{name} changed during the reset: the copy taken before it was put back" for name in changed]
     return {"removed": removed, "left_alone": left_alone, "cleared_approvals": cleared, "kept": sorted(before),
             "rebuilt": [outcome["company"] for outcome in outcomes if outcome["ok"]],
             "problems": problems, "notes": notes}

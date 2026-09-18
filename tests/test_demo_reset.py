@@ -8,12 +8,13 @@ Run from the project folder:  pytest
 """
 
 import hashlib
-import json
 import re
 import shutil
 from pathlib import Path
 
 import pytest
+from pptx import Presentation
+from streamlit.testing.v1 import AppTest
 
 import analyze
 import demo_reset
@@ -22,11 +23,13 @@ import portfolio
 from analyze import BoardSummary, build_payload, save_analysis
 from build_deck import flag_count_text
 from clean import clean_workbook
+from diff_runs import HEADING
 from export import export_paths
 from main import AI_REUSED
 from metrics import load_config
 from provenance import NOT_REVIEWED, manifest_path, read_manifest
 from rollup import rollup_paths
+from test_app import render
 from test_docs import code_strings
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -279,3 +282,77 @@ def test_a_saved_analysis_the_rebuild_deletes_or_changes_is_put_back_and_reporte
         "alderpeak_analysis.json changed during the reset: the copy taken before it was put back",
         "northwind_analysis.json changed during the reset: the copy taken before it was put back"]
 
+
+# ---------------------------------------------------------------------------
+# DEMO.md: the clicks it names are on the page, and the numbers it quotes are today's
+# ---------------------------------------------------------------------------
+
+def demo_text():
+    return DEMO_MD.read_text()
+
+
+def test_demo_md_names_the_reset_and_the_launcher():
+    for name in ("python demo_reset.py", "run_app.command"):
+        assert name in demo_text()
+
+
+def test_every_button_demo_md_clicks_is_on_the_page():
+    # Clicks are written "Click **Label**"; a label must be a string in app.py, or a company name.
+    labels = set(re.findall(r"[Cc]lick \*\*(.+?)\*\*", demo_text()))
+    page = {text for path in (PROJECT_DIR / "app.py", PROJECT_DIR / "portfolio.py") for text in code_strings(path)}
+    assert labels, "DEMO.md names no clicks"
+    missing = [label for label in labels if label not in page and label.lower() not in COMPANIES]
+    assert missing == []
+
+
+def test_demo_md_quotes_each_companys_flag_count_as_the_page_shows_it():
+    config = load_config()
+    words = " ".join(demo_text().split())   # a line break reads as a space, as Markdown shows it
+    for stem in COMPANIES:
+        data, problem = portfolio.load_company(PROJECT_DIR / "data" / f"{stem}.xlsx", config)
+        assert problem is None
+        assert flag_count_text(data["flags"]) in words, stem
+
+
+def test_demo_md_timings_add_up_to_five_minutes():
+    # Each step's heading says when it starts and ends ("(1:30 to 2:30)"); they follow on and end at 5:00.
+    spans = re.findall(r"^## .*\((\d:\d\d) to (\d:\d\d)\)", demo_text(), re.MULTILINE)
+    assert spans and spans[0][0] == "0:00" and spans[-1][1] == "5:00"
+    assert all(end == start for (_, end), (start, _) in zip(spans, spans[1:]))
+
+
+def test_demo_md_walkthrough_runs_on_the_page_after_a_reset(reset_twice, tmp_path):
+    # DEMO.md's steps 2 to 6 with the same clicks, on a copy of the reset folders.
+    data_dir, output_dir = tmp_path / "data", tmp_path / "output"
+    shutil.copytree(reset_twice["data_dir"], data_dir)
+    shutil.copytree(reset_twice["output_dir"], output_dir)
+    test = AppTest.from_function(render, args=(str(data_dir), str(output_dir)), default_timeout=120).run()
+    shown = [element.value for element in test.text]
+    for count in ("0 of 9 flags tripped", "6 of 9 flags tripped", "7 of 9 flags tripped, 1 cannot evaluate"):
+        assert count in shown                                            # step 2
+    assert shown.count(NOT_REVIEWED) == 3
+
+    test.button(key="open_northwind").click().run()                      # step 3
+    assert [header.value for header in test.subheader][:2] == ["6 of 9 flags tripped", HEADING]
+    assert any("Tripped (was Passed)" in text.value for text in test.markdown)
+    assert "**A steady quarter.**" in [text.value for text in test.markdown]   # the AI commentary
+    deck_button = next(button for button in test.get("download_button") if button.proto.label == "Download deck")
+    assert not deck_button.proto.disabled                                # step 4
+
+    test.text_input(key="reviewer_northwind").set_value("Demo Viewer").run()   # step 5
+    test.button(key="approve").click().run()
+    test.button(key="generate_page").click().run()
+    assert not test.exception
+    assert "Deck status: approved by Demo Viewer" in test.caption[0].value
+    slide = Presentation(output_dir / "northwind_board_pack.pptx").slides[0]
+    assert any("AI-drafted | reviewed by Demo Viewer" in shape.text_frame.text
+               for shape in slide.shapes if shape.has_text_frame)
+
+    test.button(key="back").click().run()                                # step 6
+    assert test.title[0].value == "Board Pack Generator"
+
+
+def test_uncommitted_code_is_noted_because_every_footer_shows_it():
+    assert demo_reset.code_note({"commit": "abc1234", "uncommitted_changes": False}) is None
+    note = demo_reset.code_note({"commit": "abc1234", "uncommitted_changes": True})
+    assert "abc1234*" in note and "commit" in note
