@@ -19,9 +19,9 @@ whether it would survive real use, then how you work.
 4. [What broke](#what-broke): Q26–Q31
 5. [Scale and risk](#scale-and-risk): Q32–Q36
 6. [Working method](#working-method): Q37–Q39
-7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q54, the follow-ups an
+7. [Deep dives on the final run](#deep-dives-on-the-final-run): Q40–Q60, the follow-ups an
    interviewer asks after the first answer (column mapping, the eval set, batch resilience, cost
-   ceilings)
+   ceilings, golden files, the approval gate)
 8. [When you can't recall a detail](#when-you-cant-recall-a-detail)
 
 ---
@@ -829,6 +829,74 @@ run of all three companies, and the table says which one. The caveat I'd give: t
 with a date, so if Anthropic changes it, someone has to update that line, and three companies is a
 small sample for an average.
 *Point to:* `main.ai_cost`, `compare_models.PRICES`, `compare_models.PRICES_AS_OF`; README.md "Cost".
+
+### Golden files
+
+**Q55. Doesn't a golden file just freeze whatever bugs were there when you approved it?**
+Yes, which is why it isn't the only check. A golden answers "is this exactly what a person
+approved?", not "is it right?". If the approved deck had a wrong number, the golden would protect the
+wrong number. So the jobs are split: the check scripts and the eval prove the numbers against hand
+formulas, and the goldens hold everything else still: wording, sizes, colors, positions, page breaks,
+Excel formats. That's where they earn their place. Of 17 planted bugs that change no number, like the
+two charts swapping sides or the Excel header row no longer frozen, the goldens caught 17 and the
+number checks caught 2. And approving means something: I read each one before it became the
+definition of right, and an intended change means reading the diff before committing it.
+*Point to:* `golden.compare`; FINAL_REPORT.md Task 8 (the 17-bug table); `tests/test_golden.py::test_the_output_matches_its_approved_golden`.
+
+**Q56. Why compare text dumps instead of the files themselves?**
+A .pptx, .docx or .xlsx is a zip file with timestamps inside, so its bytes change on every save: a
+byte comparison would always fail and never say why. So `golden.py` turns each output into plain text,
+one fact per line: every word with its size, bold and color, where each box sits, table fills, the
+memo's page breaks from the PDF, every Excel cell's value and format. A difference is then a readable
+diff: a minus line for what was approved, a plus line for now. Two things change by themselves, the
+date and the git commit in the footer, so both are fixed while building. The AI text comes from
+committed copies of saved analyses, so there's no API call and the text is the same every time.
+Charts are compared by name, place and size, not pixels, or a matplotlib update would change every
+golden.
+*Point to:* `golden.dump_deck`, `golden.RUN_DATE`; `tests/test_golden.py::test_building_twice_gives_the_same_text`.
+
+**Q57. What don't the goldens cover?**
+A few things, on purpose, each covered somewhere else. Only the version with AI text has a golden: the
+placeholder slide, the `--draft` watermark and the "reviewed by" footer have unit tests instead. The
+memo's "what changed" section isn't in them, because the goldens are built with no earlier run;
+check_diff.py checks those words exactly. The rollup has no golden, because its review column depends
+on what's in output/ at the time. Chart pixels aren't compared. And one risk to know about: a package
+upgrade, the PDF library say, can change a golden with no code change. That's worth reading when it
+happens, but it isn't always a bug in this project.
+*Point to:* FINAL_REPORT.md Task 8, "Unresolved"; `check_diff.py`, `check_rollup.py`.
+
+### The approval gate
+
+**Q58. What stops someone approving a deck they never opened?**
+Nothing technical, and I wouldn't claim otherwise. The approval isn't proof that someone read the
+deck; it's accountability: a named person and a time on the record, in the manifest and in the footer
+of every slide. What the code does make sure of is that the name goes against the right numbers.
+`approve.py` needs a name, given or taken from git. It refuses if there's no run, and it refuses if
+the workbook, config.yaml or the column mapping has changed since the deck was built, because the
+reviewer would be signing off numbers they never saw. After approval, if any of the three changes,
+the deck goes back to "not reviewed" by itself. And approve.py never builds a deck, so making a deck
+and vouching for it stay two separate acts.
+*Point to:* `approve.approve`, `approve.reviewer_name`; `tests/test_approve.py::test_a_workbook_changed_since_the_run_stops`, `tests/test_approve.py::test_a_reviewer_name_is_required`.
+
+**Q59. Why does a changed threshold undo an approval? The numbers didn't change.**
+But the deck did. A threshold decides which flags trip, and flags are most of slide 3 and the top of
+the memo. If a partner moves the runway threshold from 12 to 18 months, a company that passed now
+trips, and the deck the reviewer approved said something different. So the approval stores the hashes
+of the workbook, config.yaml and the mapping at the moment of signing, and `approval_status` compares
+them every time it's asked. Any difference sends the deck back to "not reviewed" with the reason in
+words: "config.yaml has changed since it was approved". A stale approval is worse than none, because
+it tells the board someone checked what nobody checked. It's the same idea as re-signing a
+reconciliation when the source numbers move.
+*Point to:* `provenance.approval_status`; `tests/test_provenance.py::test_changed_thresholds_send_the_deck_back_to_draft`.
+
+**Q60. Does approving the deck approve the memo too?**
+Only if the memo was there to read. The approval lists the documents it covers: the deck, and the memo
+if that run built one. The memo's footer says "reviewed" only when the memo is on that list, so an
+approval recorded before memos existed leaves its memo "not reviewed": nobody can have read a memo
+that wasn't there. The web page's Approve button only appears for files built from today's workbook.
+And the `--draft` watermark follows the same judge: once a deck is approved, a `--draft` rebuild no
+longer stamps it.
+*Point to:* `approve.reviewed_documents`, `memo.memo_approval`; `tests/test_approve.py::test_approving_a_run_that_built_a_memo_covers_the_memo_too`.
 
 ---
 
