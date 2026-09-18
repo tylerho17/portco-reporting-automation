@@ -1010,3 +1010,124 @@ temporary copy (all pass), wrote its section above and committed it separately.
 - **Not rerun after this task's code:** `check_deck.py`, `check_memo.py`, `check_excel_output.py`,
   `check_main.py` in the project itself. No code they use changed (golden.py is new and only reads
   their outputs), and all 7 ran green in a temporary copy at the start of the task. All 841 tests pass.
+
+---
+
+## Task 9: portfolio rollup (rollup.py, check_rollup.py, the web page's Download rollup)
+
+### What I built
+
+- **`rollup.py`** builds one deck and one workbook across every workbook in `data/`:
+  `output/portfolio_rollup.pptx` and `output/portfolio_rollup.xlsx` (`python rollup.py`, which also
+  prints the ranking). The deck uses `templates/base.pptx` and the company decks' own helpers (titles,
+  tables, text fitting, footer box), so it looks and behaves the same:
+  1. **Portfolio ranked by flags tripped, Q2 2026:** rank, company, quarter, "7 of 9 flags tripped, 1
+     cannot evaluate", the worst flag ("Runway at current burn: 6.0 mo (trips below 12.0 mo)", red; "None
+     tripped", green), runway at current burn, and review status. Over 7 companies continue on a second
+     ranking slide, "(1 of 2)".
+  2. **Companies by status:** two tables side by side. Flag status: flags tripped 2, none tripped but
+     some cannot evaluate 0, every flag passed 1, workbook can't be read 0. Review status: approved,
+     not reviewed, out of date, not generated. Each with the companies' names.
+  3. **Runway at current burn by company:** a bar chart (`charts.runway_chart`), shortest first, red and
+     labelled "tripped" where the runway flag trips, a dashed line at `config.yaml`'s 12 months.
+  The workbook has the same three things as sheets (Ranking, By status, Runway), with real numbers in
+  the metrics workbook's formats and its red / green fills.
+- **No typed numbers, no AI.** Every number comes from `metrics.py` through `portfolio.load_company` (the
+  call the web page already makes), from `config.yaml`, or is a count. Words and formats are
+  `build_deck.value_text`, `threshold_text`, `flag_count_text` and `excel_output.cell_value`'s. Nothing
+  calls the API; the footer ends "computed metrics only, no AI text".
+- **The web page:** a **Download rollup** popover beside Generate all, with Download rollup deck and
+  Download rollup Excel. The file is built only when clicked (Streamlit's deferred download:
+  `app.rollup_file` hands it a function), in a temporary folder, so a click never writes to `output/`
+  and a redraw never builds anything. Off when `data/` has no workbook.
+- **`check_rollup.py`**, the end-to-end proof (below), and **`tests/test_rollup.py`** (40 tests, written
+  first) plus 4 in `tests/test_app.py`. 885 tests in all.
+- **Docs:** README (output files, commands, the web page, Prove it works, a rollup section, design
+  decision 19, Next steps), STUDY_GUIDE (a rollup.py section with every function, check_rollup.py, the
+  chart row, the tests table), INTERVIEW_PREP (Q34f, Q35 and Q36 updated), LOOM_SCRIPT (a proof row),
+  LEARNINGS (5 rows).
+
+### How check_rollup.py proves it
+
+Everything expected is worked out in the check from each company's story in `check_companies.py`, not
+from `rollup.py`: flags tripped counted from the expected flag statuses, runway from the hand formulas,
+the worst flag typed per company, the review status from each manifest and the file hashes. It checks
+the ranking (order, counts, worst flag, runway as a real number equal to the hand formula) on both the
+slide and the sheet, both count tables, that every number on the deck is in the rollup workbook, the
+figure `rollup.py` actually drew (bar lengths, red exactly where the flag trips, threshold line), no
+overflow and no font under 12 pt, the footer, a 12-company portfolio with 40-character names, and an
+unreadable workbook. Creating an Anthropic client stops it.
+
+**Proof it catches what it claims:** 23 bugs planted one at a time in temporary copies of the project
+(`output/task9_plant_bugs.py`), plus an unchanged copy as the control:
+
+| Caught by | Bugs |
+|---|---|
+| Both check_rollup.py and the unit tests (20) | ranking reversed; the least severe flag called worst; unreadable workbooks ranked first; a status count missing a company; "not reviewed" shown as approved; a typed threshold; a typed flag count; the worst-flag cell uncolored; Excel runway as text; Excel runway without its format; Excel flag status always green; chart bars all navy; bars 10% long; threshold line misplaced; chart longest first; too many rows per slide; rows drawn half height; footer claiming AI text; titles never naming the quarter; the rollup creating an Anthropic client |
+| The unit tests only (3) | the tie rule ignoring the worst flag; the status ignoring "cannot evaluate"; the web page building the rollup on every redraw |
+| Neither | none |
+
+The control passed both. The three only the unit tests catch can't be seen by an end-to-end check on
+the demo companies: none has a tie or the "only cannot evaluate" status, and the page isn't part of it.
+
+### Decisions you didn't specify
+
+1. **"Worst flag" is a fixed order, not a distance past the threshold.** Months, % and x can't be
+   compared, so any score would be made up. `rollup.WORST_FIRST`: runway, NRR, GRR, burn multiple,
+   burn vs budget, net new ARR vs budget, CAC payback, Rule of 40, combo rule, with the reason beside
+   each in the code. It lives in `rollup.py`, not `config.yaml`, because you said not to edit
+   config.yaml; a test fails if a new flag is added without a place in it. **Please check the order**:
+   it's an investor judgment, and for both troubled demo companies it names runway.
+2. **"Status" is two things:** flag status (any tripped / only cannot evaluate / all passed / can't be
+   read) and review status (the web page's Deck status in a word or two). I didn't invent health
+   buckets like "at risk / watch" because they'd need new thresholds.
+3. **Ties** on flags tripped go to the company whose worst flag is worse, then by name.
+4. **Numbers are worked out from the workbooks when the rollup is built**, like the web page, never
+   read from last run's metrics workbooks, so the rollup can't be stale. Only the review status reads
+   `output/`.
+5. **An unreadable workbook doesn't stop the rollup:** it's listed last, unranked, "Workbook can't be
+   read" in every output, with clean.py's reason in the workbook's Note column.
+6. **Limits for long names and big portfolios:** 7 companies per ranking slide, at most 3 names per
+   status on the slide ("and 7 more"; the workbook lists all), measured with a 40-character name, the
+   longest the web page accepts.
+7. **The chart says "tripped" in words** beside a red bar, so the status never depends on seeing red.
+8. **The web download builds on click in a temporary folder.** If a build ever failed there, Streamlit
+   prints the traceback in the Terminal window and the page says "Failed to generate file for
+   download": no traceback on the page, but also not the project's usual plain-words message.
+9. **`python rollup.py` writes to `output/`** like the other scripts; `check_rollup.py` does too.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **Tables overflowed with long names**: 12 companies with 40-character names didn't fit the ranking
+   slide, then the status slide. Measured with `text_fit` and fixed by a wider company column, 7 rows
+   per slide and 3 names per status.
+2. **The first chart** drew the threshold line through a label, and marked tripped bars by color only.
+   Found by opening the PNG; fixed (labels above the line, the word "tripped").
+3. **check_rollup.py failed on its own expectations twice** (openpyxl reads 6.0 back as the int 6; an
+   empty string is stored as a blank cell). The check now accepts either kind of number, and the rollup
+   writes "-" for no companies, as the slide does.
+4. **Titles read "Portfolio ranked by flags tripped, -"** when no workbook could be read. Found by
+   trying it; a test first, then the quarter is left off.
+5. **Refused commands:** a script in /tmp, `mv`, `sed -i`, chained commands, a heredoc with a brace
+   beside a quote. Worked around with the Edit tool and a script in the git-ignored `output/`.
+
+### Unresolved
+
+- **CLAUDE.md doesn't list `rollup.py` or `check_rollup.py`.** You said not to edit it. Suggested
+  Architecture lines: "rollup.py: output/portfolio_rollup.pptx and .xlsx across every company: ranked by
+  flags tripped with each company's worst flag (fixed order, WORST_FIRST), companies by flag and review
+  status, runway chart; no AI; the web page's Download rollup builds it on click" and add
+  `check_rollup.py` to the check scripts line. (The golden.py and eval/ lines from Tasks 6 and 8 are
+  still pending too.)
+- **The rollup has no golden file.** Its review column depends on what's in `output/` at the time, so a
+  golden would need a fixed manifest set as well as the fixed date and commit. check_rollup.py and the
+  unit tests cover its content; its look (sizes, positions) isn't pinned the way the company decks' is.
+- **The old "Next steps" idea also had data gaps and NRR side by side.** I built what the task named
+  (ranking, worst flag, status counts, runway). Adding a data-gaps column or an NRR chart is a small
+  change if you want it.
+- **`main.py --all` doesn't build the rollup.** It's a separate command and a web button; wiring it into
+  the batch is one line if you want it after every run.
+- **Seen on the web page only through Streamlit's test runner**, not in a browser: the popover and both
+  buttons render and the files build, but I couldn't click a real download here.
+- **No slide renderer on this Mac** (no LibreOffice), so I checked the deck by its saved text, sizes
+  and the overflow re-measure, and looked at the chart PNG, not at rendered slides.

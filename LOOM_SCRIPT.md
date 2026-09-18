@@ -100,8 +100,9 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 | NRR 97.1%, below 100% | Slide 1, NRR row; threshold from `config.yaml` (`nrr_min`) | `metrics.nrr` |
 | Runway 11 months vs 12-month floor | Slide 1, Runway row; `config.yaml` (`runway_min_months`) | `metrics.runway_months` |
 | Q1 2025 blank | Northwind's blank quarter | `make_data.py` (`BLANK_QUARTER`) |
-| Over 500 tests | `python -m pytest -q` (841 today) | pytest counts them |
+| Over 500 tests | `python -m pytest -q` (885 today) | pytest counts them |
 | 12 of 12 edge cases | `python eval/run_eval.py` | each eval company's answer key in `eval/make_eval_data.py` |
+| Portfolio rollup: Fernhollow 7, Northwind 6, Alderpeak 0; worst flag runway | `python rollup.py` or the web page's Download rollup (`output/portfolio_rollup.pptx`) | `rollup.py` from `metrics.evaluate_flags`; proved by `python check_rollup.py` |
 | Each deck, memo and workbook matches its approved copy | `python golden.py` ("9 of 9 match their goldens") | the approved text copies in `tests/golden/` |
 | Haiku scored 2 of 5 | README model comparison (needed 4.0) | `compare_models.py` |
 

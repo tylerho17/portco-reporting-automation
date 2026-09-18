@@ -2,7 +2,7 @@
 
 For you, a finance student learning Python, to understand this project well enough to explain every part of it in an interview.
 
-It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build step is done:** 1, 2, 3, 3b, 4 (the deck: `make_template.py`, `build_deck.py`, `charts.py`, `text_fit.py`), 4b, 5 (with the AI step connected to `main.py`) and 6 (the README). One live `main.py --all` run has been made. **Added since:** run manifests and the approval gate (`provenance.py`, `approve.py`), the review status in the deck's footer with the watermark made opt-in (`--draft`), the 4-slide deck, the web page (`app.py`, started by `run_app.command`), the board memo (`memo.py`), and the web page's portfolio and company pages (`portfolio.py`, final run Task 2), and batch resilience: `main.py --resume --max-cost --timeout --workers` and rate-limit retries (`resilience.py`, final run Task 7), and golden files: an approved text copy of every output, compared on every test run (`golden.py`, final run Task 8). **Not done yet:** the README screenshots, which need you at the screen.
+It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build step is done:** 1, 2, 3, 3b, 4 (the deck: `make_template.py`, `build_deck.py`, `charts.py`, `text_fit.py`), 4b, 5 (with the AI step connected to `main.py`) and 6 (the README). One live `main.py --all` run has been made. **Added since:** run manifests and the approval gate (`provenance.py`, `approve.py`), the review status in the deck's footer with the watermark made opt-in (`--draft`), the 4-slide deck, the web page (`app.py`, started by `run_app.command`), the board memo (`memo.py`), and the web page's portfolio and company pages (`portfolio.py`, final run Task 2), and batch resilience: `main.py --resume --max-cost --timeout --workers` and rate-limit retries (`resilience.py`, final run Task 7), and golden files: an approved text copy of every output, compared on every test run (`golden.py`, final run Task 8), and the portfolio rollup: one deck and one workbook across every company (`rollup.py`, final run Task 9). **Not done yet:** the README screenshots, which need you at the screen.
 
 ## Contents
 
@@ -36,6 +36,8 @@ It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build st
   python check_deck.py                       # end-to-end proof for the 3 decks
   python eval/run_eval.py                    # the evaluation set: 12 edge-case companies vs their answer keys
   python golden.py                           # each deck, memo and metrics workbook vs its approved text copy
+  python rollup.py                           # the portfolio rollup: output/portfolio_rollup.pptx and .xlsx
+  python check_rollup.py                     # end-to-end proof for the rollup
   ```
 
   **These DO call the API and cost money:** `python main.py` **without** `--skip-ai` (about $0.09 per company), `python analyze.py ...` and `python compare_models.py run`. You don't need them to study: the analyses from the live run are already saved in `output/`.
@@ -516,6 +518,7 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `bar_panel(axis, quarters, values, column)` | Bars for every quarter that has a value, a zero line, the title and labels. | |
 | `arr_chart(quarters, ending_arr, net_new_arr, size_inches)` | Figure with two panels: ending ARR (taller) above net new ARR. | |
 | `cash_chart(quarters, ending_cash, runway_text, size_inches)` | Ending cash as a line, zero kept on the axis, runway at current and at budgeted burn in the title. | Cash running out means reaching zero, so the axis always shows zero. |
+| `runway_chart(companies, runways, texts, tripped, threshold, threshold_text, size_inches)` | The rollup's chart: one horizontal bar per company, first company on top, red and labelled "tripped" where the runway flag trips, navy otherwise, and a dashed line at the threshold. An infinite or missing runway gets no bar, only its words. | Built for `rollup.py`. The word "tripped" is there so the status never depends on seeing red. |
 | `save_chart(figure, path)` | Saves the PNG at its own size. | Drawn at the size it has on the slide, so 12 pt in the chart is 12 pt on screen. Since Task 7 the figures are made with matplotlib's `Figure()`, not `pyplot`: pyplot keeps one shared list of open figures, which isn't safe when several companies draw at once (`main.py --workers`). |
 
 ---
@@ -1018,6 +1021,36 @@ Every run uses `--skip-ai`. The `main.py` process also gets no API key and an AP
 | `check_ignores_lock_and_other_files(folder)` | `~$` files and non-.xlsx files are skipped; results are sorted. |
 | `main_check()` | Runs everything. |
 
+#### `check_rollup.py` (portfolio rollup proof, final Task 9)
+
+Everything expected is worked out here from each company's story in `check_companies.py` (flags
+tripped, runway by hand formula) and from the manifests and file hashes (review status), never from
+`rollup.py`. Creating an Anthropic client stops the check: the rollup has no AI step.
+
+| Function | What it does |
+|---|---|
+| `story(company)` / `expected_ranking()` | Each company's counts, worst flag (typed in `WORST`), runway and status from its answer key; the three most-tripped first. |
+| `expected_review(workbook, output_dir)` | Approved / not reviewed / out of date / not generated, from the manifest and the file hashes. |
+| `display(cell)` / `sheet_dicts(sheet)` / `table_rows(slide, name)` / `fill(cell)` | Reading the workbook and the deck back: what Excel shows, rows as dicts, a slide table's text, a cell's fill. |
+| `check_files(paths)` | 3 slides with the titles typed here; sheets Ranking, By status, Runway. |
+| `check_ranking_sheet(book, stories, reviews)` | Order, rank, counts, worst flag, and the runway as a real number equal to the hand formula. |
+| `check_ranking_slide(presentation, sheet_rows, stories)` | Slide 1, row by row, says what the workbook says, with the worst-flag cell red or green. |
+| `expected_counts(stories, reviews)` / `check_status(...)` | Companies by flag status and by review status, on slide 2 and the By status sheet. |
+| `check_numbers_are_in_the_workbook(presentation, book)` | Every number on the deck (footers aside) is in the rollup workbook. |
+| `check_runway_sheet(book, stories)` / `check_runway_chart(...)` | Shortest runway first; the figure rollup.py drew has bars of the hand-formula length, red exactly where the flag trips, and the threshold line. |
+| `check_footers(presentation, count)` | Fictional data, the workbook count, today's date, "no AI text", one line. |
+| `build_with_captured_chart(config, data_dir, output_dir)` | Runs `rollup.save_rollup` while keeping the chart figure it draws, so its bars can be checked. |
+| `check_big_portfolio(config)` / `check_unreadable_workbook(config)` | 12 companies with 40-character names: 2 ranking slides that fit. A broken workbook: listed last, unranked, with its reason. |
+| `main()` | Runs everything. |
+
+**Proof it catches what it claims:** 23 bugs planted one at a time in temporary copies of the project
+(ranking reversed, the least severe flag called worst, a count off by one, typed numbers, colors,
+chart bars, the threshold line, rows too many for a slide, a footer claiming AI text, an API call,
+the page building the rollup on every redraw, and more). The unit tests caught all 23 and
+`check_rollup.py` 20. The three it can't see: the tie rule and the "only cannot evaluate" status
+(no demo company has a tie or that profile, so only the unit tests reach them) and the web page.
+The unchanged copy passed both.
+
 ---
 
 ### `eval/make_eval_data.py` and `eval/run_eval.py`: the evaluation set (final Task 6)
@@ -1149,6 +1182,66 @@ edit passed all three.
 
 ---
 
+### `rollup.py`: one deck and one workbook across the portfolio (final Task 9)
+
+**What it's for:** a partner reading 30 company decks wants one page first: which companies need
+attention, why, and how long their cash lasts. `rollup.py` builds that from every workbook in `data/`:
+`output/portfolio_rollup.pptx` (3 slides, or more when there are over 7 companies) and
+`output/portfolio_rollup.xlsx` (sheets Ranking, By status, Runway).
+
+**Where its numbers come from:** `portfolio.load_company`, the same call the web page makes, so each
+company's metrics and flags are worked out from its workbook when the rollup is built, never read from
+an old file. The only thing read from `output/` is the review status (`portfolio.run_state`, from the
+manifests). The rollup does no math of its own beyond counting (flags tripped, companies per status),
+and has no AI text: its footer ends "computed metrics only, no AI text".
+
+**Three decisions to be able to explain:**
+- **The worst flag is picked by a fixed order, not by "how far past the threshold".** Months, % and x
+  can't be compared, so any distance score would be made up. `WORST_FIRST` lists the flags in the order
+  an investor reads them (runway first, the combo rule last), with the reason beside each.
+- **Ranking:** most flags tripped first; a tie goes to the worse worst flag, then the name. An
+  unreadable workbook is listed last with no rank and clean.py's reason, and the rollup is still built.
+- **Status means two things, shown side by side:** flag status (any tripped / only cannot evaluate /
+  every flag passed / can't be read) and review status (approved / not reviewed / out of date / not
+  generated). Only the flag status is colored: red and green mean a flag's result and nothing else.
+
+**Worked example (the three companies):** Fernhollow 7 tripped (worst: runway 6.0 mo), Northwind 6
+(worst: runway 11.0 mo), Alderpeak 0 ("None tripped", runway 108.0 mo). Flag status: 2 with flags
+tripped, 1 with every flag passed.
+
+| Function | What it does, in plain English |
+|---|---|
+| `severity(name)` | A flag's place in `WORST_FIRST`: 0 is the worst. |
+| `worst_flag(flags)` | The tripped flag highest in the order, or None if none tripped. |
+| `company_status(flags)` | Tripped if any flag tripped; else cannot evaluate if any couldn't be; else passed. |
+| `review_label(page_status)` | The web page's Deck status in a word or two: "approved by Tyler Ho on ..." → "Approved". |
+| `company_entry(workbook_path, config, output_dir)` | Everything the rollup shows about one company: counts, worst flag, status, review status. |
+| `rank_key(entry)` / `ranked(entries)` | The sort order, and the entries in it with their rank (unreadable ones last, no rank). |
+| `collect_rollup(config, data_dir, output_dir)` | Every workbook in `data/`, ranked. |
+| `counts(entries, key, order, labels)` | How many companies have each status, zeros included, with their names A to Z. |
+| `status_counts(entries)` / `review_counts(entries)` | The two count tables. |
+| `names_text(names)` | "A, B, C and 7 more": at most 3 names on the slide (the workbook lists every one). |
+| `quarter_words(entries)` / `slide_title(words, deck)` | "Q2 2026" for the titles, or "each company's latest quarter" when they differ; left off when no workbook could be read. |
+| `worst_flag_text(entry)` | "Runway at current burn: 6.0 mo (trips below 12.0 mo)", built from `build_deck.value_text` and `threshold_text`. |
+| `runway_flag(entry)` / `runway_text(entry)` / `runway_value(entry)` | A company's runway flag, its words ("6.0 mo", "∞ (not burning)", "data missing") and its number. |
+| `runway_order(entries)` | The chart's order: shortest runway first, then not burning, then no number, then unreadable. |
+| `widths_of(total_width, shares)` / `draw_table(...)` | Table column widths, and a navy-header striped table fitted by `text_fit.fit_table` (or stop naming the slide). |
+| `ranking_row(entry)` / `pages(entries)` / `ranking_slide(...)` | One company's cells; the ranking split into slides of 7; one ranking slide ("(1 of 2)" when there are two). |
+| `count_rows(rows, colored_by)` / `status_slide(slide, deck)` | Slide 2's two tables side by side. |
+| `runway_threshold(config)` / `runway_slide(slide, deck)` | The threshold from `config.yaml` in the flags' words, and slide 3's chart. |
+| `footer_text(deck, run_date)` / `build_rollup_presentation(...)` | The footer line and the whole deck. |
+| `number_cell(...)` / `metric_cell(entry, metric)` | An Excel cell in its metric's number format; a metric's latest value as `excel_output.cell_value` writes it. |
+| `ranking_values(entry)` / `write_ranking_sheet(sheet, entries)` | The Ranking sheet, one row per company, flag status colored like the metrics workbook. |
+| `write_status_sheet(sheet, entries)` / `write_runway_sheet(sheet, entries, config)` / `build_rollup_workbook(entries, config)` | The other two sheets, and the workbook. |
+| `rollup_paths(output_dir)` / `write_rollup(entries, config, folder, run_date)` / `save_rollup(config, data_dir, output_dir, run_date)` | Where the files go; writing them (old ones deleted first); both steps together. |
+| `rollup_download(kind, config, data_dir, output_dir)` | The web page's button: builds in a temporary folder and returns the file's name and bytes, so a download never writes to `output/`. |
+| `main(argv)` | `python rollup.py`: prints the ranking and saves both files. |
+
+On the web page, `app.rollup_file` hands Streamlit a function instead of the file, so the rollup is
+built only when someone clicks Download rollup deck or Download rollup Excel, not on every redraw.
+
+---
+
 ### `compare_models.py`: Sonnet vs Haiku, scored blind (build step 3b)
 
 **What it's for:** runs the same Northwind payload through `claude-sonnet-5` and `claude-haiku-4-5` 3 times each, shuffles the answers, and lets you score them without knowing which model wrote which. `run` calls the API (costs money); `score` is free. **Already done; the results are in README.md.**
@@ -1178,7 +1271,7 @@ edit passed all three.
 
 ### `tests/`: unit tests (pytest)
 
-Run with `python -m pytest -q` (841 tests, about three minutes). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
+Run with `python -m pytest -q` (885 tests, about three minutes). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
@@ -1198,9 +1291,10 @@ Run with `python -m pytest -q` (841 tests, about three minutes). Expected values
 | `test_batch.py` (50) | `no_real_client` (as in test_main.py). `short_waits`: rate-limit waits of hundredths of a second. Fake clients: `ScriptedClient(*steps)` answers or raises in order (two rate limits, then an answer), `HangingClient(company, release_when)` never answers for one company until let go, `CountingClient(together)` records how many calls are in flight at once. `answer(input_tokens, output_tokens)`, `rate_limit_error(retry_after)`, `server_error()`, `batch(tmp_path, ...)`, `events(...)`, `output_files(...)`, `wait_for_empty_staging(...)`. | **Rate limits:** waits of 5, 10, 20 s; the API's retry-after used but capped at 60; gives up after 4 retries; a server error or other API error isn't retried; a rate-limited company still gets its AI text and the waits are in the manifest and the Notes; rate limits that never clear give "OK (AI failed)". **--resume:** an up-to-date company is skipped with no call and its files untouched, the skip recorded and kept through a later rebuild; each reason to rebuild (workbook, config.yaml, mapping, a missing file, no AI text when AI is asked for, a different --draft, an approval since the build, no deck, no earlier run), and a rebuild reuses a saved analysis of the same numbers. **--max-cost:** $0.70 a company and a $1.00 ceiling stop the third company (recorded in its manifest), exactly at the ceiling stops too, below it doesn't, --skip-ai never stops, a skipped company isn't stopped, failed validation counts. **--timeout:** a hung company is given up on after 5 s and the next one runs; nothing it builds lands, even if it wakes while the batch runs on; with no earlier run it leaves no files; the manifest moves last; a killed batch's leftovers are cleared; a cancelled company stops at its next step and its wait ends. **--workers:** 3 workers run 3 companies at once, the default runs one; each company's lines print together; printed paths name output/, not the private folder; a failed company leaves its earlier files as they were. The summary, CSV and batch manifest; the options reach the batch; nonsense values stop with a usage error; exit code 1 after a timeout or stop, 0 after skips. |
 | `test_provenance.py` (16) | `manifest_for(...)`: a manifest for a tiny workbook in a temp folder. | The hash is the standard SHA-256 and changes only when the bytes do; the commit (or "unknown" outside git); a missing or broken manifest reads as None; a manifest records every input and output; no approval → not reviewed; an approval holds for today's files and is void once the workbook, config.yaml or column mapping changes (an approval from before mappings holds while there is none). |
 | `test_approve.py` (12) | `company`: a workbook, config and manifest in a temp folder. `approve_testco(...)`. | The reviewer and time are recorded and nothing else in the manifest changes; no manifest, a changed workbook, changed thresholds, a changed column mapping or no name each stop; the mapping's hash is recorded; the command line says to rebuild so the footer says reviewed (never "watermark": that needs `--draft`), or prints one line when it refuses. |
-| `test_app.py` (30) | `no_real_client` (as in test_main.py). `folders`: a temporary `data/` with copies of the three workbooks and an empty `output/`. `company_data(name)`. `render`, `page(folders, company)`: draw the page on those folders with Streamlit's `AppTest`. `downloads(test)`, `texts(test)`, `html_bodies(test)`, `tables(test)`, `primary_buttons(test)`. | The checkbox names the cost; the palette's status colors; HTML tables with escaped text and the metric names in the first column; `$` survives markdown; Northwind's 6 of 9 flags in red and green rows; Fernhollow's "Cannot evaluate: missing input" with no em dash; "data missing" gray and a tripped NRR red; both charts. **The pages:** every company listed with nothing to download yet; search narrows the table and a missing name says upload one; Generate on a row builds and enables its 3 downloads; Generate all builds 3 of 3; an unreadable workbook shows clean.py's message and Generate all still builds the other 3; clicking a name opens its page; the company page's flags, 2 tables, 2 charts, 4 downloads and a greyed-out Approve; a name with no workbook; Approve records the typed reviewer; saved commentary is shown; no em dash anywhere on either page (tables included); **Task 3:** both pages carry theme.py's style sheet, each page has exactly one primary button (Generate all; Generate) and Approve is secondary, the flags table's six tripped rows in the red fill; `run_app.command` is executable and starts app.py. **Task 5:** Review mapping shows each pair with its proposal preselected under Change, its confidence and values; Save mapping stays greyed out until every pair is confirmed; confirming all saves the file and the page shows the company's flags; Change clears that pair's tick and saves the new column; a company with known headers has no review step. |
+| `test_app.py` (34) | `no_real_client` (as in test_main.py). `folders`: a temporary `data/` with copies of the three workbooks and an empty `output/`. `company_data(name)`. `render`, `page(folders, company)`: draw the page on those folders with Streamlit's `AppTest`. `downloads(test)`, `texts(test)`, `html_bodies(test)`, `tables(test)`, `primary_buttons(test)`. | The checkbox names the cost; the palette's status colors; HTML tables with escaped text and the metric names in the first column; `$` survives markdown; Northwind's 6 of 9 flags in red and green rows; Fernhollow's "Cannot evaluate: missing input" with no em dash; "data missing" gray and a tripped NRR red; both charts. **The pages:** every company listed with nothing to download yet; search narrows the table and a missing name says upload one; Generate on a row builds and enables its 3 downloads; Generate all builds 3 of 3; an unreadable workbook shows clean.py's message and Generate all still builds the other 3; clicking a name opens its page; the company page's flags, 2 tables, 2 charts, 4 downloads and a greyed-out Approve; a name with no workbook; Approve records the typed reviewer; saved commentary is shown; no em dash anywhere on either page (tables included); **Task 3:** both pages carry theme.py's style sheet, each page has exactly one primary button (Generate all; Generate) and Approve is secondary, the flags table's six tripped rows in the red fill; `run_app.command` is executable and starts app.py. **Task 5:** Review mapping shows each pair with its proposal preselected under Change, its confidence and values; Save mapping stays greyed out until every pair is confirmed; confirming all saves the file and the page shows the company's flags; Change clears that pair's tick and saves the new column; a company with known headers has no review step. |
 | `test_portfolio.py` (44) | `FakeClient`, `summary(headline)`, `no_real_client` (as in test_main.py). `folders` (as in test_app.py). `unreadable_workbook_bytes`: a real .xlsx clean.py stops on, and clean.py's own message. `rows_by_company`, `generate`, `save_northwind_analysis`, `headline_on_deck`, `add`, `approve`. | Em dashes, last run and company-name rules; each company's row matches its story (6 of 9, 7 of 9 with 1 cannot evaluate, 0 of 9 and no gaps); "never" and "Not generated yet" before a run; an unreadable workbook, a non-Excel file and a bug each give plain words while the other rows are unaffected; search and the "No KPI workbook found" message; `find_workbook` stays inside `data/`; Generate builds all four files and the row then reads the manifest; the AI note for not asked, **reused with no call even with the box unticked**, asked once, no key, and an API failure; clean.py's message from Generate; Generate all carries on past a failure, reports progress and writes batch_summary.csv; a changed workbook makes the row out of date and its downloads disappear; Add a company saves only a readable workbook, refuses a non-Excel file and a bad name, and replaces only when asked; Approve records the typed reviewer, needs a name, and refuses before Generate or after a change; saved commentary only for exactly these numbers. **Task 5:** headers to confirm show on the row in the page's words (no command line, no temp path); proposals for a workbook and for an upload; confirming saves the mapping and the company reads as the original; an unchosen header or a mapping the workbook can't be read with saves nothing; Generate records the mapping in the manifest; a changed mapping makes the row out of date; an upload with unknown headers is added only with confirmed columns, and then both are saved. |
 | `test_eval.py` (35) | `company(name)`: a deep copy of one eval company, so a test can break its answer key without touching the real one. `run(companies, capsys)`: the scorecard's exit code and text. | The set: 12 companies, every case asked for, blanks first, second to last and last, the two stop companies; **every answer key ties out** (roll-forwards, money in 10s); Tidewell's hand formulas give each config.yaml threshold exactly; Larkspur's answer key covers all 19 metrics; **the saved eval/data workbooks are what eval/make_eval_data.py writes**. The run: 12 of 12 match, both stop companies stop. **A mismatch is named, never passed:** a wrong flag, a wrong cannot-evaluate reason, a wrong latest value, an unlisted not-meaningful cell, a wrong runway at budget, a wrong cleaned value, an unpredicted gap, a trip in a never-trips company, a workbook that should stop but reads, a stop with the wrong words, a missing workbook (with the command to make it). The gap rules for a blank first and last quarter, and no prior period never a gap. |
+| `test_rollup.py` (40) | `no_real_client`, `folders` (as in test_app.py). `flag(name, status)`: a bare flag. `entries`, `deck`, `workbook`, `table_rows`, `sheet_rows`: build and read the rollup. | Every flag has one place in the worst-first order; the worst flag, company status and review status rules; ranking by flags tripped with the tie rule; an unreadable workbook last and unranked on every output; counts with zeros; the runway chart's bars, colors, labels and threshold; 3 slide titles, the ranking row by row, both count tables, the footer, nothing overflowing; 12 companies over 2 ranking slides; the workbook's numbers, formats and colors; the command line; a download writes nothing to `output/`. |
 | `test_golden.py` (26) | `rebuilt`: every company's three outputs built once for the file, from the analysis fixtures, and dumped. | **Each of the 9 outputs matches its approved golden**, failing with the changed lines; every company in `data/` has three goldens and an analysis fixture, and there are no stray goldens; each fixture still passes the deck's and memo's checks (else the goldens would quietly show the placeholder); the footer uses the fixed date and commit; building twice gives the same text; the dumps hold positions, sizes, colors, fills, pictures, page-break rules, the PDF, number formats and alignment; a difference names the changed lines and the update command; a missing golden says how to make one; `--update` writes only what changed and deletes stray goldens; `python golden.py` exits 1 on a difference and 0 when all 9 match. |
 | `test_docs.py` (19) | `python_files_named(text)`, `study_guide_tables()`, `defined_in(files, name)`, `files_named`, `functions_named`, `watermark_lines(text)`, `em_dash_lines(text)`, `code_strings(path)`: every quoted string in a .py file (read with Python's `ast`, so comments don't count). | README keeps the model comparison markers, and rewriting that block leaves the rest alone; every `.py` file named in README, CLAUDE.md, this guide and LOOM_SCRIPT.md exists; **every function in this guide's tables exists** in the file its heading names; INTERVIEW_PREP.md's files, functions and group order; README, CLAUDE.md, this guide and LOOM_SCRIPT.md never describe the watermark without `--draft`, all name `--draft`, app.py and run_app.command, and count 4 slides. README and this guide list `python eval/run_eval.py` with the other checks. **Task 4: no em dash** in any .md file, in any string of the project's .py files (and eval/'s), or in what the code builds when it runs (the AI system prompt, the metric and input labels, each "cannot evaluate" status). |
 | `test_theme.py` (22) | `code_files()`, `missing(*families)`: a findfont that can't find those fonts. `css_rules(css)`, `rule(css, *words, plain)`: read the style sheet back. | The palette typed from the brief; status colors; **the Excel workbook keeps its fills**; **no code file but theme.py types a color** (and the pattern finds colors written four ways); no code, config or template names another brand; Arial, then Helvetica, then DejaVu Sans, and the PDF's font is a single .ttf; the sizes and the 12 pt floor; primary buttons navy with white text (navy dark on hover, surface when greyed out), secondary white with a navy border, the Download popover styled as secondary, **no button rule red or green**; 1100 px column, white cards, navy table header, 40 px rows, wide tables scroll; Arial and the sizes on the page; `.streamlit/config.toml` matches `theme.streamlit_theme()`. |

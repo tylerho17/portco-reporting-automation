@@ -427,6 +427,19 @@ frozen. The goldens caught all 17; my number checks caught 2. The trade-off: an 
 fails too, so you rerun with `--update` and read the diff before committing it.
 *Point to:* `golden.dump_deck`, `golden.compare`, `tests/golden/northwind_deck.txt`; `tests/test_golden.py::test_the_output_matches_its_approved_golden`.
 
+**Q34f. A partner wants one page on the whole portfolio. What does the rollup show, and how did you pick the "worst" flag?** (new, Task 9)
+One deck and one workbook across every company. Slide 1 ranks the companies by flags tripped, with
+each one's worst flag and its value against the threshold: Fernhollow first with 7, worst is runway
+at 6 months. Slide 2 counts companies by flag status and by review status, so you also see how many
+decks nobody has signed off. Slide 3 is runway by company, red where the flag trips, with the
+12-month line. For "worst" I didn't score how far past the threshold each flag is, because months,
+percentages and multiples can't be compared, so any score would be a made-up number. It's a fixed
+order an investor reads in, written in the code with the reason beside each: runway first, because
+cash running out leaves months to act; the combo rule last, because it explains an NRR drop that's
+already higher up. Same rules as every deck: Python computes, no AI text on it, text must fit, and
+the numbers are worked out from the workbooks when it's built, so it's never stale.
+*Point to:* `rollup.WORST_FIRST`, `rollup.rank_key`, `check_rollup.py`; `tests/test_rollup.py::test_the_portfolio_is_ranked_by_flags_tripped`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs
@@ -436,8 +449,9 @@ Not the math: Python is instant. Five things would:
    header spellings now get a proposed column to confirm once per company (`mapping.py`), so that
    queue is a review, not a code change. New layouts (no "Quarter" column, quarters across instead
    of down) still stop, and someone has to own that queue.
-3. **Review.** A person reads every deck, and 275 decks a quarter is the real bottleneck. I'd sort
-   the review queue by flags tripped, and let the healthy companies get a lighter read.
+3. **Review.** A person reads every deck, and 275 decks a quarter is the real bottleneck. The
+   portfolio rollup (Q34f) already ranks companies by flags tripped; the review queue should follow
+   it, and the healthy companies get a lighter read.
 4. **Output folder.** Everything goes to one output/ folder, and today the check scripts overwrite
    the real decks and manifests there. At scale that needs an output folder per run.
 5. **Cost** isn't the problem: about $25 a quarter, roughly double for any company that needs the retry.
@@ -451,9 +465,7 @@ In order:
 2. **An output folder per run**, so a test run can never overwrite a real deck or manifest.
 3. **A SharePoint or Power Automate trigger**: a company drops its workbook in a folder, the run
    starts, and the deck lands next to it, so nobody has to run a command.
-4. **A portfolio rollup**: one view of every company's flags, gaps, runway and NRR each quarter,
-   built from the metrics that already exist.
-5. **Close the claims code can't check yet**: whether a passing flag is really good news, and
+4. **Close the claims code can't check yet**: whether a passing flag is really good news, and
    whether two figures are really "over the same period". Until then a person reads every deck.
 
 *Point to:* README.md "Next steps".
