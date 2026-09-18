@@ -2472,3 +2472,76 @@ Every pair, after the fix:
 - **LOOM_SCRIPT.md and STUDY_GUIDE.md section 5** don't point to the new questions. STUDY_GUIDE's
   interview questions are the older list INTERVIEW_PREP.md was built from; worth a line there saying the
   deep dives live in INTERVIEW_PREP.md.
+
+## Task C: the Loom script (LOOM_SCRIPT.md)
+
+### What I built
+
+- **LOOM_SCRIPT.md rewritten for the app first flow,** two minutes at 150 words a minute (293 spoken
+  words, counted by a script from the quoted **Say** lines), with a timestamp on every section:
+  - **0:00 to 0:11, the problem.**
+  - **0:11 to 0:29, the portfolio page:** three companies, latest quarter, flags tripped (0, 7 and 6 of
+    9), data gaps ("19 metrics/flags (blank: Q1 2025)" for Northwind).
+  - **0:29 to 0:39, pick Northwind and click Generate** with the AI box unticked (about a second, no API
+    call, the saved analysis reused).
+  - **0:39 to 1:03, the deck and the memo:** Download deck (NRR 97.1% below 100, runway 11 months against
+    12, the chart gap, 6 of 9 flags, slide 4 marked AI-drafted), then Download memo (PDF): two pages and
+    "what changed since last quarter's run: five flags flipped".
+  - **1:03 to 1:43, five design decisions:** Python computes and Claude interprets; validation in code;
+    the blind model comparison (Haiku 2 of 5, Sonnet 4); the three false claims caught by reading the
+    output (LEARNINGS.md, v3 → v4); provenance and approval (the footer's "not reviewed" and the Approve
+    box).
+  - **1:43 to 2:00, next steps:** any file format in with each number cited and a person confirming, a
+    SharePoint trigger, and the rollup run across 275 companies.
+- **A pre-recording checklist:** `python demo_reset.py` (no API call, rebuilds from the saved analysis
+  JSONs, expected Fernhollow warning), a clean `git status` so the footer has no `*`, no approval before
+  recording, no `--draft`, `run_app.command`, AI box unticked, old downloads cleared, the doc tabs to open
+  in order, notifications off.
+- **A table of where every number said on camera comes from:** 14 rows, each with where it's shown and the
+  function or file that computes or records it. Every function named was checked in the code.
+- **Honesty notes** for the three next steps: what already exists (the mapping confirm step, the rollup
+  for three companies) and what doesn't (citations for any file format, SharePoint, a 275-company run).
+
+### Checks (no API calls)
+
+- `python demo_reset.py`: "Ready for the demo.", rebuilt from the saved analyses; Northwind and Alderpeak
+  decks and memos carry the AI text (manifests say `ai_text: true`), Fernhollow the placeholder, as
+  expected.
+- Every number in the script read back from the rebuilt files: the four slides' text, the memo's text
+  and its PDF page count (2), and the portfolio page's rows (`portfolio.portfolio_rows`).
+- `python -m pytest -q`: 1384 passed. tests/test_docs.py passed before each commit.
+- `python golden.py`: 9 of 9 match. config.yaml untouched.
+
+### What failed and how I fixed it (logged in LEARNINGS.md)
+
+1. **Two section word counts were wrong** (55 and 99 written, 56 and 102 spoken). Counted by a script and
+   corrected before the commit.
+
+### Decisions you didn't specify
+
+1. **No terminal on camera.** The old script showed Excel, VS Code, the terminal and the batch run. The
+   app first flow keeps a non-technical viewer on the web page, the deck, the memo and three README and
+   LEARNINGS views; the messy workbook is described ("a quarter blank") rather than opened.
+2. **Generate with the AI box unticked.** A live Claude call costs about $0.09, takes about 70 s, and could
+   fall back to the placeholder on camera (the slide-fit risk the old script warned about). The saved
+   analysis gives the same deck in about a second, and the narration never says "live".
+3. **Northwind stays unapproved on camera,** so the footer shows "AI-drafted | not reviewed" and the
+   Approve box is pointed at, not clicked. Approving and regenerating would cost about 10 seconds the
+   script doesn't have; DEMO.md has the full sign-off for a longer demo.
+4. **"Three false claims" points at LEARNINGS.md,** not a slide, because the claims were fixed: they only
+   exist in the log now. The example said aloud ("a trend that moved both ways called persistent") is
+   the one the direction check in code now catches too (`analyze.claim_problems`).
+5. **The portfolio page's Deck status column isn't read aloud.** It says "DRAFT - NOT REVIEWED" whether
+   or not a deck was built with `--draft`, which would contradict "no watermark" in the same breath. The
+   script says "not reviewed", the footer's wording.
+
+### Unresolved
+
+- **Nobody has read it aloud against a timer.** The timing is from word counts. Numbers take longer to
+  say than their word count ("ninety-seven point one percent"); if the design section runs over, cut
+  "sign included" and "code version" first.
+- **The footer's commit changes with every commit.** The decks built for this task show the commit before
+  this report's; run `python demo_reset.py` once more right before recording, as the checklist says.
+- **The portfolio page's "DRAFT - NOT REVIEWED" status** uses the watermark's words for an unwatermarked
+  deck. Worth rewording to "not reviewed" on the page, like the footer; left alone here because it's code,
+  not the script.
