@@ -378,3 +378,90 @@ what failed and how it was fixed, and anything unresolved.
 - **The manifests' AI records** say "skipped" after check_main.py (as in Task 1): the decks and memos
   were rebuilt from the saved analyses afterwards, but the manifests' `ai` part stays "skipped" until
   the next real run.
+
+## Task 4: no em dashes
+
+### What I built
+
+- **Three tests in `tests/test_docs.py`** (written first; all three failed before the fix):
+  - `test_no_markdown_file_has_an_em_dash`: every `.md` file in the project and its subfolders
+    (not `.venv` or `output/`). A failure lists the file and the start of each line.
+  - `test_no_string_in_the_project_code_has_an_em_dash`: every string in every `.py` file in the
+    project folder, read with Python's `ast` so f-string pieces and docstrings count and comments
+    don't. That covers the files you named (app.py, build_deck.py, memo.py, main.py, analyze.py,
+    metrics.py) and every other file whose words reach a person (excel_output.py, clean.py's stop
+    messages, the check scripts).
+  - `test_the_prompt_the_labels_and_the_flag_statuses_have_no_em_dash`: what the code builds when it
+    runs: `analyze.SYSTEM_PROMPT`, every `METRIC_LABELS` and `INPUT_LABELS` value, and the
+    "cannot evaluate" status for each of the three reasons. This one catches an em dash put together
+    with `chr()`, which the string test can't see.
+- **The fixes (19 in code, about 55 in docs):**
+  - Flag status: "cannot evaluate: missing input" (metrics.py), and "Cannot evaluate: missing input"
+    in Excel and on the deck. Data gaps: "None: every metric and flag has the data it needs".
+  - Slide titles: "Northwind: key metrics, Q2 2026 vs Q1 2026", "ARR and cash, Q3 2024 to Q2 2026",
+    "Risks and flags, Q2 2026", "AI commentary, Q2 2026".
+  - Docs: colons for "label: explanation", full stops for two clauses, commas elsewhere. Every
+    `.md` file, including the historical reports.
+- **CLAUDE.md Rules** gets: "No em dashes in any .md file or user-facing text: use a comma, colon or
+  full stop", naming the test that enforces it.
+- **Proof the tests work:** `output/task4_mutations.py` made 14 changes in temporary copies: an em
+  dash in README, in CLAUDE.md, in a new `.md` file in `data/`, a slide title, the empty table cell,
+  the web page's legend, a memo label, main.py's reuse note, the system prompt (typed, and added with
+  `chr()`), a metric label (with `chr()`), the flag status and Excel's None line. **13 of 13 caught**,
+  and the control (an em dash in a comment) passes, as it should.
+- **Rebuilt, no API call:** all 6 check scripts pass, and the three decks and memos were rebuilt from
+  their saved analyses. A scan of the rebuilt decks finds no em dash and AI text on all three.
+  **651 tests pass.**
+
+### Decisions you didn't specify
+
+1. **Wider than your list.** You named six files; the test covers every `.py` file in the project
+   folder. The Excel workbook's "Cannot evaluate" and "None" lines had em dashes too and reach the
+   same reader, and a narrower test would have left them. tests/ is left out, because
+   tests/test_memo.py has to hold an em dash to look for one.
+2. **Docstrings count, comments don't.** A docstring that quotes an output ("'cannot evaluate:
+   <reason>'") should match the output, so it's checked. Nothing a user sees comes from a comment.
+3. **Colon for statuses, comma for slide titles.** "Cannot evaluate: missing input" is the wording
+   the memo and web page already showed. Slide 1's title already has a colon after the company name,
+   so a second colon would read badly; the titles take a comma, all four the same way.
+4. **The empty table cell is "-"** (non-flag rows' status, the combo row's values). No comma, colon
+   or full stop fits an empty cell. "-" is what the memo already shows there (`memo.NOT_A_FLAG`), so
+   the deck and memo now match. I considered a blank cell, but a board reader could take a blank for
+   missing data.
+5. **Historical reports were changed too** (OVERNIGHT_REPORT, DAY_REPORT, POLISH_REPORT), because the
+   rule is "any md file". Where they quote the old wording they now show the new punctuation, and
+   POLISH_REPORT's note "The titles use em dashes" now says Task 4 replaced them.
+6. **`memo.no_em_dash` stays.** The project's own labels no longer need it, but the web page runs
+   Claude's headline, risks and questions and other libraries' error messages through it, and those
+   can still contain an em dash. Its docstring says so now.
+7. **`check_memo.py` got stricter:** it compared the memo's status with the Excel status after
+   swapping the em dash for a colon. Now both use the same words, so it compares them exactly.
+8. **config.yaml keeps one em dash** in a comment (`rule_of_40_min`). You said not to edit it, and a
+   comment isn't shown to anyone but a reader of the file.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **My own docstring broke the rule.** The first docstring for `memo.no_em_dash` showed an em dash
+   as its example. Caught on reread; it now shows the result instead.
+2. **4 tests pinned the old wording** (test_analyze.py, test_excel_output.py, test_build_deck.py).
+   Updated to the new words; test_build_deck.py now imports `NOT_APPLICABLE` rather than typing it.
+3. **Fernhollow's saved analysis is no longer reused by the web page** (see Unresolved).
+4. **Small slips:** one breakage's anchor text appeared 3 times in main.py (fixed to a unique line);
+   `sed`, `awk` and chained shell commands were refused, so edits ran as small scripts in `output/`
+   (`task4_code_edit.py`, `task4_tests_edit.py`, `task4_docs_edit.py`, `task4_checks.py`).
+
+### Unresolved
+
+- **The web page won't reuse Fernhollow's saved AI commentary.** Claude was sent "cannot evaluate"
+  + em dash + "missing input" for Rule of 40; today's facts say "cannot evaluate: missing input", so
+  `main.reusable_analysis` (rightly) sees different facts. Northwind and Alderpeak still match (no
+  "cannot evaluate" flag in their latest quarter). The CLI decks and memos are unaffected: they show
+  Fernhollow's AI text. Two ways out: one paid Fernhollow run (about $0.09), or editing that one
+  string in `output/fernhollow_analysis.json`. I didn't do the second: that file is the record of
+  what Claude was sent, and rewriting it would make the record untrue. Your call.
+- **Claude's own text can contain an em dash.** None of the three saved analyses does, and the web
+  page converts any it finds, but the deck and memo show Claude's words as written. A line in the
+  system prompt ("no em dashes") would need a new prompt version (v5) and a paid run to test, so I
+  left the prompt alone.
+- **Task 3's Unresolved note about em dashes in the slide titles and the shared "Cannot evaluate"
+  and "None" labels is now done.**
