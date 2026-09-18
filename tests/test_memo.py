@@ -447,6 +447,21 @@ def test_save_memo_compares_with_the_run_in_the_manifest(tmp_path, monkeypatch):
     assert "Runway at current burn: Passed (was Tripped)" in pdf_words
 
 
+def test_save_memo_lists_moves_by_config_yaml_s_settings(tmp_path, monkeypatch):
+    # Found by planting a bug: save_memo using the defaults instead of config's settings passed every test.
+    workbook = tmp_path / "testco.xlsx"
+    workbook.write_bytes(b"not read: clean_workbook is replaced")
+    monkeypatch.setattr("memo.clean_workbook", lambda path: (three_quarters(), None))
+    earlier = run_results(memo_data())
+    earlier["metrics"]["gross_margin"] = {"value": 0.9, "shown": "90.0%"}   # every input 100: margin 100.0%, 10 pts up
+    save_manifest(manifest_path(workbook, tmp_path), {"company": "Testco", "run_at": "2026-06-18T09:05:41",
+                                                      "results": earlier})
+    default = save_memo(workbook, TEST_CONFIG, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert "Gross margin: 90.0% to 100.0% (up 10.0 pts)" in docx_text(default["docx"])
+    wider = save_memo(workbook, {**TEST_CONFIG, "diff_min_points": 0.2}, None, run_date=RUN_DATE, output_dir=tmp_path)
+    assert "Gross margin: 90.0%" not in docx_text(wider["docx"])
+
+
 def test_memo_paths():
     docx, pdf = memo_paths("data/northwind.xlsx", "output")
     assert (str(docx), str(pdf)) == ("output/northwind_board_memo.docx", "output/northwind_board_memo.pdf")

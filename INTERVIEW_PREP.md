@@ -440,6 +440,20 @@ already higher up. Same rules as every deck: Python computes, no AI text on it, 
 the numbers are worked out from the workbooks when it's built, so it's never stale.
 *Point to:* `rollup.WORST_FIRST`, `rollup.rank_key`, `check_rollup.py`; `tests/test_rollup.py::test_the_portfolio_is_ranked_by_flags_tripped`.
 
+**Q34g. A board member asks "what's different from last quarter?" How does the tool answer?** (new, Task 10)
+Every run saves its results in the manifest: each metric's value and the words the deck showed, each
+flag's status, each data gap. The next run compares and lists three things: flags that flipped
+("Runway at current burn: Tripped (was Passed)"), metrics that moved more than a set amount, and data
+gaps that opened or closed. For Northwind, Q1 to Q2: five flags flipped, eight metrics moved, one gap
+closed. It's in the memo after the headline and on the company page. Two choices I'd defend. First,
+"moved" is points for percentages and percent-of-old-value for everything else, because one number
+can't mean both: 5% of a 97% NRR is under 5 points. Second, it compares with the last run whose
+numbers were different, not literally the last run: otherwise approving and rebuilding would make the
+memo say "nothing changed" against a run ten seconds old. Proof: `check_diff.py` rebuilds each company's
+workbook as it stood a quarter ago, runs both, and checks every line against lists I worked out by
+hand from the answer keys.
+*Point to:* `diff_runs.baseline`, `diff_runs.move_text`, `check_diff.py`; `tests/test_diff_runs.py::test_a_rebuild_with_the_same_results_keeps_the_comparison_it_already_had`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs

@@ -1131,3 +1131,147 @@ the demo companies: none has a tie or the "only cannot evaluate" status, and the
   buttons render and the files build, but I couldn't click a real download here.
 - **No slide renderer on this Mac** (no LibreOffice), so I checked the deck by its saved text, sizes
   and the overflow re-measure, and looked at the chart PNG, not at rendered slides.
+
+---
+
+## Task 10: what changed since the last run (diff_runs.py, check_diff.py, the memo and the company page)
+
+### What I built
+
+- **Every run saves its results** in `output/<company>_manifest.json` (`results`): the latest quarter,
+  each of the 19 metrics' value (rounded to 6 decimals) and the words the deck shows for it, each flag's
+  status ("Tripped", "Passed", "Cannot evaluate: missing input"), and every data gap. Beside it,
+  `previous_run`: the earlier run (its time and results) this one was compared with.
+- **`diff_runs.py`** compares two runs' results and lists:
+  - **Flags that flipped:** "Runway at current burn: Tripped (was Passed)", including to or from
+    "Cannot evaluate" or from one reason to another.
+  - **Metrics that moved** more than a set amount: percentages by points (default more than 5),
+    everything else by percent of the old value (default more than 10%). "Burn multiple: 1.81x to 2.35x
+    (up 30.0%)". A value that became or stopped being a number ("ARR growth YoY: data missing to 42.8%")
+    is always listed, with no size.
+  - **New and resolved data gaps**, quarter by quarter, in the Data gaps line's own words.
+  - Or "Nothing changed" and what was checked.
+  `python diff_runs.py data/northwind.xlsx [--min-points 0.02] [--min-relative 0.2]` compares today's
+  workbook with its last run in `output/`.
+- **The memo** has a "What changed since the last run" section after the headline, before Key metrics,
+  **only when an earlier run exists** (a first memo leaves it out). It says which run it compares with
+  ("Compared with the run of 2026-06-18 09:05, whose latest quarter was Q1 2026 (now Q2 2026).").
+  With the Q1 to Q2 comparison all three memos are still 1 or 2 pages.
+- **The company page** has the same as a card right after the flags, or "Nothing to compare with yet:
+  this is the first run on record." (`portfolio.run_changes`, `app.show_changes`; a bad setting shows
+  plain words).
+- **`main.py`** prints one line per company: "✓ What changed since the last run: 5 flags flipped,
+  8 metrics moved, 0 new data gaps, 1 resolved (since the run of ...)".
+- **`check_diff.py`** (below), **`tests/test_diff_runs.py`** (35 tests, written first), plus 5 in
+  test_memo, 4 in test_main, 4 in test_portfolio and 2 in test_app. 935 tests in all. `check_memo.py`
+  changed too (below).
+- **Docs:** README (output files, commands, the web page, Prove it works, a What changed section,
+  decision 20, Next steps), STUDY_GUIDE (a diff_runs.py section with every function, check_diff.py, the
+  tests table), INTERVIEW_PREP Q34g, LOOM_SCRIPT (a proof row, test count), LEARNINGS (7 rows).
+
+For the demo companies, Q1 2026 to Q2 2026: Northwind 5 flags flipped (NRR, burn multiple, runway, Rule
+of 40 from "Cannot evaluate", the combo rule), 8 metrics moved, 1 gap closed; Alderpeak 2 metrics moved
+(burn multiple and runway, both better); Fernhollow 1 flip (Rule of 40 to "Cannot evaluate: missing
+input", since Q2 2026's year-ago quarter is its blank one), 10 metrics moved, 4 new gaps.
+
+### How check_diff.py proves it
+
+For each company it writes the workbook **as it stood a quarter ago** from the make_data answer key (the
+latest quarter left off; that quarter's budget becomes the budget-only row, in the company's own
+wording: "Q2 2026 - Bud"), runs it, then runs today's workbook into the same temporary folder. What
+must change is typed in the check, worked out by hand from the answer key with the formula beside each
+line (`3650/2020 = 1.81x -> 3900/1660 = 2.35x`). It checks: a first run saves results and has no
+section; the second run is compared with the first; the memo's section equals the typed lines exactly,
+in Word and in the PDF; the page and `python diff_runs.py` say the same; and after `approve.py` and a
+rebuild the comparison is still with Q1 2026 and the footer says reviewed. No API call; the real
+`output/` is never touched.
+
+**check_memo.py** checks that every number in a memo is in the metrics workbook. The new section breaks
+that rule by design (last quarter's values, the size of each move, the earlier run's time), so check_memo
+now leaves that section out, and only it. It proves both halves: a real Q1-then-Q2 memo does have
+numbers there that today's workbook lacks, and a number planted just after the section is still caught.
+
+**Proof it catches what it claims:** 25 bugs planted one at a time in temporary copies of the project
+(`output/task10_mutations.py`), plus an unchanged copy as the control:
+
+| Caught by | Bugs |
+|---|---|
+| Both the unit tests and check_diff.py (16) | a rebuild compared with itself; different results compared with the older run; burn multiple measured in points; a value becoming "data missing" not listed; new and resolved gaps swapped; gaps compared by metric not quarter; a flip written backwards; the compared-with line naming the wrong quarter; ∞ and NaN written into the JSON; results saved for the prior quarter; main.py not saving the results; main.py reading the manifest from `output/` instead of the company's own folder; the memo without the section; the memo with a section on a first run; the section after Key metrics; the page reading the manifest from the wrong folder |
+| The unit tests only (8) | exactly 5 points counted as a move; exactly 10% counted; zero to zero listed as a move; a flag only one run checked dropped; values saved unrounded; config.yaml's settings ignored by `move_settings`; the memo ignoring config.yaml's settings; the page without the card |
+| check_memo.py only (1) | check_memo leaving out everything after the section, not just the section |
+| Nothing | none (after one fix, below) |
+
+The control passed all three. The eight check_diff can't see need a case no demo company has: a move
+of exactly the setting, a metric at zero both quarters, the combo rule switched off, float noise, or
+settings in config.yaml. **One bug passed everything at first:** the memo using the default settings
+instead of config.yaml's. No test built a real memo with those keys set. I wrote that test, and the
+same bug planted again now fails it.
+
+### Decisions you didn't specify
+
+1. **Which "previous run":** the last run whose results were **different**, not literally the last one.
+   Comparing with the literal last run fails your own workflow: approve, rebuild, and the memo says
+   "nothing changed" against a run seconds old. A rebuild from the same results keeps the comparison it
+   had. `previous_run` in the manifest records which run that is. **Please check you agree.**
+2. **"Moved more than a configurable amount" is two amounts:** points for percentages (5) and percent of
+   the old value for everything else (10%). One number can't mean both: NRR 102% to 96.9% is 5.1 points
+   but 5% of itself; a runway can't move "5 points". "More than" means exactly the setting isn't listed,
+   as "exactly at a threshold passes" in the flags. The defaults are my judgment; please check them. With
+   them, Northwind's NRR (102.0% to 97.1%, 4.9 points) flips but isn't listed as a move.
+3. **Configurable without editing config.yaml:** the settings are read from `diff_min_points` and
+   `diff_min_relative` **if** they're there, else the defaults in `diff_runs.py`; the command line can
+   override both. I didn't add them to config.yaml: you said not to, and a new key changes the file's
+   hash, which would have sent every approved deck back to "not reviewed".
+4. **Only the latest quarter's metrics are compared**, each run's own latest (Q1 2026's values against
+   Q2 2026's). Data gaps are compared across every quarter.
+5. **A change of words always counts** (a number becoming "data missing", "∞ (ARR shrank)", "n/m"), with
+   no size, because there's nothing to subtract. Each run saves the words it showed, since last
+   quarter's can't be rebuilt from today's workbook.
+6. **Flips read today's status first** ("Tripped (was Passed)"), because "Cannot evaluate: missing input
+   to Tripped" has two colons and reads badly.
+7. **Where it goes:** the memo, after the headline (what a board member wants first); the page, a card
+   right after the flags. **Not on the deck**: you asked for the page and the memo, and the deck has a
+   4-slide rule.
+8. **Move sizes come from the exact values**, not the rounded ones shown. So "Net new ARR vs budget:
+   -1.5% to -19.0% (down 17.6 pts)": subtracting the shown numbers gives 17.5. It's the true move, but a
+   reader checking by hand will get 0.1 less.
+9. **A percent move on a negative base** uses its size: Fernhollow's net new ARR -110 to -240 is "down
+   118.2%". Correct, but odd to read; the points rule wouldn't help (it's $K).
+10. **The memo and the page each work out the comparison themselves** from the manifest, by the same
+    rule, instead of main.py passing it along. So `python memo.py` alone, the page and a batch run always
+    agree, and the memo (built before the manifest is written) reads the previous run's manifest.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **Zero to zero was listed as "down from zero".** Found by a test written first; `move_text` now
+   returns nothing for equal values before any other rule.
+2. **My own "nothing changed" test was wrong**: identical results never compare (that's decision 1).
+   The test now moves NRR 1 point.
+3. **"Rule of 40: Cannot evaluate: missing input to Tripped"** passed every test; I saw it by reading
+   Fernhollow's memo. Changed to today's status first.
+4. **check_memo's rule couldn't hold for the new section.** It now leaves that section out, with the two
+   proofs above.
+5. **The planted-bug run:** the memo ignoring config's settings got through (a test added), and the
+   harness failed the control because it didn't copy the saved analyses check_memo reads (fixed; control
+   passes).
+6. **Refused commands:** `mkdir /tmp/...`, `source`, a heredoc with a brace beside a quote, a `for`
+   loop. Worked around with `tempfile`, `.venv/bin/python` and the Edit tool.
+7. **`check_main.py` rebuilt `output/` with `--skip-ai`**, as README warns. I put the saved AI text back
+   with `build_deck.py` and `memo.py` (no API call).
+
+### Unresolved
+
+- **The real `output/` has nothing to compare with yet.** The manifests there were written before this
+  task, so the first run records results and the section appears from the next run with different numbers.
+  To see it now: `python check_diff.py`, or run a quarter-earlier workbook before today's (as check_diff does).
+- **CLAUDE.md doesn't list `diff_runs.py` or `check_diff.py`.** You said not to edit it. Suggested
+  Architecture line: "diff_runs.py: what changed since the last run (flags flipped, metrics moved more
+  than diff_min_points / diff_min_relative, new and resolved data gaps), from the results each manifest
+  saves; compared with the last run whose results differ; shown in the memo after the headline and on
+  the company page", and add `check_diff.py` to the check scripts line. (The rollup, golden and eval
+  lines from earlier tasks are still pending too.)
+- **The goldens don't cover the section.** They're built with no earlier run, so their memos have none.
+  A golden with a section would need a fixed previous manifest; check_diff covers its words exactly.
+- **No history beyond one run.** The manifest keeps this run and the one it compared with, not every
+  quarter. "Since two quarters ago" would need a history file per company.
+- **Seen on the page only through Streamlit's test runner**, not in a browser.
