@@ -369,7 +369,23 @@ def check_a_memo_with_changes(config, folder):
     outside = sentence_tokens(section) - allowed
     assert outside, "every number in the What changed section is in the workbook: the exception isn't needed"
     memo_numbers_check(docx_path, pdf_path, expected_footer(workbook, output_dir, None), allowed, "Northwind")
+    check_a_number_after_the_section_is_still_caught(docx_path, paragraphs, allowed, folder)
     return sorted(outside)
+
+
+def check_a_number_after_the_section_is_still_caught(docx_path, paragraphs, allowed, folder):
+    """Leaving the section out must not leave out what follows it: plant a number after it, and the check must fail."""
+    document = Document(docx_path)
+    start = paragraphs.index(KEY_METRICS_HEADING)
+    target = next(item for item in document.paragraphs[start:] if re.search(r"\d", item.text))
+    target.runs[0].text = re.sub(r"\d", "4", target.runs[0].text)   # e.g. 13.0 mo -> 44.4 mo
+    planted = Path(folder) / "planted_after_changes.docx"
+    document.save(planted)
+    try:
+        check_numbers([without_changes("\n".join(docx_body(planted)[0]))], allowed, "planted")
+    except AssertionError:
+        return
+    raise AssertionError("A number planted after the What changed section wasn't caught")
 
 
 def main():
