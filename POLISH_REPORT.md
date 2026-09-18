@@ -277,3 +277,100 @@ Northwind's slide 4 as built:
   fit is proven by text_fit.py's measurements and check_deck.py's re-measure of the saved files.
 - **Still open from Task 1:** check_main.py leaves the manifests' `ai` block saying "skipped".
   The decks in output/ were rebuilt afterwards from the saved analyses, so they carry the AI text.
+
+## Task 3: a web page for non-technical users (app.py)
+
+### What I built
+
+- **app.py (Streamlit).** Drag in a KPI workbook (.xlsx) and the page runs the same steps as
+  main.py: clean, metrics and flags, Excel, AI (only if ticked), deck. It then shows:
+  - the company and latest quarter, and two download buttons: the deck and the metrics workbook
+  - a note saying what happened to the AI commentary
+  - the flag count ("6 of 9 flags tripped") and the flag table, each row red, green or gray
+  - the Data gaps lines
+  - the metrics table: gray = data missing, red = the flag tripped that quarter (the Excel rules)
+  - The colors are `excel_output.STATUS_COLORS`, and every piece of text comes from build_deck.py's
+    helpers, so the page, the workbook and the deck use the same words and colors. No new math.
+- **The AI checkbox**: "Include AI commentary (typically about $0.09 and 70 seconds per
+  workbook)". Off by default.
+- **Errors**: a workbook clean.py can't read shows clean.py's own message, word for word. A file
+  that isn't an Excel workbook gets a one-line plain message. A bug says "Something unexpected
+  went wrong ..." with the error's name; its traceback goes to the Terminal window only.
+- **run_app.command**: double-click on a Mac. The first time, it creates `.venv` and installs
+  requirements.txt. Then it starts the app and opens the browser.
+- **.streamlit/config.toml**: headless (so Streamlit doesn't stop at its first-run email
+  question), no usage statistics, **no tracebacks on the page** (a backstop), and a minimal toolbar.
+- **requirements.txt**: added `streamlit`. Why: it turns a Python script into a web page with
+  file upload, tables and download buttons, with no HTML or JavaScript to write or maintain.
+  It brings its own dependencies (pyarrow, altair, tornado-style server, ...), about 25 packages.
+- **tests/test_app.py (19 tests)**: imports app.py and exercises its helpers: the label, saving an
+  upload, colors, all three error kinds, Northwind's deck/workbook/flags/metrics colors, the four
+  AI paths (reused, not reused, asked, no key, API error), and Streamlit's `AppTest` drawing the
+  page and the results. A guard makes creating a real Anthropic client fail every test.
+- **No API calls.** I checked the AI path on the real saved analyses: with the box ticked, all
+  three companies reused `output/<company>_analysis.json` (the Anthropic client was switched off
+  for the run), and the flag counts matched each story (6 of 9; 0 of 9; 7 of 9, 1 cannot evaluate).
+- pytest: 519 passed (500 before, +19).
+- Docs: README "Or use the web page", CLAUDE.md architecture lines, STUDY_GUIDE (a table for
+  app.py, the test_app.py row, the new small files). 2 LEARNINGS rows.
+
+### Decisions you didn't specify
+
+1. **What the checkbox does when ticked.** It first looks for a saved analysis in `output/` made
+   from *exactly* the same facts (the whole payload Claude saw must match, not just company and
+   quarter), which still passes the deck's checks. If there is one, it's reused for free and the
+   note says so. Only otherwise does it call Claude (`main.ai_step`), which needs the key in
+   `.env`. Without a key the deck is still built, with the placeholder and a note saying why.
+   - This is how the rule "rebuild decks from the saved analysis JSONs" shows up in the app.
+2. **A new analysis is not saved to `output/`.** The page never writes there (see 3), so
+   uploading the same new workbook again costs again. Within one browser session it doesn't: the
+   result is kept per file and checkbox choice.
+3. **The page builds in a temporary folder**, not `output/`, and hands the files to the browser
+   as downloads. So it can't overwrite the command-line decks, manifests or approvals. No
+   manifest is written, and the deck's footer says "not reviewed".
+4. **It builds as soon as a file is dropped in**, with no "Build" button. Ticking or unticking the
+   box rebuilds. With the box ticked this can mean an API call, which is why the cost is on the
+   box's label.
+5. **The typical cost is a label copied from README's Cost table** ($0.0911 → "about $0.09",
+   71 s → "70 seconds") in `TYPICAL_AI_COST_USD` / `TYPICAL_AI_SECONDS`, with a comment saying to
+   update it with the README. The saved manifests have no cost recorded (`cost_usd: null`) and
+   output/ isn't in git, so there's nothing reliable to compute it from.
+6. **Metrics table: one row per metric, one column per quarter** (the Excel sheet is the other way
+   round). 19 metrics across a screen don't fit; 8 quarters do.
+7. **Metric cells: only red and gray**, no green. That is the Excel Metrics sheet's rule. Green
+   appears in the flag table, as on the Excel Flags sheet.
+8. **Runway at next quarter's budgeted burn is not on the page.** It's context, not a flag, and it
+   is in the downloaded workbook and on the deck.
+9. **Non-Excel files are caught in app.py, not clean.py**, so main.py's behavior is unchanged (see
+   "What failed").
+10. **An uploaded file keeps only its own name** ("../x.xlsx" → "x.xlsx"), and the company name
+    comes from it, as in main.py. "Northwind Q2.xlsx" gives "Northwind Q2_board_pack.pptx".
+11. **run_app.command sets itself up on first run** (creates `.venv`, installs packages) rather
+    than assuming the setup was done, since the person double-clicking it may never have opened
+    Terminal. It pins port 8501 and opens the browser after 3 seconds.
+12. **The Streamlit toolbar is minimal**: the developer menu (rerun, settings, deploy) is hidden.
+
+### What failed and how I fixed it
+
+- **A non-Excel file showed pandas' message**, "Excel file format cannot be determined, you must
+  specify an engine manually", not the plain one. Caught by the test written before the code.
+  pandas raises it as a `ValueError`, like clean.py's own messages. Fixed: app.py checks the file
+  is a zip archive (every .xlsx is) before cleaning. Logged in LEARNINGS.md.
+- **`chmod +x` and starting the server were refused** in this session. I set the executable bit
+  with Python's `os.chmod`, committed it (mode 100755 in git), and added a test for it. The page
+  was tested in-process with Streamlit's `AppTest`. Logged in LEARNINGS.md.
+
+### Unresolved
+
+- **Not tried in a browser, and run_app.command not double-clicked.** Both need a person. `AppTest`
+  proves the page and the results draw with no error, two tables and two download buttons, but not
+  how they look. `AppTest` can't simulate a file upload, so the upload widget itself is untested.
+- **macOS may block the first double-click** of a `.command` file that came from a download or a
+  zip ("cannot be opened because it is from an unidentified developer"). Right-click → Open once
+  fixes it. A clone made with git isn't affected.
+- **If port 8501 is already in use** (the app is already running), a second double-click fails in
+  its Terminal window; the browser still opens the first copy.
+- **main.py still prints pandas' message** for a file that isn't an Excel workbook. A one-line
+  check in clean.py would fix both; I left clean.py alone.
+- **The live AI path (a real Claude call from the page) has not run**, by this task's rules. It
+  reuses `main.ai_step`, which the live batch runs have exercised, and it's tested with a fake client.
