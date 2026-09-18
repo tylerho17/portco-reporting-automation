@@ -53,7 +53,7 @@ UNAVAILABLE = "AI commentary unavailable"
 AI_LINE = "AI-drafted from computed metrics - review before use"
 RUNWAY_CONTEXT_ROW = "Runway at next quarter's budgeted burn"
 FLAG_STATUSES = ("Tripped", "Passed", "Cannot evaluate")
-EM_DASH = "—"
+EM_DASH = chr(0x2014)   # the em dash, by its Unicode number
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ EM_DASH = "—"
 
 def flag_counts(flags):
     """The Flags sheet's rows counted by status, as text: tripped, passed, cannot evaluate, and all of them."""
-    statuses = [flag["Status"].split(" ")[0] for flag in flags.values()]   # "Cannot evaluate — ..." -> "Cannot"
+    statuses = [flag["Status"].split(" ")[0] for flag in flags.values()]   # "Cannot evaluate ..." -> "Cannot"
     counts = [statuses.count(status.split(" ")[0]) for status in FLAG_STATUSES]
     return [str(count) for count in counts + [len(statuses)]]
 

@@ -21,8 +21,8 @@ Rules (the same as build_deck.py):
 - The AI text is used only if it passes everything the deck checks (build_deck.load_analysis),
   AND every number in the headline and questions is one the metrics workbook shows. Otherwise the
   memo says "AI commentary unavailable" and every computed number still appears.
-- No em dashes: the labels shared with the deck and Excel ("Cannot evaluate — missing input")
-  are shown with a colon instead.
+- No em dashes: two labels shared with the deck and Excel have one (the "Cannot evaluate" status
+  and the "None" data gaps line); the memo shows a colon instead.
 
 Run: python memo.py data/northwind.xlsx                  (uses output/northwind_analysis.json if it exists)
      python memo.py data/northwind.xlsx --no-analysis    (AI commentary unavailable)
@@ -68,6 +68,7 @@ COMBO_CELL = "see Flags below"          # the combo rule has no single value; it
 NO_TRIPPED_FLAGS = "No flag tripped"
 RUNWAY_CONTEXT = "Runway at next quarter's budgeted burn (context, not a flag)"
 MEMO_SUFFIX = "_board_memo"
+EM_DASH = chr(0x2014)                   # the em dash, by its Unicode number, so this file never shows one
 
 # Rows of the key metrics table that aren't flags, shown first: (metric, its "vs budget" metric or None).
 CONTEXT_ROWS = [("ending_arr", "arr_vs_budget"), ("net_new_arr", None), ("arr_yoy", None), ("gross_margin", None)]
@@ -160,8 +161,8 @@ def memo_analysis(analysis_file, payload, data):
 # ---------------------------------------------------------------------------
 
 def no_em_dash(text):
-    """The memo's words for a label that has an em dash: 'Cannot evaluate — missing input' -> 'Cannot evaluate: missing input'."""
-    return text.replace(" — ", ": ").replace("—", "-")
+    """The memo's words for a label with an em dash (EM_DASH): a colon, e.g. 'Cannot evaluate: missing input'."""
+    return text.replace(f" {EM_DASH} ", ": ").replace(EM_DASH, "-")
 
 
 def flag_cells(data, flag):
@@ -547,7 +548,9 @@ def main(argv=None, output_dir=OUTPUT_DIR):
 
     analysis_file = None if args.no_analysis else (args.analysis or analysis_path(args.workbook, output_dir))
     result = save_memo(args.workbook, load_config(), analysis_file, output_dir=output_dir)
-    print(f"Saved {result['docx']} and {result['pdf'].name}")
+    project = Path(__file__).parent
+    docx = result["docx"]
+    print(f"Saved {docx.relative_to(project) if docx.is_relative_to(project) else docx} and {result['pdf'].name}")
     if result["why_unavailable"]:
         print(f"{MEMO_UNAVAILABLE}: {result['why_unavailable']}")
 

@@ -100,7 +100,7 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 | NRR 97.1%, below 100% | Slide 1, NRR row; threshold from `config.yaml` (`nrr_min`) | `metrics.nrr` |
 | Runway 11 months vs 12-month floor | Slide 1, Runway row; `config.yaml` (`runway_min_months`) | `metrics.runway_months` |
 | Q1 2025 blank | Northwind's blank quarter | `make_data.py` (`BLANK_QUARTER`) |
-| Over 500 tests | `python -m pytest -q` (532 today) | — |
+| Over 500 tests | `python -m pytest -q` (571 today) | — |
 | Haiku scored 2 of 5 | README model comparison (needed 4.0) | `compare_models.py` |
 
 ## Timing check

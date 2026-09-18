@@ -136,7 +136,7 @@ def test_no_gaps_says_so():
 
 
 def test_no_em_dash_anywhere_in_the_memo():
-    # The labels shared with the deck and Excel ("Cannot evaluate — missing input") carry one; the memo doesn't.
+    # Two labels shared with the deck and Excel carry one (the "Cannot evaluate" status, the "None" gaps line).
     for blocks in (memo_blocks(memo_data(blank="Q1 2026"), None), memo_blocks(memo_data(), None),
                    memo_blocks(memo_data(), summary_from(summary_dict()))):
         assert "—" not in all_text(blocks)

@@ -538,6 +538,48 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 
 ---
 
+### `memo.py`: the board memo, Word and PDF (final Task 1)
+
+**What it's for:** the same update as the deck, written as a 1 to 2 page memo for board members who read rather than present. `python memo.py data/northwind.xlsx` saves `output/northwind_board_memo.docx` and `.pdf` beside the deck; `main.py` does it for every company.
+
+**What's in it, top to bottom:** title and quarter; the AI headline under "AI-drafted from computed metrics - review before use"; the key metrics table (latest, prior, budget or threshold, status in red / green / gray); runway at next quarter's budgeted burn; "Flags: 6 of 9 flags tripped" with each tripped flag's value and threshold, the flags that can't be evaluated, and the combo rule; data gaps; the AI's 3 questions for management. The footer is the deck's footer, on every page.
+
+**How it's built:** the memo is built once as a list of "blocks" (a title, a heading, a paragraph, a bullet list, a table), then written twice: `write_docx` (python-docx) and `write_pdf` (reportlab). So the Word file and the PDF can't say different things, and `check_memo.py` proves they don't.
+
+**The one rule the deck doesn't have:** every number in the memo must be one the metrics workbook shows. Claude may quote any number in its payload, which includes raw inputs (net burn, ending cash in $K) that the metrics workbook doesn't have. So the memo checks the AI headline and questions against the workbook's numbers too, and says "AI commentary unavailable" if one is missing. An analysis can therefore be on the deck and not in the memo.
+
+**No em dashes:** two labels it shares with the deck and Excel have one (the "Cannot evaluate" status and the "None" data gaps line); the memo shows a colon instead, e.g. "Cannot evaluate: missing input".
+
+| Function | What it does, in plain English | Example / why it exists |
+|---|---|---|
+| `workbook_texts(data)` | Every text the metrics workbook shows: each metric in each quarter, the quarter labels, flag names and thresholds (as Excel displays them), the combo rule's wording, runway at budget, and the flag count. | The list the AI's numbers are checked against. |
+| `workbook_numbers(data)` | The numbers in those texts, read the way analyze.py reads numbers (sign kept, %, x and mo dropped). | Thresholds count as Excel shows them: 15.0, not 0.15 (that bug is in LEARNINGS). |
+| `unlisted_numbers(summary, data)` | Numbers in the AI headline and questions that aren't in `workbook_numbers`. | The wins and risks aren't in the memo, so they aren't checked here. |
+| `memo_analysis(analysis_file, payload, data)` | First every check the deck makes (`build_deck.load_analysis`), then `unlisted_numbers`. Returns (summary, None) or (None, why not). | Northwind with "ending cash of $14,300K" in a question: fine for the deck, "AI commentary unavailable" in the memo. |
+| `no_em_dash(text)` | Swaps a spaced em dash for a colon: the deck's "Cannot evaluate" status becomes "Cannot evaluate: missing input". | The memo has no em dashes. |
+| `flag_cells(data, flag)` | One flag's row on the Flags sheet (`excel_output.flag_row`). | The combo rule's words come from here, so its "1 pt" and "3 quarters" are the workbook's own. |
+| `runway_context_text(data)` | Runway at next quarter's budgeted burn: "13.0 mo", or why there's no number. | |
+| `combo_line(data, flag)` | "NRR falling while pipeline rising: Tripped (trips when NRR falls at least 1 pt and pipeline rises at every step, over the last 3 quarters)". | |
+| `kpi_rows(data)` | The key metrics table: Ending ARR, Net new ARR, ARR growth YoY, Gross margin, then every flag with latest, prior, threshold and status. | The same text helpers as slide 1 (`value_text`, `threshold_text`, `status_label`). |
+| `flag_lines(data)` | Tripped flags with value and threshold, then "cannot evaluate" flags, then the combo rule. | "Runway at current burn: 11.0 mo (trips below 12.0 mo)". |
+| `heading(text)` / `text(words, style, ai)` / `bullets(items, ai)` | Make one block. `ai=True` marks the AI's two slots (Claude's words, or "AI commentary unavailable" in their place). | A test proves every other block is the same with or without the AI text. |
+| `ai_blocks(summary, part)` | The headline or the questions under the AI-drafted line, or "AI commentary unavailable" and a note. | |
+| `memo_blocks(data, summary)` | Every block of the memo, in order. | |
+| `block_texts(blocks)` | Every piece of text in the blocks. | Tests use it to prove both files hold all of it. |
+| `memo_footer(data, run_date, model, approval, commit)` | "Fictional data \| northwind.xlsx \| 2026-09-17 \| 2a215a9 \| claude-sonnet-5 \| AI-drafted \| not reviewed". | The same parts as the deck's footer, and the same review status from the manifest. |
+| `docx_run` / `docx_paragraph` / `keep_with_next` / `shade_cell` / `docx_cell` / `docx_table` / `docx_block` | Write text, a paragraph, a colored table cell, the table and each block into the Word file. `keep_with_next` stops a heading ending a page. | python-docx has no setting for a cell's color, so `shade_cell` writes the XML itself. |
+| `write_docx(blocks, footer, path)` | Saves the Word file: US Letter, 0.7 inch margins, the footer on every page. | |
+| `register_pdf_fonts()` | Tells reportlab where DejaVu Sans is. | The PDF's built-in fonts have no "∞", and Fernhollow's burn multiple is "∞ (ARR shrank)". |
+| `pdf_color` / `pdf_style` / `pdf_paragraph` / `pdf_table` / `pdf_flowables` | The same blocks in reportlab's terms. `pdf_paragraph` escapes &, < and >, which reportlab would read as markup. | |
+| `pdf_sections(blocks)` | Groups the PDF into sections (a heading and what follows), each kept on one page when it fits. | Northwind's first memo left "Questions for management" alone at the foot of page 1. |
+| `write_pdf(blocks, footer, path)` | Saves the PDF with the footer drawn on every page; a long footer wraps instead of running off the page. | |
+| `memo_paths(workbook_path, output_dir)` | `data/northwind.xlsx` → `output/northwind_board_memo.docx` and `.pdf`. | |
+| `save_memo(workbook_path, config, analysis_file, run_date, output_dir)` | **The one function `main.py` calls.** Deletes the old memo files, cleans the workbook, collects the data, checks the analysis, reads the approval, writes both files. Returns the two paths and why the AI text isn't in it, or None. | |
+| `record_memo_status(workbook_path, output_dir, files, ai_text)` | After a rebuild, updates the manifest's `memo` part, if there is a manifest. | Same rule as `record_deck_status`. |
+| `main(argv, output_dir)` | Command line: `--analysis`, `--no-analysis`. | |
+
+---
+
 ### `main.py`: the batch runner (build step 5)
 
 **What it's for:** `python main.py data/northwind.xlsx` runs one company; `python main.py --all` runs every workbook in `data/`; add `--skip-ai` to make no API call, and `--draft` to watermark every deck nobody has approved. One failing company never stops the batch.
@@ -562,10 +604,11 @@ Not code, just settings. Every flag threshold lives here with a comment saying w
 | `ai_step(workbook_path, actuals, next_budget, config, output_dir, client)` | Deletes the old analysis JSON, builds the payload, calls `analyze.analyze`, and saves the result **whether it passed or failed** (`save_analysis`). Returns the JSON path if it passed, else None. Catches only `AnalysisError` (failed twice) and `anthropic.AnthropicError` (API failed). | Any other error is a bug and fails the company, so a coding mistake can't hide behind "AI failed". `client` is for tests (a fake client). |
 | `deck_step(workbook_path, config, analysis_file, output_dir, draft)` | Calls `build_deck.save_deck` (passing `--draft` on) and prints whether the AI text made it onto the deck. Returns why not, or None. | |
 | `ai_record(ai, analysis_file)` | What the manifest says about the AI step: model, prompt version, attempts, tokens, seconds, cost, and passed / failed / skipped. | Nothing is set to 0 when the AI didn't run: a 0 would read like a real cost. |
-| `manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable)` | Writes `output/<company>_manifest.json` (`provenance.build_manifest`), carrying over any approval already recorded. | Whether that approval still counts is decided by `provenance.approval_status`, never assumed. |
+| `memo_step(workbook_path, config, analysis_file, output_dir)` | Calls `memo.save_memo` with the same analysis as the deck and prints where the memo went, and why the AI text isn't in it if it isn't. | The memo can turn down AI text the deck accepted (see `memo.py`), so it gets its own line. |
+| `manifest_step(workbook_path, output_dir, ai, analysis_file, why_unavailable, memo)` | Writes `output/<company>_manifest.json` (`provenance.build_manifest`), carrying over any approval already recorded, plus a `memo` part: its two files and whether it has the AI text. | Whether that approval still counts is decided by `provenance.approval_status`, never assumed. |
 | `ai_status(skip_ai, why_unavailable)` | "skipped" with `--skip-ai`; otherwise "ok" only if the AI text is really on the deck, else "failed". | "OK" means the text is on the slide, not just that Claude answered. |
 | `blank_quarters(actuals)` | Quarters with at least one blank input. | Northwind → `["Q1 2025"]`. |
-| `run_company(workbook_path, config, skip_ai, client, output_dir, draft)` | Clean → metrics → flags → gaps → Excel → AI step (unless `--skip-ai`) → deck → manifest, printing a ✓ line for each. Returns a result dict for the summary table. | |
+| `run_company(workbook_path, config, skip_ai, client, output_dir, draft)` | Clean → metrics → flags → gaps → Excel → AI step (unless `--skip-ai`) → deck → memo → manifest, printing a ✓ line for each. Returns a result dict for the summary table. | |
 | `describe_error(error)` | Prints `✗ FAILED: <type>: <message>`. Bad-input errors (`ValueError`, `OSError`) get one line; anything else also gets a full traceback, because it's probably a bug. | A person fixing a workbook doesn't need a traceback; a developer fixing a bug does. Known gap (DAY_REPORT Review, finding 2): a text-fit stop also gets a traceback. |
 | `run_batch(workbook_paths, config, skip_ai, client, output_dir, draft)` | Loops over the workbooks with `try`/`except` around each company, records the error and moves on. | The key reliability feature: company 2 breaking doesn't stop company 3. |
 | `flags_text(result)` | "6 of 9", or "7 of 9, 1 cannot evaluate". | Without the second part, Fernhollow's "7 of 9" would hide a flag that had no answer. |
@@ -753,6 +796,28 @@ Builds each company's deck (with its saved analysis if there is one), **opens th
 | `check_company(company, config, output_dir)` | Runs all the checks for one company. |
 | `tampered_analysis(folder, change)` / `check_bad_analysis_gets_placeholder(config, folder)` | Copies Northwind's analysis with one change ("11.0 mo" → "11.5 mo", or the wrong quarter): the deck must show the placeholder. |
 
+#### `check_memo.py` (memo proof)
+
+Builds each company's memo (with its saved analysis if there is one), **opens the saved Word file and PDF**, and checks every number in them against the saved metrics workbook, read with check_deck.py's own Excel-reading functions, not memo.py's.
+
+| Function | What it does |
+|---|---|
+| `flag_counts(flags)` | The Flags sheet's rows counted by status, so "6 of 9 flags tripped" counts as in the workbook. |
+| `runway_context(path)` | The runway-at-budget cell below the flag table, as Excel shows it. |
+| `workbook_allowed(path)` | Every number the metrics workbook shows: check_deck's `allowed_numbers`, plus the flag counts and runway at budget. |
+| `docx_body(path)` / `docx_footer(path)` / `pdf_pages(path)` | Read the saved files back: paragraphs and table cells, the Word footer, each PDF page's text. |
+| `flat(text)` / `without_footer(page, footer)` | One space between words (a PDF wraps lines where it likes); a PDF page less its footer. |
+| `sentence_tokens(text)` | check_deck's `number_tokens`, but "Q2 2026, compared with" reads as 2026, not "2026,". |
+| `check_numbers(texts, allowed, where)` | Every number in the texts is in the metrics workbook. |
+| `check_kpi_table(tables, table, flags, name)` | Row by row: latest and prior cells equal the Excel cells; thresholds and statuses match the Flags sheet; every flag has a row. |
+| `check_flags_and_gaps(paragraphs, company, gap_labels)` | The flag count from the story, every tripped flag, every data gap (or None). |
+| `check_ai_text(paragraphs, summary, name)` | The JSON's headline and questions under the AI-drafted line, no wins or risks; or "AI commentary unavailable" twice and no AI-drafted line. |
+| `expected_footer(workbook, output_dir, model)` / `check_footer(...)` | The footer worked out here from git, the analysis and the manifest; it must be the Word footer and on every PDF page. |
+| `check_same_text_and_no_em_dash(paragraphs, tables, pages, name)` | Every piece of the Word text is in the PDF; neither has an em dash. |
+| `memo_numbers_check(...)` / `check_company(company, config, output_dir)` | Runs all the checks for one company. |
+| `check_bad_analyses_are_unavailable(config, folder)` | An invented number, and a quoted ending cash the deck accepts: both give "AI commentary unavailable" with every computed number still there. |
+| `check_number_check_catches_a_planted_number(memo, config, folder)` | Changes NRR's 97.1% to 44.4% in a copy of the saved memo: the number check must fail. |
+
 #### `check_main.py` (batch runner proof)
 
 Every run uses `--skip-ai`. The `main.py` process also gets no API key and an API address where nothing listens, so even a bug couldn't reach Claude.
@@ -808,7 +873,7 @@ Every run uses `--skip-ai`. The `main.py` process also gets no API key and an AP
 
 ### `tests/`: unit tests (pytest)
 
-Run with `python -m pytest -q` (532 tests, about 30 seconds). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
+Run with `python -m pytest -q` (571 tests, about a minute). Expected values are **worked out by hand** in comments, not copied from running the code. Tests with `@pytest.mark.parametrize` run the same test on many inputs, each inputs line counting as one test.
 
 | File | Helper functions | What the tests cover |
 |---|---|---|
@@ -821,8 +886,9 @@ Run with `python -m pytest -q` (532 tests, about 30 seconds). Expected values ar
 | `test_make_template.py` (9) | `placeholder_types(layout)`, `theme(presentation)`. | 16:9, exactly the 2 layouts, no slides, title/body/footer placeholders inside the slide in the right order, navy/gray theme and Arial, the saved file opens again. |
 | `test_text_fit.py` (13) | none | Wider text measures wider (bold wider still), wrapping, a word wider than the box, height, shrinking all sizes together, never below 12 pt, failing loudly with the box's name, table fitting. |
 | `test_charts.py` (5) | `texts(axis)`, `bar_positions(axis)`. | No bar for a blank quarter and "data missing" written there; latest values labelled; the cash line keeps the NaN (so it breaks); runway text in the title and zero on the axis; figure drawn at slide size. |
-| `test_build_deck.py` (50) | `flag(...)`, `three_quarters(blank)`, `deck_data(company, blank)`: a tiny 3-quarter company. `summary_dict()`, `write_analysis(...)`, `payload`: analysis files. `build(tmp_path, summary)`, `shape`, `all_text`, `status_fills`, `run_sizes`: build and read a deck. | Flag count and threshold wording; data gaps grouped by quarter; **every way `load_analysis` must reject a file** (missing, not JSON, failed, wrong shape, other quarter, other company, a number not in today's data, 2 questions); 4 slides in order; placeholder vs AI text on slide 4, the AI-drafted line, no wins on the deck; footer on every slide; status colors; "data missing" in the table; slide 3 contents and flag count; matching column font sizes; 2 chart pictures; text too long fails loudly; **no digit typed in any text in build_deck.py or charts.py**; no watermark by default, 4 of 4 with `--draft`, none on an approved deck even with `--draft`; both footer review wordings, the one-line fit and the long-name fallback. |
-| `test_main.py` (27) | `ok(...)`, `failed(...)`: result dicts. `FakeClient`: stands in for the Anthropic client, returns a fixed answer (or raises) and counts calls. `no_real_client`: runs before every test and makes creating a real client fail the test. `summary`, `run_northwind`, `headline_on_deck`, `saved_analysis`. | The CSV, both warnings and the result texts; a passing answer lands on the deck (1 call); an answer with an invented number is called exactly twice, then the placeholder and "OK (AI failed)"; an API error is "OK (AI failed)", not FAILED; a bug in the AI step fails the company and leaves no old analysis; `--skip-ai` never calls Claude or looks for a key; a missing key stops the run before any company; the manifest; no watermark by default and "not reviewed" in the footer, `--draft` from the command line stamps every slide, a still-valid approval is named on a re-run. |
+| `test_build_deck.py` (53) | `flag(...)`, `three_quarters(blank)`, `deck_data(company, blank)`: a tiny 3-quarter company. `summary_dict()`, `write_analysis(...)`, `payload`: analysis files. `build(tmp_path, summary)`, `shape`, `all_text`, `status_fills`, `run_sizes`: build and read a deck. | Flag count and threshold wording; data gaps grouped by quarter; **every way `load_analysis` must reject a file** (missing, not JSON, failed, wrong shape, other quarter, other company, a number not in today's data, 2 questions); 4 slides in order; placeholder vs AI text on slide 4, the AI-drafted line, no wins on the deck; footer on every slide; status colors; "data missing" in the table; slide 3 contents and flag count; matching column font sizes; 2 chart pictures; text too long fails loudly; **no digit typed in any text in build_deck.py, charts.py or memo.py**; no watermark by default, 4 of 4 with `--draft`, none on an approved deck even with `--draft`; both footer review wordings, the one-line fit and the long-name fallback. |
+| `test_memo.py` (33) | `three_quarters(blank)`, `memo_data(blank)`: the same tiny 3-quarter company as test_build_deck.py. `summary_dict(headline, question)`, `summary_from`, `write_analysis`, `payload`: analyses. `all_text`, `docx_text`: read the memo back. | Title, quarter and sections in order; the key metrics table's values, thresholds and statuses worked out by hand (NRR −300.0%, runway 36.0 mo); tripped flags with value and threshold; the combo rule in the Flags sheet's words; data gaps or None; **no em dash**; the AI headline and questions but no wins or risks, and questions as bullets (not "1.", "2.", "3.", which aren't in the workbook); every way the AI text is refused, including a number in the payload the workbook doesn't show; thresholds counted as Excel displays them; the footer; the Word file and the PDF hold every piece of text, the PDF is 1 or 2 pages with the footer on each, draws "∞", keeps a heading with its text and wraps a long footer; old files deleted before a build; the manifest's memo part. |
+| `test_main.py` (32) | `ok(...)`, `failed(...)`: result dicts. `FakeClient`: stands in for the Anthropic client, returns a fixed answer (or raises) and counts calls. `no_real_client`: runs before every test and makes creating a real client fail the test. `summary`, `run_northwind`, `headline_on_deck`, `saved_analysis`. | The CSV, both warnings and the result texts; a passing answer lands on the deck (1 call); an answer with an invented number is called exactly twice, then the placeholder and "OK (AI failed)"; an API error is "OK (AI failed)", not FAILED; a bug in the AI step fails the company and leaves no old analysis; `--skip-ai` never calls Claude or looks for a key; a missing key stops the run before any company; the manifest; no watermark by default and "not reviewed" in the footer, `--draft` from the command line stamps every slide, a still-valid approval is named on a re-run; the memo is built beside the deck (AI text, skipped, AI failed, and AI text the deck takes but the memo refuses) and recorded in the manifest. |
 | `test_provenance.py` (13) | `manifest_for(...)`: a manifest for a tiny workbook in a temp folder. | The hash is the standard SHA-256 and changes only when the bytes do; the commit (or "unknown" outside git); a missing or broken manifest reads as None; a manifest records every input and output; no approval → not reviewed; an approval holds for today's files and is void once the workbook or config.yaml changes. |
 | `test_approve.py` (8) | `company`: a workbook, config and manifest in a temp folder. `approve_testco(...)`. | The reviewer and time are recorded and nothing else in the manifest changes; no manifest, a changed workbook, changed thresholds or no name each stop; the command line says to rebuild so the footer says reviewed (never "watermark": that needs `--draft`), or prints one line when it refuses. |
 | `test_app.py` (19) | `FakeClient`, `summary(headline)`, `no_real_client` (as in test_main.py). `build_northwind`: the Northwind workbook's bytes through `build_outputs`. `save_northwind_analysis`: a saved analysis of today's numbers. `headline_in(deck_bytes)`. `render_northwind`, `render_bad_file`: draw the results with Streamlit's `AppTest`. | The checkbox names the cost; an upload can't escape its folder; the Excel colors; clean.py's message word for word, a non-Excel file and a bug each give a plain message with no traceback; Northwind gives a 4-slide deck and a 3-sheet workbook, 6 of 9 flags in red and green rows, "data missing" gray and a tripped NRR red; a saved analysis of the same numbers is reused with **no** call, one of other numbers is not; no saved analysis → 1 call; no key or an API error still builds the placeholder deck; the page and the results draw with no error; `run_app.command` is executable and starts app.py. |
