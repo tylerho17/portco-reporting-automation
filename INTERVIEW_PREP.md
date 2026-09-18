@@ -467,6 +467,18 @@ repeated as bgcolor. `check_export.py` reads every file back from disk and compa
 152 metric values per company with the workbook, and checks the email against each of those rules.
 *Point to:* `export.as_stored`, `export.email_html`, `check_export.outlook_problems`; `tests/test_export.py::test_a_value_has_the_16_significant_digits_the_workbook_stores`.
 
+**Q34i. How do you make sure a demo doesn't go wrong in front of someone?** (new, Task 12)
+Two things. A script, DEMO.md: five minutes, the exact clicks and what to say, what to do if
+something goes wrong. And a reset, `python demo_reset.py`, run before every demo. Practice leaves
+things behind: an approval, decks built without the AI text, exports. The reset deletes only the
+files the tool builds, by the names the code gives them, and keeps the saved AI analyses, which are
+the one thing that costs money to remake: it copies them first and checks their hashes after. It
+rebuilds through the page's own Generate all button with a client that refuses any API call, and
+builds last quarter first so "what changed" has something to show. Then it checks the state and says
+"Ready for the demo." or what to fix. The script can't drift from the page either: a test walks its
+clicks through the real page after a reset, and fails if a button it names is renamed.
+*Point to:* `demo_reset.remove_built`, `demo_reset.readiness`, `demo_reset.NoApiClient`; `tests/test_demo_reset.py::test_demo_md_walkthrough_runs_on_the_page_after_a_reset`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs

@@ -8,8 +8,8 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 
 ## Before you record
 
-1. **Put the AI text back on the decks (no API call):** `python build_deck.py data/northwind.xlsx`. It's needed if `check_main.py` has run since, because that script leaves "AI summary unavailable" decks behind. Open slide 4 and check you see the headline, not the placeholder.
-   - **Build without `--draft`**, so there's no watermark over the numbers. The footer does the job instead: check it ends "AI-drafted | reviewed by Tyler Ho on ..." (Northwind is approved). If it says "not reviewed", the workbook or config.yaml changed since the approval: run `python approve.py northwind`, then build again.
+1. **Put the AI text back on the decks (no API call):** `python demo_reset.py` (it must end "Ready for the demo."), or for one deck `python build_deck.py data/northwind.xlsx`. It's needed if `check_main.py` has run since, because that script leaves "AI summary unavailable" decks behind. Open slide 4 and check you see the headline, not the placeholder.
+   - **Build without `--draft`**, so there's no watermark over the numbers. The footer does the job instead: check it ends "AI-drafted | reviewed by Tyler Ho on ...". `demo_reset.py` clears every approval (a demo starts "not reviewed"), so after it run `python approve.py northwind`, then `python build_deck.py data/northwind.xlsx`.
 2. **Choose how to show the run** (0:35):
    - **Option A (free, no risk; recommended for now):** don't run the AI again. Show the terminal output of today's real live run of `python main.py --all`, saved in `output/day_logs/task4_live_run.txt` (e.g. open it in the VS Code terminal with `cat`). The narration doesn't say "live", so it's accurate either way.
    - **Option B (live, about $0.09 and 70 s for one company):** run `python main.py data/northwind.xlsx` on camera and trim the wait in Loom.
@@ -100,10 +100,10 @@ The script quotes only numbers Python computes (6 of 9 flags, NRR 97.1%, runway 
 | NRR 97.1%, below 100% | Slide 1, NRR row; threshold from `config.yaml` (`nrr_min`) | `metrics.nrr` |
 | Runway 11 months vs 12-month floor | Slide 1, Runway row; `config.yaml` (`runway_min_months`) | `metrics.runway_months` |
 | Q1 2025 blank | Northwind's blank quarter | `make_data.py` (`BLANK_QUARTER`) |
-| Over 500 tests | `python -m pytest -q` (987 today) | pytest counts them |
+| Over 500 tests | `python -m pytest -q` (1013 today) | pytest counts them |
 | 12 of 12 edge cases | `python eval/run_eval.py` | each eval company's answer key in `eval/make_eval_data.py` |
 | Portfolio rollup: Fernhollow 7, Northwind 6, Alderpeak 0; worst flag runway | `python rollup.py` or the web page's Download rollup (`output/portfolio_rollup.pptx`) | `rollup.py` from `metrics.evaluate_flags`; proved by `python check_rollup.py` |
-| Northwind Q1 to Q2: 5 flags flipped, 8 metrics moved, 1 data gap closed | The memo's "What changed since the last run", the company page's card, or `python diff_runs.py data/northwind.xlsx` (needs a run a quarter earlier) | `diff_runs.py` from the saved results in the manifest; proved by `python check_diff.py` |
+| Northwind Q1 to Q2: 5 flags flipped, 8 metrics moved, 1 data gap closed | The memo's "What changed since the last run", the company page's card, or `python diff_runs.py data/northwind.xlsx` (needs a run a quarter earlier: `python demo_reset.py` makes one) | `diff_runs.py` from the saved results in the manifest; proved by `python check_diff.py` |
 | Metrics and flags as CSV and JSON, and a table for email | `python export.py data/northwind.xlsx`, or the company page's Export | `export.py` from the same numbers as the metrics workbook; proved by `python check_export.py` |
 | Each deck, memo and workbook matches its approved copy | `python golden.py` ("9 of 9 match their goldens") | the approved text copies in `tests/golden/` |
 | Haiku scored 2 of 5 | README model comparison (needed 4.0) | `compare_models.py` |

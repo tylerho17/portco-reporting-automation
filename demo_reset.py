@@ -178,7 +178,7 @@ def company_readiness(workbook, output_dir):
     manifest = read_manifest(manifest_path(workbook, output_dir)) or {}
     problems, notes = [], []
     if not state["current"] or state["status"] != NOT_REVIEWED:
-        problems.append(f"{name}: its files don't match today's workbook ({state['status']})")
+        problems.append(f"{name}: its files aren't a fresh, unreviewed build of today's workbook ({state['status']})")
     if not manifest.get("deck", {}).get("ai_text"):
         (problems if stem == DEMO_COMPANY else notes).append(ai_line(name, stem))
     if stem not in ANSWER_KEYS:
@@ -237,7 +237,7 @@ def reset(data_dir=DATA_DIR, output_dir=OUTPUT_DIR):
         copy_files(copies, output_dir, changed)   # put back any the rebuild touched
     problems, notes = readiness(outcomes, data_dir, output_dir)
     notes += [note for note in [code_note(git_commit())] if note]
-    problems +=[f"{name} changed during the reset: the copy taken before it was put back" for name in changed]
+    problems += [f"{name} changed during the reset: the copy taken before it was put back" for name in changed]
     return {"removed": removed, "left_alone": left_alone, "cleared_approvals": cleared, "kept": sorted(before),
             "rebuilt": [outcome["company"] for outcome in outcomes if outcome["ok"]],
             "problems": problems, "notes": notes}

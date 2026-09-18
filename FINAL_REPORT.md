@@ -1383,3 +1383,108 @@ check to check_export.py; both, planted again, are caught.
   `check_export.py` to the check scripts line.
 - **No combined portfolio file.** `--all` writes one set per company; a tool wanting one table stacks
   the CSVs (same columns, a company column in each).
+
+## Task 12: the demo (DEMO.md, demo_reset.py)
+
+### What I built
+
+- **`DEMO.md`**, a 5 minute script for showing the web page to someone who doesn't write code:
+  - **Before the demo** (not timed): run `python demo_reset.py` and see "Ready for the demo."; commit
+    first so the footers carry no `*`; double-click `run_app.command`; set the screen; leave the AI box
+    unticked (it can't spend money).
+  - **Six timed steps**, each heading saying when it starts and ends: the problem (0:00 to 0:45); the
+    portfolio's three rows (0:45 to 1:30); Northwind's page top to bottom: flags, what changed, data
+    gaps, metrics and charts, AI commentary (1:30 to 2:45); Download deck and the four slides with the
+    footer (2:45 to 3:45); Approve, then Generate, and the status now "approved by" (3:45 to 4:30);
+    Back to portfolio and close (4:30 to 5:00). Each gives the exact clicks (**Click** Northwind,
+    Download deck, Approve, Generate, Back to portfolio) and what to say, in plain words.
+  - **If something goes wrong** (a table: page not loaded, a greyed-out download, no AI commentary, a
+    red error, a wrong click), **questions they may ask** (can the AI make up a number, cost, other
+    layouts, is the data real), and **after the demo**: reset again.
+- **`demo_reset.py`** (`python demo_reset.py`, about 10 seconds):
+  1. copies every saved analysis (`output/<company>_analysis.json`) aside;
+  2. deletes every file the tool builds, by the names the code gives them: decks, memos (Word and
+     PDF), metrics workbooks, manifests, the four exports, `charts/`, `batch_summary.csv`,
+     `batch_manifest.json`, the rollup, and a killed batch's `.staging/`. Anything else in `output/`
+     is left alone and listed (77 files of logs and scripts from earlier tasks today);
+  3. builds each company's workbook as it stood a quarter ago (check_diff.py's `last_quarter_workbook`),
+     so the page's "What changed since the last run" has a run to compare with;
+  4. builds today's files through the page's own Generate all with the AI box unticked, with a client
+     that raises on any use (`NoApiClient`): a saved analysis of exactly today's numbers goes on slide 4;
+  5. checks every saved analysis's SHA-256 against the copy (a changed or deleted one is put back and
+     the demo is not ready), then every company: files current and not reviewed, Northwind with AI text
+     and an earlier run. It prints what it did, notes (!) and problems (✗), then "Ready for the demo."
+     (exit 0) or "Not ready for the demo: fix the lines marked ✗, then run python demo_reset.py again."
+     (exit 1). Each problem says how to fix it ("One paid run (about $0.09) makes a new one: python
+     main.py data/northwind.xlsx, then python demo_reset.py again.").
+- **Tests:** `tests/test_demo_reset.py` (26; the reset's 20 written before the code). Besides the reset
+  itself, they hold DEMO.md to the page: every button it says to click is a string in app.py or
+  portfolio.py, each company's flag count is today's, the timings run 0:00 to 5:00 with no gap, and
+  **its clicks are walked through the real page** (Streamlit's AppTest) after a reset, down to the
+  deck's footer saying "reviewed by". 1013 tests in all.
+- **Run on the real `output/`** (a full copy taken first, outside the project): it cleared Northwind's
+  approval, deleted 20 built files, and left Northwind and Alderpeak with AI text on their decks, all
+  three compared with a Q1 2026 run, and Fernhollow noted (below).
+- **Docs:** README (the command, a Giving a demo paragraph, decision 22, Next steps), STUDY_GUIDE (a
+  demo_reset.py section with every function, the tests table, the command list), INTERVIEW_PREP Q34i,
+  LOOM_SCRIPT (how to get the AI text and approval back before recording; test count), LEARNINGS
+  (7 rows).
+
+### How it's proved
+
+PLANTED_TABLE
+
+### Decisions you didn't specify
+
+1. **What "known good" means:** every company's files built from today's workbook, config.yaml and
+   mapping; **nobody's approval** (a demo starts "not reviewed", so it can show approving); no
+   `--draft` watermark; the saved AI text wherever a saved analysis matches; last quarter's run on
+   record. **Please check you agree with clearing approvals.** Northwind's approval by you
+   (2026-09-17) is gone from the real manifest; the Loom script now says to re-approve before recording.
+2. **Rebuild through the page's Generate all**, not a new build path, so the reset leaves exactly
+   what a click would, and a click during the demo changes nothing on screen.
+3. **Delete by name, not "empty the folder".** `output/` holds logs and planted-bug scripts from
+   earlier tasks that FINAL_REPORT points to. They are listed, not deleted.
+4. **Last quarter's run is built by default**, so What changed shows Northwind's 5 flipped flags
+   instead of "nothing to compare with yet". Its run time is the reset's (seconds before today's), and
+   the page says so ("Compared with the run of 2026-09-18 ..."); a sharp viewer might notice the two
+   times are close. There's no option to skip it; say if you want one.
+5. **Only `output/` is reset.** A workbook added under Add a company in practice goes into `data/`: the
+   reset builds it, notes it, and says to delete the file; it never deletes from `data/` (tracked in
+   git) or `mappings/`.
+6. **Northwind is the demo company**: no AI text on its deck is a problem (exit 1); on the others
+   it's a note. Fernhollow is a note today.
+7. **A client that refuses any use** is passed to every build, so a future change that asked Claude
+   would fail the reset rather than spend money.
+8. **DEMO.md's words are a guide in plain language**, quoting only the page's own lines and numbers
+   (6 of 9, 97.1%, 11.0 months, 15.0 to 11.0), never Claude's wording, which changes by run.
+
+### What failed and how I fixed it (all logged in LEARNINGS.md)
+
+1. **The real `output/` wasn't demo-ready** (why the reset is needed): no deck had AI text after
+   check_main.py's `--skip-ai` run, Northwind carried an old approval, and its manifest held six
+   "simulated bug" events from earlier planted-bug runs.
+2. **My first DEMO.md said "five of these were green last quarter"**: four were, and Rule of 40
+   couldn't be evaluated. Rewritten from the page's lines.
+3. **The flag-count test failed on a line wrap** inside "1 cannot evaluate"; it now reads line breaks
+   as spaces.
+4. **The first real reset stamped `cfdd556*` on every footer** (uncommitted code). The reset now says so.
+5. **My own edit wrote `problems +=[`** without a space, so one planted bug's text didn't match. Fixed
+   and re-run.
+6. **Refused commands:** a heredoc with a brace beside a quote, `ps` with options. Worked around.
+
+### Unresolved
+
+- **Fernhollow has no AI text on its deck or page** (FINAL_REPORT Task 4, still your call: one paid
+  run of about $0.09, or editing the record). DEMO.md shows AI commentary on Northwind only.
+- **Not rehearsed with a person or a timer.** The step timings are my estimate of the words at a
+  normal pace plus the clicks; the page was driven through Streamlit's test runner, not a browser, and
+  the deck was read with python-pptx, not opened in PowerPoint.
+- **Northwind's approval for the Loom recording** was cleared by the reset; run `python approve.py
+  northwind` and `python build_deck.py data/northwind.xlsx` before recording.
+- **CLAUDE.md doesn't list `DEMO.md` or `demo_reset.py`.** You said not to edit it. Suggested
+  Architecture lines: "DEMO.md: a 5 minute walkthrough of the web page for a non-technical viewer
+  (clicks, what to say, what can go wrong)" and "demo_reset.py: `python demo_reset.py` puts output/
+  back to a known good state before a demo (built files deleted by name, saved analyses kept and
+  hash-checked, last quarter then today rebuilt as Generate all does with no API call; Ready or what
+  to fix)".
