@@ -2,7 +2,7 @@
 
 For you, a finance student learning Python, to understand this project well enough to explain every part of it in an interview.
 
-It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build step is done:** 1, 2, 3, 3b, 4 (the deck: `make_template.py`, `build_deck.py`, `charts.py`, `text_fit.py`), 4b, 5 (with the AI step connected to `main.py`) and 6 (the README). One live `main.py --all` run has been made. **Added since:** run manifests and the approval gate (`provenance.py`, `approve.py`), the review status in the deck's footer with the watermark made opt-in (`--draft`), the 4-slide deck, the web page (`app.py`, started by `run_app.command`), the board memo (`memo.py`), and the web page's portfolio and company pages (`portfolio.py`, final run Task 2), and batch resilience: `main.py --resume --max-cost --timeout --workers` and rate-limit retries (`resilience.py`, final run Task 7), and golden files: an approved text copy of every output, compared on every test run (`golden.py`, final run Task 8), and the portfolio rollup: one deck and one workbook across every company (`rollup.py`, final run Task 9), and what changed since the last run, in the memo and on the company page (`diff_runs.py`, final run Task 10), and exports: metrics and flags as CSV and JSON for other tools and an email summary that pastes into Outlook (`export.py`, final run Task 11), and a 5 minute demo script with a reset that puts `output/` back to a known good state (DEMO.md, `demo_reset.py`, final run Task 12). **Not done yet:** the README screenshots, which need you at the screen.
+It matches the code as of 2026-09-18 (branch `final-polish`, after final run Task 20). **Every build step is done:** 1, 2, 3, 3b, 4 (the deck: `make_template.py`, `build_deck.py`, `charts.py`, `text_fit.py`), 4b, 5 (with the AI step connected to `main.py`) and 6 (the README). One live `main.py --all` run has been made. **Added since:** run manifests and the approval gate (`provenance.py`, `approve.py`), the review status in the deck's footer with the watermark made opt-in (`--draft`), the 4-slide deck, the web page (`app.py`, started by `run_app.command`), the board memo (`memo.py`), and the web page's portfolio and company pages (`portfolio.py`, final run Task 2), and batch resilience: `main.py --resume --max-cost --timeout --workers` and rate-limit retries (`resilience.py`, final run Task 7), and golden files: an approved text copy of every output, compared on every test run (`golden.py`, final run Task 8), and the portfolio rollup: one deck and one workbook across every company (`rollup.py`, final run Task 9), and what changed since the last run, in the memo and on the company page (`diff_runs.py`, final run Task 10), and exports: metrics and flags as CSV and JSON for other tools and an email summary that pastes into Outlook (`export.py`, final run Task 11), and a 5 minute demo script with a reset that puts `output/` back to a known good state (DEMO.md, `demo_reset.py`, final run Task 12). Also from the final run: one palette, font and set of type sizes for every output (`theme.py`, Task 3), proposals for headers clean.py doesn't know (`mapping.py`, Task 5), 12 edge-case companies with answer keys (`eval/make_eval_data.py`, `eval/run_eval.py`, Task 6), config.yaml checked against a schema (`config_schema.py`, Task 13), `main.py --version`, `--list-companies` and a full `--help` (Task 14), a run log (`run_log.py`, Task 15), error messages that say what to do next (Task 16), each workbook read once per run (`cache.py`, `benchmark.py`, Task 17), WCAG AA contrast for every color (Task 18), one axis style for both charts (Task 19) and an optional appendix slide with every metric (`--appendix`, Task 20). **Not done yet:** the README screenshots, which need you at the screen.
 
 ## Contents
 
@@ -33,8 +33,10 @@ It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build st
   python build_deck.py data/northwind.xlsx   # one deck, using the saved AI analysis (output/northwind_analysis.json)
   python build_deck.py data/northwind.xlsx --draft   # the same, with the DRAFT watermark if nobody has approved it
   python build_deck.py data/northwind.xlsx --appendix   # the same, plus one slide with every metric for every quarter
+  python memo.py data/northwind.xlsx         # the board memo (Word + PDF), using the saved AI analysis
+  python mapping.py data/northwind.xlsx      # headers clean.py doesn't know, with a proposed column for each (none for Northwind)
   python approve.py northwind                # record yourself as the reviewer (writes output/northwind_manifest.json)
-  python -m pytest -q                        # 500+ unit tests
+  python -m pytest -q                        # 1,300+ unit tests
   python check_companies.py                  # end-to-end proof for all 3 companies
   python check_deck.py                       # end-to-end proof for the 3 decks
   python eval/run_eval.py                    # the evaluation set: 12 edge-case companies vs their answer keys
@@ -52,7 +54,7 @@ It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build st
 
   **One trap:** `python check_main.py` runs `main.py --all --skip-ai` into `output/`, so afterwards every deck shows "AI summary unavailable" and each manifest's `ai` record says "skipped". Run `python build_deck.py data/<company>.xlsx` to put the saved AI text back on the deck (no API call); the manifest's `ai` record stays "skipped" until the next live run. Or run `python demo_reset.py`: it rebuilds every company from the saved analyses (no API call), and each manifest then says the analysis was reused.
 
-  **Or use the web page:** double-click `run_app.command` (or `streamlit run app.py`), click Northwind in the portfolio table to see its flags, metrics and charts, and download its deck. Leave the AI box unticked and it's free; a saved analysis of the same numbers is reused either way, also free.
+  **Or use the web page:** double-click `run_app.command` (or `streamlit run app.py`). The first page, Portfolio, lists every company; click Northwind to open its own page with its flags, metrics and charts, click **Generate**, then **Download deck** and **Download memo (PDF)**. Leave the AI box unticked and it's free; a saved analysis of the same numbers is reused either way, also free. (README.md's Quick start is the same steps for someone who doesn't code.)
 - **Do the exercises in section 6 before you look at section 8.**
 
 ---
@@ -61,7 +63,7 @@ It matches the code as of 2026-09-17 (branch `polish`, Task 5). **Every build st
 
 ### The one-sentence version
 
-A messy Excel file from a portfolio company goes in. Python tidies it, calculates the KPIs, checks them against investor thresholds and lists what's missing. Then it writes an Excel summary, asks Claude to word the commentary (checking that Claude didn't invent or calculate any number), and builds a 4-slide PowerPoint deck.
+A messy Excel file from a portfolio company goes in. Python tidies it, calculates the KPIs, checks them against investor thresholds and lists what's missing. Then it writes an Excel summary, asks Claude to word the commentary (checking that Claude didn't invent or calculate any number), and builds a 4-slide PowerPoint deck and a 1 to 2 page board memo.
 
 ### The finance analogy
 
@@ -71,12 +73,17 @@ It's the quarterly process a portfolio analyst already runs by hand:
 |---|---|
 | Receive the company's KPI file, with its own column names and typing habits | `data/northwind.xlsx` |
 | Copy it into the fund's standard template, fixing "$14.3M" typed as text | `clean.py` |
+| Work out which of the fund's lines a new column name ("Opening ARR") means, and check with a colleague | `mapping.py` (proposes), a person (confirms) |
 | Build the KPI formulas in the model | `metrics.py` (`compute_metrics`) |
 | Compare each KPI to the watch-list thresholds | `metrics.py` (`evaluate_flags`) + `config.yaml` |
 | Note which numbers the company didn't send | `metrics.py` (`data_gaps`) |
 | Write the commentary for the board | `analyze.py` (Claude words it, Python checks it) |
 | Build the deck on the fund's PowerPoint template, plus the backup Excel | `build_deck.py` (on `templates/base.pptx` from `make_template.py`) and `excel_output.py` |
+| Write the covering memo for the board papers | `memo.py` (Word and PDF) |
+| Note what moved since last quarter's pack | `diff_runs.py` |
 | Do this for every company in the fund | `main.py --all` |
+| One page for the partners' meeting: which companies need attention | `rollup.py` |
+| Send the numbers to the fund's database, or paste them into an email | `export.py` |
 
 ### The picture
 
@@ -87,6 +94,8 @@ make_data.py ──writes──▶ data/northwind.xlsx            fake messy inp
 clean.py        clean_workbook()
                   ├─▶ actuals       8 quarters × 16 input columns, all $K, blanks = NaN
                   └─▶ next_budget   the "Q3 2026 (Budget)" row: 3 budget numbers
+mapping.py      only for a header clean.py doesn't know: proposes a column, a person confirms,
+                saved to mappings/<company>.yaml
                               │
                               ▼
 metrics.py      compute_metrics()        ─▶ metrics table: 8 quarters × 19 metrics (ratios as decimals)
@@ -103,14 +112,21 @@ metrics.xlsx            check → retry once →             + charts.py (2 matp
                                                          re-checks the analysis, else "AI summary unavailable"
                                                          → output/northwind_board_pack.pptx
 
+memo.py      the same numbers and analysis as a 1 to 2 page memo: output/northwind_board_memo.docx and .pdf
+diff_runs.py what changed since the last run (flags flipped, metrics moved, gaps): in the memo and on the page
+theme.py     the one palette, font and type sizes the template, deck, charts, memo and web page all use
+
 main.py      runs the chain for one workbook or every workbook in data/, always builds the deck,
              prints a summary table and saves output/batch_summary.csv
              and output/northwind_manifest.json (provenance.py: hashes, commit, model, cost)
-app.py       the web page (run_app.command starts it): every company in a table, and a page per company
+             resilience.py keeps a long batch going; run_log.py writes a line per step to output/logs/
+app.py       the web page (run_app.command starts it), two pages: Portfolio (every company in a table)
+             and Company (one company's flags, metrics, charts, AI commentary, downloads, Approve)
 portfolio.py what the page's buttons do: Generate (main.py's chain), Add a company, Approve (approve.py)
 approve.py   a person records their review in the manifest; the next build's footer says "reviewed by"
-config.yaml  the flag thresholds            .env  the API key (never committed)
-check_*.py and tests/   prove each step gives the right answer
+rollup.py    one deck and one workbook across every company     export.py  CSV, JSON and an email summary
+config.yaml  the flag thresholds (config_schema.py checks them)  .env  the API key (never committed)
+check_*.py, tests/, golden.py and eval/   prove each step gives the right answer
 ```
 
 ### Step by step, with Northwind
@@ -134,9 +150,11 @@ check_*.py and tests/   prove each step gives the right answer
 
   **Before it uses Claude's text, it checks it again** against numbers rebuilt from today's workbook. If the analysis is missing, failed, is for another quarter or has a number that's no longer in the data, slide 4 says "AI summary unavailable". The other slides are built as normal, because their numbers come from Python. `text_fit.py` measures every piece of text and shrinks it to fit, down to 12 pt; below that, the build stops and names the slide and box.
 
+- `memo.py` writes the board memo, 1 to 2 pages, as Word and PDF: the AI headline, what changed since the last run, the key metrics table, the flags with values and thresholds, the data gaps and the AI questions, with the deck's footer. It uses Claude's text only if the deck would, plus one more rule: every number in it must be one the metrics workbook shows. Otherwise it says "AI commentary unavailable", and every computed number is still there.
+
   **Every slide's footer says where the deck came from and whether a person has reviewed it:** `Fictional data | northwind.xlsx | 2026-09-17 | 9c1b52c | claude-sonnet-5 | AI-drafted | not reviewed`. The last part becomes `AI-drafted | reviewed by Tyler Ho on 2026-09-17` once `approve.py` has recorded a reviewer. There's **no watermark** unless you build with `--draft`, which stamps "DRAFT - NOT REVIEWED" across every slide of a deck nobody has approved.
 
-**Step 5: run the batch** (`main.py`). For each workbook it runs clean → metrics → Excel → AI → deck and prints a ✓ line per step. It catches failures so one broken company doesn't stop the rest. **The deck is always built:**
+**Step 5: run the batch** (`main.py`). For each workbook it runs clean → metrics → what changed → Excel → AI → deck → memo and prints a ✓ line per step. It catches failures so one broken company doesn't stop the rest. **The deck is always built:**
 - **Claude's answer passed:** its text is on the deck, result `OK`.
 - **The answer failed twice, or the API call failed:** the deck has the placeholder, result `OK (AI failed)`.
 - **`--skip-ai`:** no API call, the placeholder, result `OK (AI skipped)`.
@@ -145,7 +163,9 @@ Without `--skip-ai`, it checks for the API key before any company runs. It finis
 
 **Step 6: a person reviews and approves** (`approve.py`). Someone reads the deck, then runs `python approve.py northwind`. That writes their name and the time into the manifest, next to the hashes of the workbook and config.yaml the deck was built from. It never builds a deck. The next build's footer says "reviewed by ...". If the workbook or a threshold changes afterwards, the hashes no longer match and the footer goes back to "not reviewed" on its own: the reviewer approved numbers that aren't on the deck any more.
 
-**The web page** (`app.py`, with `portfolio.py` behind its buttons) lists every company in `data/` with its flags, data gaps, last run and deck status, and runs steps 1 to 5 for one company or all of them into `output/`, exactly as `main.py` does. Click a company for its flags, metrics (in the Excel colors), charts and AI commentary, the downloads, and Approve (the same record `approve.py` writes).
+**The web page** (`app.py`, with `portfolio.py` behind its buttons) has two pages. **Portfolio** lists every company in `data/` with its flags, data gaps, last run and deck status, and runs steps 1 to 5 for one company (a row's Generate) or all of them (Generate all) into `output/`, exactly as `main.py` does; it also has Download rollup, Add a company and Recent runs. Click a company's name for its **Company** page: flags, what changed, metrics (in the Excel colors), charts and AI commentary, Generate, the downloads (deck, memo as PDF or Word, metrics workbook), Export, and Approve (the same record `approve.py` writes).
+
+**Around the chain.** `rollup.py` puts every company on one ranked deck and workbook; `export.py` writes the numbers as CSV and JSON for other tools and an email summary; `golden.py` keeps an approved text copy of every output so a change in how anything looks is caught; `eval/run_eval.py` runs 12 edge-case companies against their answer keys; `demo_reset.py` puts `output/` back to a known good state before a demo.
 
 **The proof layer.** Two kinds of proof:
 - **`check_*.py` scripts** run the real workbooks end to end and compare the results with the answer keys and hand formulas.
@@ -197,12 +217,16 @@ Without `--skip-ai`, it checks for the API key before any company runs. It finis
 | **manifest** | `output/<company>_manifest.json`: the record of one run (input and config hashes, commit, model, cost) plus the approval. The audit trail behind a deck. |
 | **JSON** | A plain-text format for nested data: `{"reviewer": "Tyler Ho"}`. Python's `json` module reads and writes it; it's how the analysis and manifest are saved. |
 | **Streamlit** | A package that turns a Python script into a web page (`app.py`). You write `st.checkbox(...)`, it draws a checkbox; no HTML to write. |
+| **cache** | Remembering an answer so it isn't worked out twice. `cache.py` keys each answer by the input's SHA-256 hash, so an edited file is never mistaken for the old one. |
+| **JSON Lines** | A file with one complete JSON object per line (`run_log.py`'s logs). A run that crashes still leaves every line up to that moment readable. |
+| **golden file** | An approved copy of an output, compared on every test run. Here, text copies of each deck, memo and workbook in `tests/golden/`. |
+| **WCAG AA contrast** | The web accessibility standard's rule for how far text must stand out from its background: a ratio of at least 4.5 : 1. |
 
 ---
 
 ## 4. Every file, function by function
 
-Order: config, then the pipeline files in the order data flows (clean, metrics, analyze, Excel, the 4 deck files, main), the web page (app), the manifest and approval (provenance, approve), then the data generators, the check scripts, the model comparison, the tests and the small files.
+Order: config and its schema, then the pipeline files in the order data flows (clean, mapping, metrics, analyze, Excel, theme, the 4 deck files, the memo, main with resilience and the run log), the web page (app, portfolio), the manifest and approval (provenance, approve), then the data generators, the check scripts, the evaluation set, the cache, the goldens, the rollup, what changed, the exports, the demo reset, the model comparison, the tests and the small files.
 
 ### `config.yaml`: the thresholds
 
@@ -1699,10 +1723,14 @@ Run with `python -m pytest -q` (1383 tests, about four minutes). Expected values
 | `README.md` | What it does, how to run it, data flow, design decisions, the model comparison, cost, screenshots to capture, next steps. |
 | `LOOM_SCRIPT.md` | The 2-minute demo video script, with timestamps and recording prep. |
 | `POLISH_REPORT.md` | The polish tasks (review status in the footer, the 4-slide deck, the web page, interview prep, these docs): what each built, the decisions made, what failed, what's unresolved. |
+| `FINAL_REPORT.md` | The same for the final run (the memo onward, Tasks 1 to 20 and Task A): what each built, its decisions, what failed, how many planted bugs the tests caught, what's unresolved. |
 | `INTERVIEW_PREP.md` | Every interview question in the order it tends to be asked, with 30–60 second answers and where to point. |
+| `DEMO.md` | A 5 minute walkthrough of the web page for someone who doesn't write code: the exact clicks, what to say, what to do if something goes wrong. Run `demo_reset.py` first. |
 | `templates/base.pptx` | The brand template, built by `make_template.py` and committed. |
+| `tests/golden/` | The approved text copies of every company's deck, memo and metrics workbook (`golden.py`), and in `tests/golden/analysis/` the saved analyses they are rebuilt from, so the goldens need no API call. |
+| `eval/data/` | The 12 edge-case workbooks `eval/make_eval_data.py` writes, committed so `eval/run_eval.py` runs without making them first. |
 | `mappings/` | Confirmed column mappings, one `<company>.yaml` per company, written by `mapping.py` or the web page once a person confirmed them, and committed like config.yaml. Empty today: the three companies' headers are all known. |
-| `output/` | Generated files (git-ignored): `*_board_pack.pptx`, `*_metrics.xlsx`, `*_analysis.json`, `*_manifest.json` (with any approval), `charts/*.png`, `batch_summary.csv`, `compare/`, `day_logs/` (the saved live run). |
+| `output/` | Generated files (git-ignored): `*_board_pack.pptx`, `*_board_memo.docx` and `.pdf`, `*_metrics.xlsx`, `*_analysis.json`, `*_manifest.json` (with any approval), the exports (`*_metrics.csv`, `*_flags.csv`, `*_export.json`, `*_email.html`), `portfolio_rollup.pptx` and `.xlsx`, `charts/*.png`, `batch_summary.csv`, `batch_manifest.json`, `logs/` (the run logs), `compare/`, `day_logs/` (the saved live run). |
 
 ---
 
