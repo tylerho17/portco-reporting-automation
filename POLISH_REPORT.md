@@ -464,3 +464,126 @@ Northwind's slide 4 as built:
 - **Still open from Task 1:** CLAUDE.md's build_deck.py line says every slide is watermarked until
   approval, but since Task 1 the watermark is opt-in (`--draft`) and the footer carries the review
   status. INTERVIEW_PREP.md Q34 describes the current behavior.
+
+---
+
+## Task 5: docs and outputs
+
+### What I built
+
+- **README.md**
+  - "Review the deck, then approve it" is rewritten:
+    - the footer ends `AI-drafted | not reviewed`
+    - `approve.py`, then a rebuild, makes it `AI-drafted | reviewed by NAME on DATE`
+    - a changed workbook or config.yaml sends it back to "not reviewed"
+    - `--draft` is how to get the watermark
+  - Design decision 12 says why: a footer can stay on a deck that goes to a board; a stamp across the numbers can't.
+  - Also updated:
+    - `main.py --all --draft` and `python excel_output.py` added to the command lists
+    - app.py and approve.py added to the data-flow picture
+    - "500+ tests"
+    - Known limitations no longer mentions the watermark
+    - a screenshot line for the footer, and one for the web page
+- **CLAUDE.md Architecture**
+  - The build_deck.py line now says: the footer carries the review status, and the watermark is opt-in with `--draft`.
+  - approve.py: "the rebuilt deck's footer says reviewed by".
+  - main.py lists `[--draft]`.
+  - The tests line says what test_docs.py now guards.
+- **STUDY_GUIDE.md**
+  - **New section:** `provenance.py` and `approve.py`, function by function. It has a finance analogy (a sign-off stapled to the version of the file that was checked). Neither file had a section before.
+  - **build_deck.py section:** the real footer, replacing the old "Fictional data, generated for demonstration | Source: ... | Run date: ..." example. There are new rows for:
+    - `commit_text`, `review_text`, `footer_text`, `fits_one_line`
+    - `set_alpha` / `add_watermark`
+    - `analysis_details`, `record_deck_status`
+    - `--draft` in the signatures and the call order
+  - **main.py section:** `--draft`, `ai_record` and `manifest_step`.
+  - **app.py section:** how it differs from main.py (a temporary folder, no manifest, always "not reviewed", no watermark).
+  - **check_deck.py rows:** `expected_review`, the new `check_footers`, `watermark_count` and `check_draft_option`.
+  - **Walk-through:** a "Step 6: a person reviews and approves", a paragraph on the web page, and the footer in step 4.
+  - **Glossary:** SHA-256 hash, manifest, JSON, Streamlit.
+  - **Tests table:** the counts are corrected, and there are new rows for test_provenance.py and test_approve.py.
+  - **Small files:** POLISH_REPORT.md and INTERVIEW_PREP.md.
+  - **Header note:** says what was added since the day build.
+- **LOOM_SCRIPT.md**
+  - **Recording prep:** build without `--draft`, and check that the footer says "reviewed by" (if not, run `approve.py`). There's a 5th window to open: the web page, started with `run_app.command`.
+  - **Slide 4 line:** it now also points at the footer. "Every footer says whether a person has reviewed the deck."
+  - **The last 15 s** show the web page, then the next steps. Total: about 281 words, still 2:00.
+  - **Stale facts fixed:** 415 → 527 tests ("over 500"), and Option B costs about $0.09 / 70 s.
+- **approve.py**
+  - Printed after an approval: "Rebuild the deck so its footer says reviewed: python build_deck.py data/northwind.xlsx". It used to say "...to drop the DRAFT watermark".
+  - Its docstring and provenance.py's now describe the footer and `--draft`. No logic changed.
+- **tests** (written first; 5 failed until the docs and approve.py changed):
+  - tests/test_docs.py, 5 new:
+    - no line in README, CLAUDE.md, STUDY_GUIDE or LOOM_SCRIPT mentions the watermark without `--draft`
+    - all four name `--draft`, app.py and run_app.command
+    - README and the guide show both footer wordings
+    - none counts 5 slides
+    - the guide has function tables for provenance.py, approve.py and app.py
+  - tests/test_approve.py: the printed hint mentions the footer and never "watermark".
+  - pytest: 527 passed (522 before, +5 new tests; the approve change is extra assertions in an existing test).
+- **Outputs rebuilt with no API call**
+  - All three Excel files (`python excel_output.py data/<company>.xlsx`) and all three decks (`python build_deck.py data/<company>.xlsx`).
+  - All three saved analyses still pass today's checks, so every slide 4 carries Claude's text.
+  - check_deck.py on the rebuilt decks:
+    - Northwind "AI-drafted | reviewed by Tyler Ho on 2026-09-17", 737 of 755 pt
+    - Alderpeak and Fernhollow "AI-drafted | not reviewed", 594 and 597 pt
+    - no watermarks
+    - `--draft` gives 0 / 4 / 4 slides
+  - All 5 check scripts print "All checks passed".
+
+### Decisions you didn't specify
+
+1. **I changed approve.py's printed message and two docstrings.** Task 1 was told to leave approve.py
+   and provenance.py alone, so it flagged the old wording as unresolved. This task is the docs task,
+   and the message was the one place a user was told something false after every approval. Only
+   wording changed: no logic, and the manifest format is the same. The manifest's `deck.status`
+   still says "DRAFT - NOT REVIEWED" for an unapproved deck. That's data, not a doc, and changing it
+   would change the manifest format.
+2. **The doc test works line by line:** a line that mentions the watermark must also say `--draft`.
+   That's strict, and it's simple to explain. The cost is that a sentence about the watermark has to
+   carry `--draft` on the same line.
+3. **The Loom's last 15 seconds changed.** The old "next steps" promised a trend-word check that is
+   already built. I replaced it with 7 seconds on the web page ("drag in the workbook, download the
+   deck") and kept 2 next steps (SharePoint trigger, portfolio rollup). The slide 4 line now points at
+   the footer. The timing is still 2:00.
+4. **Recording advice: no `--draft`.** The footer shows the review; a watermark would cover the
+   numbers on camera. Northwind is approved, so `--draft` wouldn't stamp it anyway.
+5. **Output rebuild order:** check_main.py first (it overwrites output/), then the Excel files and
+   decks, then check_excel_output.py and check_deck.py last. That way the checks read the decks
+   exactly as they're left.
+6. **I left the manifests' `ai` block alone.** check_main.py set it to "skipped". The rebuild updated
+   each manifest's `deck` part (`ai_text: true`, review status), but not the model/tokens/cost
+   record. That record is only written by a real run. Rebuilding it from the analysis JSON is
+   possible, but it would be a new code path written for one clean-up, and the cost would still be
+   missing.
+7. **STUDY_GUIDE section 5 (the 30 questions) is unchanged.** Task 4 left its four stale answers
+   (cost, test count, next steps) as your call, and none of them is about this task's topics.
+8. **Test counts in the guide are exact (527)** because the guide's tests table lists counts per
+   file. README and the Loom narration say "over 500", so they don't go stale.
+
+### What failed and how I fixed it
+
+- **My new doc test flagged the wrong line.** It matched "DRAFT" inside the constant
+  `AI_DRAFTED_LINE`. Fixed by matching the whole word only. Logged in LEARNINGS.md.
+- **The docs had more stale facts than the watermark:**
+  - the Loom promised an already-built check, and quoted 415 tests and $0.05 / 35 s
+  - approve.py printed a false instruction
+  All are fixed, and the test now guards the watermark wording. Logged.
+- **Two shell commands were refused** (a `for ... $c` loop, and a heredoc with braces). Nothing
+  ran; I used an `&&` chain and `python -c` instead. Logged.
+- **The queue's post-task checks will undo the deck rebuild.** `run_checks` runs check_*.py in name
+  order, so check_main.py (which writes `--skip-ai` decks into output/) runs after check_deck.py.
+  Logged. See Unresolved.
+
+### Unresolved
+
+- **After the queue's checks run, output/'s decks will show "AI summary unavailable" again**, and
+  batch_summary.csv will hold check_main.py's rows. The decks and Excel files were rebuilt with the
+  AI text and checked in this task. To get the AI text back afterwards, with no API call, run
+  `python build_deck.py data/northwind.xlsx` (and the same for alderpeak and fernhollow). The real
+  fix is an `--output-dir` for main.py so check_main.py uses a temporary folder. It's already in
+  README Next steps, and it's code, not docs.
+- **The manifests' `ai` block says "skipped"** (decision 6) until the next live `main.py` run.
+- **Not checked by eye:** the rebuilt decks in PowerPoint, and the web page in a browser (same
+  reasons as Tasks 1–3). The Loom script now asks you to do both before recording.
+- **STUDY_GUIDE section 5** still has Task 4's four stale answers (decision 7).
