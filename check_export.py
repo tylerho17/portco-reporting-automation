@@ -11,7 +11,8 @@ For each company, in a temporary folder (output/ is never touched):
    "missing input" exactly where it is gray.
 3. Flags CSV and JSON against the Flags sheet: same flags in the same order, value, threshold,
    "trips when", status words, and a status that matches the row's color.
-4. JSON: the quarters, runway at next quarter's budgeted burn, and the data gaps equal the workbook's.
+4. JSON: the quarters, runway at next quarter's budgeted burn, and the data gaps equal the workbook's;
+   its source hashes equal the workbook's and config.yaml's, hashed here with hashlib.
 5. The latest quarter's exported values equal the hand formulas in check_companies.py, and the flag
    statuses equal each company's story.
 6. The email: follows every Outlook rule (outlook_problems); its table shows the workbook's values for
@@ -24,6 +25,7 @@ Run: python check_export.py  -> prints "All checks passed" or stops at the first
 """
 
 import csv
+import hashlib
 import io
 import json
 import math
@@ -78,7 +80,7 @@ def refuse(*args, **kwargs):
 # ---------------------------------------------------------------------------
 
 def fill_of(cell):
-    """A cell's solid fill as 6-digit hex ('FFC7CE'), or None."""
+    """A cell's solid fill as 6-digit hex (Excel's red, theme.EXCEL_STATUS_COLORS), or None."""
     if cell.fill is None or cell.fill.fill_type != "solid":
         return None
     return str(cell.fill.fgColor.rgb)[-6:].upper()
@@ -325,7 +327,7 @@ def email_tables(html):
 
 
 def declarations(style):
-    """'color: #334155; font-size: 14px' -> {"color": "#334155", "font-size": "14px"}."""
+    """'font-weight: bold; font-size: 14px' -> {"font-weight": "bold", "font-size": "14px"}."""
     result = {}
     for part in (style or "").split(";"):
         name, _, value = part.partition(":")
@@ -469,6 +471,14 @@ def answer_key_problems(company, exports):
     return problems
 
 
+def source_problems(record, workbook):
+    """The JSON's hashes against the workbook and config.yaml hashed here (no mapping for the demo companies)."""
+    expected = {"workbook_sha256": hashlib.sha256(workbook.read_bytes()).hexdigest(),
+                "config_sha256": hashlib.sha256((PROJECT_DIR / "config.yaml").read_bytes()).hexdigest(),
+                "mapping_sha256": None}
+    return [] if record["sources"] == expected else [f"sources {record['sources']}, expected {expected}"]
+
+
 def check_company(company, config, folder):
     """Save the workbook and the exports, read both back, and compare everything."""
     workbook = DATA_DIR / f"{company['name'].lower()}.xlsx"
@@ -483,6 +493,7 @@ def check_company(company, config, folder):
               ("JSON flags", flag_problems(exports["json"]["flags"], excel)),
               ("JSON runway and gaps", record_problems(exports["json"], excel)),
               ("answer key", answer_key_problems(company, exports)),
+              ("JSON sources", source_problems(exports["json"], workbook)),
               ("email values", email_problems(exports["email"], excel)),
               ("email Outlook rules", outlook_problems(exports["email"]))]
     for what, problems in checks:

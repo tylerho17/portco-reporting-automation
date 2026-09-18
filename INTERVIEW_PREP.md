@@ -454,6 +454,19 @@ workbook as it stood a quarter ago, runs both, and checks every line against lis
 hand from the answer keys.
 *Point to:* `diff_runs.baseline`, `diff_runs.move_text`, `check_diff.py`; `tests/test_diff_runs.py::test_a_rebuild_with_the_same_results_keeps_the_comparison_it_already_had`.
 
+**Q34h. The data team wants your numbers in their warehouse, and a partner wants the table in an email. How?** (new, Task 11)
+`export.py` writes the same numbers four ways: a metrics CSV with one row per quarter and metric
+(the shape a database or Power BI reads without reshaping), a flags CSV, a JSON with both plus the
+hashes of the inputs, and an HTML email. Three choices I'd defend. A missing number is an empty
+cell or null with a status saying why, never 0 and never NaN, because a tool that reads 0 for a
+blank quarter gets the portfolio quietly wrong. The values are the metrics workbook's to the digit:
+the test comparing them failed first, because openpyxl stores 16 significant digits and Python has
+17, so I export what the workbook stores. And the email is built for Outlook, which draws email with
+Word's engine: inline styles only, a font on every cell or it falls back to Times New Roman, fills
+repeated as bgcolor. `check_export.py` reads every file back from disk and compares each of the
+152 metric values per company with the workbook, and checks the email against each of those rules.
+*Point to:* `export.as_stored`, `export.email_html`, `check_export.outlook_problems`; `tests/test_export.py::test_a_value_has_the_16_significant_digits_the_workbook_stores`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs

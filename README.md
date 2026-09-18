@@ -70,6 +70,7 @@ Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK
 | `batch_summary.csv` | One row per company: latest quarter, flags tripped, data gaps, result, AI cost, notes (rate-limit retries, why `--resume` rebuilt it) |
 | `portfolio_rollup.pptx` and `.xlsx` | One set for the whole portfolio, from `python rollup.py` (below): companies ranked by flags tripped with each one's worst flag, companies by status, and runway by company |
 | `batch_manifest.json` | The last batch: when, which commit, the options, the total AI spend, and every company's outcome (built, skipped, timed out, stopped, failed) |
+| `<company>_metrics.csv`, `_flags.csv`, `_export.json`, `_email.html` | From `python export.py` (below), not `main.py`: the metrics and flags for other tools, and a summary to paste into an email |
 
 Results: `OK`, `OK (AI failed)` (deck built with the placeholder), `OK (AI skipped)`, or `FAILED: ...` with the reason. One company failing never stops the batch; the exit code is 1 if any company failed.
 
@@ -86,6 +87,7 @@ python mapping.py data/acme.xlsx --confirm     # confirm (Enter) or change each 
 python metrics.py data/northwind.xlsx          # print every metric, flag and data gap
 python rollup.py                               # the portfolio rollup: one deck and one workbook across every company (no API call)
 python diff_runs.py data/northwind.xlsx        # what changed since the last run: flags flipped, metrics moved, data gaps opened or closed
+python export.py data/northwind.xlsx           # metrics and flags as CSV and JSON, and an email summary (no API call); --all for every company
 python make_data.py                            # regenerate data/northwind.xlsx (also make_data_alderpeak.py, make_data_fernhollow.py)
 ```
 
@@ -94,7 +96,7 @@ python make_data.py                            # regenerate data/northwind.xlsx 
 The page has two parts:
 
 1. **Portfolio** (the first page): one row per company in `data/`, with its latest quarter, flags tripped, data gaps, when it was last generated and its deck status (read from `output/<company>_manifest.json`: not generated yet, not reviewed, approved by NAME, or out of date because the workbook changed). Each row has **Generate** (builds the deck, memo and metrics workbook into `output/`, exactly as `python main.py` does) and **Download**, which opens Download deck / memo / Excel (greyed out until there are files built from today's workbook). A search box narrows the table, and a name with no workbook says so. **Generate all** runs every company under a progress bar; one company failing never stops the others. **Download rollup** opens Download rollup deck / Download rollup Excel: the portfolio rollup, built from today's workbooks when you click (nothing needs generating first, and nothing is written to `output/`). **Add a company** takes a new workbook, and adds it to `data/` only if it can be read (otherwise it shows clean.py's message saying what to fix). If some of its headers aren't ones clean.py knows, a **Review mapping** step comes first (below).
-2. **Company** (click a company's name): its flags with thresholds and reasons, **What changed since the last run** (below), the data gaps, the metrics table in the status colors (red = tripped, green = passed, gray = data missing or cannot evaluate), both charts, the AI commentary when a saved analysis matches these numbers, and the buttons Generate, the downloads and **Approve** (type your name: it records you as the reviewer, as `approve.py` does; click Generate afterwards so the footers say reviewed).
+2. **Company** (click a company's name): its flags with thresholds and reasons, **What changed since the last run** (below), the data gaps, the metrics table in the status colors (red = tripped, green = passed, gray = data missing or cannot evaluate), both charts, the AI commentary when a saved analysis matches these numbers, and the buttons Generate, the downloads, **Export** (the metrics and flags as CSV and JSON, and the email summary, below: built from today's workbook when you click, so nothing needs generating first) and **Approve** (type your name: it records you as the reviewer, as `approve.py` does; click Generate afterwards so the footers say reviewed).
 
 - **The AI box** ("Ask Claude for AI commentary when no saved analysis matches") is off by default; its label gives the typical cost (about $0.09 and 70 seconds per company, from the [Cost](#cost) table). Either way, Generate first looks in `output/` for a saved analysis made from exactly the same numbers and reuses it for free. Only with the box ticked, and no such analysis, does it call Claude (this needs the key in `.env`).
 - **A workbook it can't read** shows `clean.py`'s own message (which sheet, row and cell, and what to fix), never a traceback, and gets "-" instead of numbers.
@@ -134,6 +136,7 @@ python eval/run_eval.py      # 12 edge-case companies (thresholds, blanks, zero 
 python golden.py             # each deck, memo and metrics workbook vs its approved text copy in tests/golden/
 python check_rollup.py       # the portfolio rollup: ranking, worst flags, status counts and runway chart vs the answer keys
 python check_diff.py         # last quarter's run, then today's: what changed vs lists worked out by hand from the answer keys
+python check_export.py       # the CSV, JSON and email carry the metrics workbook's values; the email is Outlook-safe
 ```
 
 **What changed since the last run.** Every run saves its results in the manifest: the latest quarter, every metric's value and the words the deck shows for it, every flag's status, and every data gap. The next run compares with them and lists:
@@ -151,6 +154,15 @@ The memo carries it after the headline, the company page shows it as a card, and
 3. **Runway at current burn by company:** one bar per company, shortest first, red (and labelled "tripped") where the runway flag trips, with `config.yaml`'s 12-month threshold as a dashed line.
 
 The workbook holds the same three things as real numbers in the metrics workbook's formats (sheets Ranking, By status, Runway). There is no AI text in the rollup, and its footer says so: "computed metrics only, no AI text". The numbers are worked out from each workbook when the rollup is built, so they are never stale; only the review status reads `output/`.
+
+**Exports for other tools, and a summary for email.** `python export.py data/northwind.xlsx` (or `--all`) writes four files next to the metrics workbook, from the same numbers:
+
+- **`northwind_metrics.csv`:** one row per quarter and metric (152 for 8 quarters): company, quarter, metric (`nrr`), label ("NRR (annualized)"), unit (`$K`, `ratio`, `months`, `multiple`), value, text, status, flag_tripped. Ratios are decimals (0.9705540488182874, text "97.1%"), money is in $K. A value with no number is an empty cell, never 0, and its status says why: `missing input`, `no prior period`, `not meaningful` or `infinite` (the text says which: "∞ (ARR shrank)"). flag_tripped is true where the workbook's cell is red.
+- **`northwind_flags.csv`:** the 9 flags for the latest quarter: value, text, threshold, trips when, status (`trip`, `pass`, `cannot evaluate`), reason and the workbook's status words.
+- **`northwind_export.json`:** both of the above, plus the flag count, runway at next quarter's budgeted burn, the data gaps, and the SHA-256 hashes of the workbook, `config.yaml` and column mapping it came from. No value is ever `NaN` or `Infinity` (strict JSON readers reject both); it is `null` with a status.
+- **`northwind_email.html`:** slide 1's key metrics table with its status colors, the flag count, runway at budget and the data gaps. Open it in a browser, select all, copy, and paste into a new Outlook email. It is laid out the way Outlook needs, because Outlook draws email with Word's engine: inline styles only, a font on every cell (else Outlook shows Times New Roman), tables with their width and spacing as attributes, every fill also as `bgcolor`, 640 px wide, no images or style sheet.
+
+Every number is the metrics workbook's own, to the digit: the workbook stores 16 significant digits, so the exports do too. No AI text and no run time, so the same workbook and thresholds always give byte-for-byte the same files. On the web page they are under **Export** on a company's page.
 
 **Golden files: changing what a deck looks like on purpose.** `tests/golden/` holds an approved text copy of every company's deck, memo and metrics workbook: every word with its size, weight and color, where each box sits, table fills, the memo's page breaks and PDF text, and every Excel cell with its number format, fill and alignment. `pytest` rebuilds all nine (from the saved analyses in `tests/golden/analysis/`, with a fixed date and commit in the footer, so no API call and nothing that changes by the day) and fails with the changed lines if any differ. When you change the output on purpose:
 
@@ -198,6 +210,7 @@ excel_output.py         analyze.py                         build_deck.py
 
 memo.py        the same numbers and analysis as a 1 to 2 page memo: <company>_board_memo.docx and .pdf
                (AI text only if every number in it is in the metrics workbook; else "AI commentary unavailable")
+export.py      the same numbers as CSV and JSON for other tools, and an email summary that pastes into Outlook
 main.py        runs the chain for one workbook or all of data/, prints the summary, writes batch_summary.csv
 app.py         the web page (run_app.command starts it): the portfolio table and a page per company;
 portfolio.py   its buttons run main.py's chain, memo.py and approve.py (portfolio.py does the work)
@@ -232,6 +245,7 @@ The walk-through with Northwind's real numbers, a glossary, and exercises are in
 18. **Golden files catch what the number checks can't see.** The check scripts prove every number on a deck is right; they don't notice the charts swapped sides, the questions lost their numbers, a heading can now end a memo page, or the Excel header row stopped being frozen. A text copy of every output, approved once and compared on every test run, catches all of those: of 17 such bugs planted on purpose, the goldens caught 17, the check scripts 2 and the unit tests 4. Text, not the files: a .pptx is a zip whose bytes change on every save, so a byte comparison would always fail and never say why. A diff of text names the slide, the box and the words.
 19. **The rollup ranks by flags tripped, and names each company's worst flag by a fixed order.** The flags' units can't be compared (months, %, x), so "how far past its threshold" would be a made-up number. Instead, `rollup.WORST_FIRST` puts them in the order an investor would read them, with the reason beside each: runway first (cash running out leaves months to raise or cut), then NRR, GRR, burn multiple, burn vs budget, net new ARR vs budget, CAC payback, Rule of 40, and the combo rule last (it explains why NRR falls, and NRR is already higher up). A tie on flags tripped goes to the company whose worst flag is worse, then by name. A workbook that can't be read is listed last, unranked, with clean.py's reason, so the rollup is still built.
 20. **"What changed" compares with the last run that had different numbers, and saves words as well as values.** Comparing with literally the previous run fails on the most common workflow: approve, rebuild, and the memo now says "nothing changed" against a run ten seconds old. So a rebuild from the same results keeps the comparison it already had. Each run saves the words the deck showed for every metric ("∞ (ARR shrank)", "data missing") as well as its value, because a value that became "data missing" has no number to subtract, and last quarter's words can't be rebuilt from today's workbook. Percentages move by points and everything else by percent of its old value, because one setting can't mean both: 5% of an NRR of 97% is under 5 points, and a runway of 11 months moving "5 points" means nothing. The settings are read from `config.yaml` only if someone adds them; they were left out on purpose, since adding a key changes the file's hash and sends every approved deck back to "not reviewed".
+21. **An export carries the workbook's numbers exactly, and says why a number is missing instead of making one up.** A downstream tool that reads `0` for a blank quarter, or `NaN` it can't parse, will quietly get the portfolio wrong. So a value with no number is empty (CSV) or `null` (JSON), with a status beside it in the same three reasons the deck uses, plus `infinite`. The CSV is one row per quarter and metric (a "long" table), because that is what a database or Power BI reads without reshaping, and a company can be appended to another. Values are the 16 significant digits the metrics workbook stores (openpyxl writes `%.16g`): Python has 17, and a tool comparing the CSV with the workbook would otherwise flag 2.3493975903614457 against 2.349397590361446 as different. The email summary is built for Outlook specifically, because an email that looks right in a browser can lose its colors and fonts when pasted; `check_export.outlook_problems` names each rule it would break.
 
 ---
 
@@ -306,6 +320,9 @@ Placeholders: capture each one and replace the line with the image. Before captu
 - 📸 **Portfolio:** the three companies' rows with their flags, data gaps, last run and deck status under the navy header row, the one navy Generate all button, and each row's Generate and Download buttons.
 - 📸 **Northwind's page:** "6 of 9 flags tripped" with the red and green flag rows, the metrics table with its gray "data missing" cells, and the two charts.
 
+**The email summary** (`python export.py data/northwind.xlsx`, then open `output/northwind_email.html`)
+- 📸 **Pasted into a new Outlook email:** the key metrics table with its navy header and red and green status cells, and the Data gaps lines.
+
 **After: the backup workbook** (`output/northwind_metrics.xlsx`)
 - 📸 **Metrics sheet:** red tripped cells and gray "data missing" cells around Q1 2025.
 - 📸 **Flags sheet:** value, threshold and status for all 9 flags.
@@ -367,6 +384,7 @@ why a person still reads every deck, and why its footer says "not reviewed" unti
 - [x] **Golden files:** an approved text copy of every deck, memo and metrics workbook in `tests/golden/`, compared on every test run (`golden.py`).
 - [x] **Portfolio rollup:** one deck and one workbook across every company: ranked by flags tripped with each company's worst flag, companies by status, runway by company (`rollup.py`, the web page's Download rollup).
 - [x] **What changed since the last run:** flags that flipped, metrics that moved more than a set amount, new and resolved data gaps, in the memo and on the company page (`diff_runs.py`).
+- [x] **Exports:** metrics and flags as CSV and JSON for other tools, and an email summary that pastes cleanly into Outlook (`export.py`, the company page's Export).
 
 **Still to do:**
 

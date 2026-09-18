@@ -287,6 +287,17 @@ def test_a_changed_export_value_is_caught(saved):
                                                          f"{excel['metrics'][('Q2 2026', 'NRR (annualized)')]['value']!r}"]
 
 
+def test_a_row_the_workbook_lacks_a_repeated_row_and_a_missing_row_are_each_caught(saved):
+    # Found by a planted bug: with "exported but not in the workbook" switched off, every test passed.
+    excel, exports = saved["northwind"]
+    rows = [dict(row) for row in exports["metrics_csv"]]
+    extra = dict(rows[0], quarter="Q3 2026")
+    assert check_export.metric_problems(rows + [extra], excel) == [
+        "Q3 2026 Ending ARR ($K): exported but not in the workbook"]
+    assert check_export.metric_problems(rows + [rows[0]], excel) == ["Q3 2024 Ending ARR ($K): exported twice"]
+    assert check_export.metric_problems(rows[1:], excel) == ["Q3 2024 Ending ARR ($K): in the workbook but not exported"]
+
+
 # ---------------------------------------------------------------------------
 # The email summary
 # ---------------------------------------------------------------------------
