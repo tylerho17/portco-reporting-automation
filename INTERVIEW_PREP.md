@@ -568,6 +568,18 @@ striped, and amber is far lighter than navy, so it reads even in grayscale. I pl
 copy of the project and all 14 were caught.
 *Point to:* `charts.finish_layout`, `charts.money_axis`; `tests/test_chart_layout.py::test_no_text_overlaps_anything_on_either_chart`.
 
+**Q34q. A director wants every number in the deck, not just the latest quarter. What did you do?** (new, Task 20)
+An opt-in appendix: `--appendix` adds one slide after the four with all 19 metrics for all 8 quarters.
+Off by default, because the four slides are the update and the table is reference. It keeps the deck's
+rules: `format_value` writes every number, and the same fit check applies, never below 12 pt. It didn't
+fit at first: 20 rows at slide 1's padding need 403 pt and the slide has 392, and "n/a (no prior
+period)" is wider than a quarter column. I kept 12 pt and gave up words instead. The cells are tighter,
+the long reason words become "n/a", "n/m" and "∞", and a key under the table explains each one on the
+slide. "data missing" keeps its words, because that's the one to chase. Gray and red cells match the
+metrics workbook exactly, and tripped cells are bold too, so color isn't the only signal. `check_deck.py`
+checks every cell against Excel. I planted 8 appendix bugs in a copy of the project and all 8 were caught.
+*Point to:* `build_deck.appendix_slide`, `build_deck.appendix_key`; `check_deck.check_appendix_slide`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs

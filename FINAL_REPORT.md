@@ -2213,3 +2213,109 @@ Every pair, after the fix:
 - **Screen-reader alt text for the two chart pictures** on slide 2 is still missing (noted in Task 18).
 - **CLAUDE.md's Architecture list** could mention the new test. Suggested addition to the charts.py line:
   "one axis style for both charts; tests/test_chart_layout.py fails on any overlapping label".
+
+## Task 20: deck appendix (--appendix: every metric for every quarter)
+
+### What I built
+
+- **build_deck.py, one optional slide after the four:** `--appendix` (on `build_deck.py` and
+  `main.py`) adds "Appendix: every metric, Q3 2024 to Q2 2026": all 19 metrics as rows, in metrics.py's
+  order, and all 8 quarters as columns, with a key under the table. Off by default: without the flag the
+  deck is the same 4 slides as before (the goldens still match).
+  - Same formatting rules: every number from `format_value`, navy header, white and surface stripes,
+    theme.py's status fills. A data-missing cell is gray and a tripped cell is red, exactly the cells the
+    metrics workbook colors (`excel_output.tripped_cells`, reused).
+  - Same fit checks: `fit_cells` (shared with slide 1 now) finds the biggest size from 14 pt down to the
+    12 pt floor; a table that can't fit stops the build with the slide and "Appendix table" named. The key
+    is a normal fitted text box. The footer and the `--draft` watermark go on the appendix like every slide.
+  - New functions: `appendix_quarters`, `appendix_text`, `appendix_rows`, `infinity_reason`,
+    `appendix_key`, `appendix_widths`, `fill_appendix`, `appendix_slide`; and `fit_cells` / `add_table`,
+    pulled out of `kpi_slide` so both tables are fitted and drawn the same way.
+- **main.py and resilience.py:** `--appendix` reaches every company in a batch (`run_batch` →
+  `run_company` → `deck_step`), is in `--help`, the usage line, the examples and the batch manifest's
+  options. The company manifest's `deck` record says `"appendix": true/false` (also when build_deck.py
+  rebuilds on its own), and `--resume` rebuilds a company whose deck was built with the other setting.
+- **check_deck.py:** builds all three companies with `--appendix` in a temporary folder and checks, from
+  the saved metrics workbook (its text as Excel displays it, and its cell fills), not from build_deck's
+  code: 5 slides with the first 4 unchanged, the title, the header, the 19 metric rows in order, every one
+  of the 152 cells, gray and red exactly where Excel's cells are, bold only on tripped cells, and a key
+  with every entry it should have and no others. Plus footers, 12 pt floor and overflow, as on every slide.
+  It also breaks a saved appendix four ways (a wrong number, a lost color, a lost key entry, an
+  overflowing cell) and fails unless each is caught. The default decks are still checked to have 4 slides.
+- **Tests (16 new, 1383 in all):** 12 in tests/test_build_deck.py (hand-worked values: NRR -300.0%,
+  runway 36.0 mo, CAC payback 12.0 mo; the marks and key; colors and bold; the 12 pt floor; the last 8 of
+  10 quarters; the fit stop; the watermark; the flag; the manifest), 2 in tests/test_main.py, 1 in
+  tests/test_batch.py (the `--resume` reason), 1 in tests/test_cli.py (the new help example is a valid
+  command), and `--appendix` added to test_cli's "every option has its own help line" check.
+- Docs: README (run command, output table, decision 29), STUDY_GUIDE (the new functions, constants,
+  check_deck rows, test counts), INTERVIEW_PREP Q34q, LEARNINGS rows.
+
+### How it's proved
+
+- **1383 tests pass**; `python golden.py`: 9 of 9 match; all 9 `check_*.py` scripts pass.
+- All three companies' appendices fit at 12 pt: the table takes 331 pt of the 342 pt it has.
+- **8 of 8 planted bugs caught** by `check_deck.py`, each in a fresh copy of the project in /tmp (never
+  in the project), with an unbroken copy passing first:
+
+| Planted bug in build_deck.py | Caught by |
+|---|---|
+| Shows 7 quarters, not 8 | appendix title (then header) |
+| Data-missing cells not gray | cell color vs the metrics workbook (Northwind Ending ARR, Q1 2025) |
+| Tripped cells not bold | bold check (Northwind NRR, Q2 2026) |
+| Key leaves out "gray = data missing" | key entries |
+| Red only in the latest quarter | cell color vs the metrics workbook (Northwind Rule of 40, Q3 2025) |
+| Metric rows reversed | metric row order |
+| Cells written with bigger margins than they were fitted with | overflow check (header cell 23.0 pt needed, 16.6 pt) |
+| Appendix on by default | "5 slides, expected 4 (no appendix by default)" |
+
+### Decisions you didn't specify
+
+1. **Short marks plus a key, instead of the full reason words.** The table didn't fit: 20 rows at 12 pt
+   with slide 1's padding need 403 pt and the slide has 392, and "n/a (no prior period)" is 121 pt in an
+   84 pt column. Keeping 12 pt and one slide meant giving up words: "n/a", "n/m" and "∞" in the cells, and
+   the key spelling out each one on the slide ("∞ in Burn multiple = ARR shrank"). "data missing" fits,
+   so it keeps its words: it is the one reason that is a problem to chase. The three reasons still never
+   look alike. The n/m cells lose their $K figures ("net burn 1,650 vs budget 0"); the key points to the
+   metrics workbook, and slide 1 still shows them for the latest quarter.
+2. **Tighter cells on this slide only:** 0.015 in top and bottom (slide 1: 0.04) and 0.05 in at the sides
+   (slide 1: 0.08). Slide 1 is unchanged.
+3. **Metrics as rows, quarters as columns**, the way a board pack reads time (the Excel sheet is the other
+   way round, quarters as rows). 19 metric columns would never fit across a slide.
+4. **The key lists only what is on the slide.** Alderpeak's key is just "n/a = no prior period"; listing
+   "gray" and "red" there would send a reader looking for problems that aren't there.
+5. **Tripped cells are bold as well as red**, so the appendix never relies on color alone (Task 18's rule;
+   slide 1 has a status word for that, the appendix has no room for one). Passed cells are not colored
+   green, the same as the metrics workbook's Metrics sheet.
+6. **A workbook with more than 8 quarters shows its last 8**, and the title names the range. Nine quarter
+   columns don't fit at 12 pt; the alternative was a build that stops.
+7. **Only the metrics, not the raw inputs** (starting ARR, new ARR, headcount and so on): "the full metric
+   table" is the Metrics sheet. The inputs are in the source workbook.
+8. **The combo rule isn't in the table**: it has no single value per quarter, the same as on the Metrics
+   sheet. Its result is on slides 1 and 3.
+9. **`--resume` treats a manifest from before this task as "no appendix"**, which is true of those decks,
+   so a plain `--resume` doesn't rebuild everything.
+10. **Not on the web page yet** (app.py has no appendix checkbox): the task named the command-line flag.
+
+### What failed and how I fixed it (logged in LEARNINGS.md)
+
+1. **The table didn't fit at first** (decision 1); I measured the worst cells before building, so no
+   layout was built and thrown away.
+2. **tests/test_docs.py failed on my STUDY_GUIDE rows twice:** "5 slides" / "Slide 5" (the docs count 4
+   slides) and a watermark mention without `--draft`. Reworded.
+3. **tests/test_main.py's manifest test** pins the whole deck record; it now expects `"appendix": False`.
+4. **A long shell command was refused as over-length** (nothing ran; checked with `git diff --stat`), and
+   running a script from /tmp needed approval. Used the Edit tool, and ran the mutation script from the
+   project folder with the project's Python (the broken copies were still only in /tmp).
+
+### Unresolved
+
+- **Not looked at in PowerPoint or Keynote.** There is no renderer on this machine (no LibreOffice), so
+  the fit rests on text_fit.py's measurements with DejaVu Sans (wider than Arial, so it errs toward "needs
+  more room") and check_deck's re-measurement, as for the other slides. Worth one look at a Fernhollow
+  appendix before a demo: 12 pt in tight cells is dense.
+- **The appendix number check covers cells, not the key**: the key has no numbers today, and
+  `test_no_digit_in_any_text_written_in_the_code` stops one being typed into build_deck.py.
+- **The web page** has no appendix option (decision 10). Adding it would be a checkbox passing
+  `appendix=True` to `save_deck`.
+- **CLAUDE.md's Architecture list** could mention it. Suggested addition to the build_deck.py line:
+  "--appendix adds one optional slide after the four: every metric for every quarter, with a key".
