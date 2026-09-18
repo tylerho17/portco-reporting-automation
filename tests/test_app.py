@@ -317,6 +317,14 @@ def test_recent_runs_shows_a_generate_click_with_a_line_per_step(folders):
     assert "AI commentary" in steps and "whole company" in steps
 
 
+def test_recent_runs_shows_what_went_wrong(folders):
+    (folders[0] / "broken.xlsx").write_text("not a workbook")
+    main.run_batch([folders[0] / "broken.xlsx"], load_config(), True, output_dir=folders[1])
+    test = page(folders)
+    assert "command line · 1 company: 1 failed" in run_expanders(test)[0]
+    assert any(error.value.startswith("Broken, clean: ") for error in test.error)   # the run's, not the row's
+
+
 def test_recent_runs_reads_the_command_line_s_logs_too(folders):
     main.run_batch([folders[0] / "fernhollow.xlsx"], load_config(), True, output_dir=folders[1])
     test = page(folders)

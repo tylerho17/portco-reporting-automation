@@ -340,6 +340,14 @@ def test_recent_runs_are_newest_first_and_at_most_the_limit(tmp_path):
     assert [run["started"] for run in runs] == [f"2026-09-18 14:{minute:02d}" for minute in (6, 5, 4, 3, 2)]
 
 
+def test_the_tenth_run_in_one_second_is_newer_than_the_second(tmp_path):
+    # Found by a planted bug: sorted as text, "_10" comes before "_2".
+    for _ in range(10):
+        write_run(tmp_path, "2026-09-18 14:15:03", [("Northwind", run_log.CLEAN, 0.1, run_log.OK)])
+    newest = run_log.recent_runs(tmp_path, limit=2)
+    assert [run["run"] for run in newest] == ["run_20260918-141503_10", "run_20260918-141503_9"]
+
+
 def test_a_run_summary_counts_the_outcomes_and_lists_the_problems(tmp_path):
     write_run(tmp_path, "2026-09-18 14:15:03", [
         ("Northwind", run_log.CLEAN, 0.5, run_log.OK), ("Northwind", run_log.WHOLE_COMPANY, 4.0, main.BUILT),
