@@ -1996,3 +1996,116 @@ charts. The AI call, when there is one, dwarfs all of it (about 70 s).
 - **CLAUDE.md's Architecture list** doesn't name the new files. Suggested lines: "cache.py  ResultCache:
   clean and metrics results kept by a hash of their inputs, copied in and out, at most 32" and
   "benchmark.py  seconds per company run and workbook reads, from empty caches (no API call)".
+
+---
+
+## Task 18: contrast and accessibility (WCAG AA)
+
+### What I built
+
+- **theme.py:** `relative_luminance` and `contrast_ratio` (WCAG 2's formula), the AA thresholds
+  (`AA_TEXT_RATIO = 4.5`, `AA_NON_TEXT_RATIO = 3.0`), and `TEXT_PAIRS` / `NON_TEXT_PAIRS`: every text
+  color with every background it is drawn on, and where.
+- **Two fixes:**
+  1. `GREEN` `1E8449` → `1A7742`. "Passed" text on its light green cell was **4.25 : 1**, under 4.5, on
+     the deck, the memo, the web page's tables and the email export. Now 5.03 : 1: the same green, a
+     shade darker. The fill is unchanged.
+  2. The template's navy **cover page footer** had no color of its own and inherited the master's dark
+     gray (about **1.5 : 1** on navy). `make_template.py` now gives it the surface color at 12 pt, and
+     `templates/base.pptx` is rebuilt. The 4-slide deck doesn't use the cover, so no output showed it.
+- **tests/test_contrast.py (31 tests):** the math against hand-worked values; every declared pair; and
+  pairs **read back from what the code makes**, so a pair nobody declared still gets checked: every
+  status color (deck, web, Excel), every text color in the web page's style sheet with the background
+  behind it, Streamlit's own text, link and accent colors, every colored run on every slide of four
+  built decks (three drafts from the saved analyses, one with no AI text), and the template's styles.
+- Tests that typed the old green by hand (test_theme, test_app, test_build_deck) and the three deck
+  goldens updated. Every golden line that changed was the green and nothing else (checked by filtering
+  the diff for any other line: none).
+
+Every pair, after the fix:
+
+| Where | Colors | Ratio |
+|---|---|---|
+| web: body text on the page | 334155 on F8FAFC | 9.90 |
+| web, deck, memo: body and table text on white | 334155 on FFFFFF | 10.35 |
+| web: headings, links, a company's name on the page | 0B2545 on F8FAFC | 14.71 |
+| web, deck, memo: titles, headings, secondary buttons | 0B2545 on FFFFFF | 15.39 |
+| web: a secondary button under the mouse | 08192F on F8FAFC | 16.86 |
+| web, deck: primary buttons, table headers, the cover title | FFFFFF on 0B2545 | 15.39 |
+| web: a primary button under the mouse | FFFFFF on 08192F | 17.64 |
+| deck: the cover subtitle and footer | F8FAFC on 0B2545 | 14.71 |
+| web: captions and disabled buttons on the page | 64748B on F8FAFC | 4.55 |
+| web, deck, charts, memo: captions, footers, notes, gap labels | 64748B on FFFFFF | 4.76 |
+| status: cannot evaluate | 334155 on EDF0F3 | 9.05 |
+| status: tripped | C0392B on FDE8E6 | 4.63 |
+| status: passed | 1A7742 on EAF6EF (was 1E8449: 4.25) | 5.03 |
+| Excel: trip / pass / cannot evaluate | Excel's own fills | 5.92 / 6.14 / 7.35 |
+| marks: checkbox, chart bars and line, a tripped bar (3 : 1 needed) | navy, red | 14.71 / 15.39 / 5.44 |
+
+### How it's proved
+
+- **1332 tests pass** (1301 before, plus 31); `python golden.py`: 9 of 9 match; all 9 `check_*.py`
+  scripts pass.
+- **12 of 12 planted bugs caught** in a temporary copy of the project (`output/task18_plant_bugs.py`),
+  each by a failing test, not an import error:
+
+| Planted bug | Caught by |
+|---|---|
+| Green back to 1E8449 | declared pair, status colors, deck |
+| Mid gray lightened to 94A3B8 | declared pairs, style sheet, deck |
+| Excel's trip text lightened to FF7C80 | status colors (Excel) |
+| Portfolio header text mid gray on navy (web only, not in the declared list) | style sheet |
+| Secondary button hover text in the line color (web only) | style sheet |
+| Streamlit's text color set to the line color | Streamlit theme |
+| Deck table header text slate on navy (deck only) | deck |
+| Deck footer in the surface color on white (deck only) | deck |
+| Cover footer left without its own color (template rebuilt) | template |
+| Contrast math skips the gamma curve | the hand-worked values, and most pairs |
+| Contrast math doesn't put the lighter color on top | 21 : 1, order, and every pair |
+| Threshold loosened to 4.0 | `test_the_aa_threshold_is_wcag_s` |
+
+### Decisions you didn't specify
+
+1. **4.5 : 1 for all text, never the 3 : 1 WCAG allows for large text.** Our 20 and 28 pt headings would
+   qualify, but they already pass 4.5, and one rule is easier to explain and can't be misapplied to a
+   14 pt table cell.
+2. **Darken the green, not lighten its fill.** The fill is shared with Excel-like tables people already
+   read; a darker text changes less on screen. I chose the smallest step with a margin (5.0, like red's
+   4.6 and mid gray's 4.55 it isn't at the edge). Red (4.63) and mid gray (4.55) pass, so I left them:
+   the task said fix what fails.
+3. **The watermark is exempt, on purpose.** "DRAFT - NOT REVIEWED" is 25% see-through navy so the
+   numbers under it stay readable; at full contrast it would hide them. The same words are in the
+   footer, which passes, and a test checks both are there.
+4. **Disabled buttons are checked anyway.** WCAG exempts them, but mid gray on the surface color passes
+   (4.55), so there was no reason to carve out an exception.
+5. **The declared list and the read-back checks both exist.** The list documents where each pair is
+   used and covers what can't be read back easily (the charts' images, the memo); the read-back checks
+   catch a color used somewhere new that nobody added to the list (two of the planted bugs).
+6. **The template's unused cover was fixed rather than exempted.** It ships in templates/base.pptx, and
+   the first person to add a cover page would get an invisible footer.
+7. **Excel's own status fills are checked too** (they pass), though the task named only the app and
+   the deck: the web page's download is that workbook.
+
+### What failed and how I fixed it (logged in LEARNINGS.md)
+
+1. **The green failed AA**, and **the cover footer** was about 1.5 : 1: both fixed above.
+2. **My first deck and template checks crashed** (`NoneType`) instead of failing: the master's
+   background is a reference to the theme's light color, not a fill, and the cover footer had no color
+   to read. The test now resolves the reference and asserts "has a color of its own" by name.
+3. **Refused commands:** `sed -i` across three test files and copying output/ outside the project. I
+   used the Edit tool, and skipped the backup: the check scripts build in temp folders, and the saved
+   analyses were untouched (still dated 2026-09-17).
+4. **tests/test_docs.py failed on my own STUDY_GUIDE row:** it mentioned the watermark without
+   `--draft`. Fixed the wording.
+
+### Unresolved
+
+- **Mid gray on the surface color is 4.55 : 1**, the thinnest pass in the palette. It passes, and the
+  test will stop any change that makes it worse, but a lighter caption gray is not an option.
+- **Contrast is one part of accessibility.** Not checked here: keyboard use of the web page (Streamlit's
+  own), screen-reader alt text for the two chart images on slide 2, and the PDF memo's tagging. Status
+  never relies on color alone (every cell says "Tripped", "Passed" or "Cannot evaluate").
+- **Chart text is checked through the declared pairs only**, not read back from the images: the charts
+  draw on white with slate and mid gray, both in the list.
+- **CLAUDE.md's Architecture list** doesn't mention contrast. Suggested addition to the tests line:
+  "tests/test_contrast.py works out WCAG AA contrast for every text/background pair from theme.py".

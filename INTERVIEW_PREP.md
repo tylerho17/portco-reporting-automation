@@ -544,6 +544,18 @@ passed a bug the first time: it only changed an answer the cache had never hande
 go three rounds. Result: 1 read instead of 5, runs 23 to 26% faster.
 *Point to:* `cache.ResultCache.get`, `clean.clean_workbook`, `metrics.table_key`; `tests/test_cache.py::test_an_edited_workbook_is_read_again`; `python benchmark.py`.
 
+**Q34o. Can everyone on the board actually read your deck?** (new, Task 18)
+I checked every text color against every background it sits on, using WCAG's contrast standard:
+AA needs 4.5 : 1 for text. Most of the palette passes easily (body text is about 10 : 1), but two
+didn't. The "Passed" green on its light green cell was 4.25 : 1, so I darkened it a shade to 5.0 : 1.
+And the template's cover page had a footer with no color of its own, so it inherited a dark gray on
+navy, about 1.5 : 1: invisible. Nobody would have noticed that one until someone used the cover. The
+test works the ratio out from theme.py, and doesn't only trust my list of pairs: it also reads the
+pairs back from the real web page style sheet and from every colored piece of text in four built
+decks. I planted 12 bad colors in a copy of the project and all 12 were caught. Status never relies
+on color alone either: every cell also says "Tripped" or "Passed".
+*Point to:* `theme.contrast_ratio`, `theme.TEXT_PAIRS`; `tests/test_contrast.py::test_every_colored_text_on_every_slide_passes_aa`.
+
 **Q35. What breaks at 275 companies?** (new)
 Not the math: Python is instant. Five things would:
 1. **Time.** About 70 s of API time per company, so 5 hours one at a time. `--workers` now runs
