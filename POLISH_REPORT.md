@@ -302,7 +302,7 @@ Northwind's slide 4 as built:
   question), no usage statistics, **no tracebacks on the page** (a backstop), and a minimal toolbar.
 - **requirements.txt**: added `streamlit`. Why: it turns a Python script into a web page with
   file upload, tables and download buttons, with no HTML or JavaScript to write or maintain.
-  It brings its own dependencies (pyarrow, altair, tornado-style server, ...), about 25 packages.
+  It brings its own dependencies (pyarrow, altair, a web server, ...), about 25 packages.
 - **tests/test_app.py (19 tests)**: imports app.py and exercises its helpers: the label, saving an
   upload, colors, all three error kinds, Northwind's deck/workbook/flags/metrics colors, the four
   AI paths (reused, not reused, asked, no key, API error), and Streamlit's `AppTest` drawing the
