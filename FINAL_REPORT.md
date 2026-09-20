@@ -2646,3 +2646,134 @@ From the project folder (`cd ~/board-pack-generator`), after `source .venv/bin/a
 - **No smoke test script and no tasks.sh:** the overnight task list stopped before them, so the
   fresh-clone steps above were not run today.
 - **The portfolio page's "DRAFT - NOT REVIEWED" status** (from Task C) is unchanged.
+
+## Night two, Task 1: the target question set and the question scorer (eval/score_questions.py)
+
+**API spend: $0.00.** No model was called. Running total for the night: $0.00 of the $2.00 ceiling.
+
+### The blocker, first
+
+**docs/RESEARCH_BOARD_PACKS.md is not in the repository.** `docs/` exists and is empty, nothing in
+git history has ever held it, and no file under another name matches it. The task names it as the
+specification for every content decision and asks for section 6's worked ten-question set to be
+saved as the gold standard.
+
+So **tests/fixtures/target_questions_northwind.md was not written.** It could not be written
+honestly. Each of its ten questions has to carry a provenance marker saying whether it is quoted
+from a source word for word, quoted with Northwind's values put in, or constructed. A marker is a
+claim about a source. Inventing ten questions and marking them would be exactly the thing the task
+forbids: presenting an unsourced convention as evidence. Writing ten and marking them all
+`constructed` would be worse, because a later task would tune the prompt against them as if they
+were the standard.
+
+Researching the document instead was not possible either: WebSearch is not permitted in this
+session, so there was no way to reach a real source.
+
+Everything that does not depend on the document was built in full, and the reserved path stays
+empty so nothing can be mistaken for the standard.
+
+### What I built
+
+- **`eval/score_questions.py`**: scores a generated management-question set against the target set.
+  No API call, no model, no judgement of whether a question is a good one. Five checks, the five
+  the task named:
+
+  | Check | What it asks | How it decides |
+  |---|---|---|
+  | Decomposition, not explanation | does the question send management to a cut of the data, or to a story? | phrases that ask for parts ("break down", "how much of", "what share"), or a splitting word close to a dimension ("which cost lines", "by customer segment"). Against them: "why", "what is driving", "what caused". A question with both counts as a decomposition |
+  | Names a metric and a value | can management tell what is being asked about? | a metric label from `metrics.py` (aliases worked out from the labels, so the project keeps one label set) and a figure carrying a unit or a decimal point |
+  | Grouped under a theme | does it sit under a `## Theme:` heading? | the parse. `analyze.py` returns a flat list of 3, so a generated set scores 0 here today, correctly |
+  | Duplicates | does another question ask the same thing in other words? | same metric and a third of the wording shared, or 60% of the wording shared whatever the metric |
+  | Theme coverage | which of the target's themes does the set reach, and which does it miss? | a generated question reaches a target question if they share a metric, or share 30% of their wording |
+
+  It reads either an `analyze.py` analysis JSON (`summary.questions`) or a markdown list, prints a
+  question-by-question verdict and the five rates, and exits 0, 1 (below `--fail-under`) or 2 (a
+  file it could not read). The **written 1 to 5 rubric** is `--rubric`: what a 5 and a 1 look like,
+  and, at the top, the three things the string checks cannot see (whether a question is worth a
+  board's time, whether the company could answer it, whether the answer would change a decision).
+  It continues Task 6's plan for scoring commentary offline, point 7: code can prove the commentary
+  is grounded and complete, not that it is good.
+
+- **`tests/fixtures/README.md`**: the reserved path, why it is empty, the exact format to paste
+  section 6 into, the parser's three rules, and a plain reading of what the three markers mean
+  flagged to be **replaced by section 6's own wording** when the document lands.
+
+- **Honest stop when the standard is missing.** Scoring against the default target prints: "no
+  question file at tests/fixtures/target_questions_northwind.md. It is the worked ten-question set
+  from section 6 of docs/RESEARCH_BOARD_PACKS.md ... Copy it there before scoring against it."
+
+- **Tests (42 new, 1426 in all, all passing):** `tests/test_score_questions.py`, written before the code. The
+  file format and its four stops, then each of the five checks against hand-written questions, then
+  the whole scorecard, the rubric, and the four command-line exits. They build their own small
+  targets in a temporary folder, so they never wait on the missing fixture.
+
+### Proof the checks catch what they claim
+
+Eight bugs planted one at a time in a **copy of the project under /tmp** (never in the project), the
+tests run against each, the file restored between: **8 of 8 caught.** The bugs: explanation checked
+before decomposition; a bare number counted as a value; the splitting word allowed any distance from
+the dimension; the target no longer required a theme and a marker; duplicates required near-identical
+wording; every theme counted as covered; a missing file read as an empty set; a metric alias matched
+inside a longer word.
+
+**The first run caught only 4 of 8.** That is the useful part of the exercise. The four misses and
+what each one taught:
+
+1. **"a missing file is read as an empty set" passed.** The test asserted the stop message named
+   `not_here.md`, and it did, but only because the *parse* failed afterwards and quoted the path.
+   The test could not tell "the file is absent" from "the file is unreadable". Now it asserts the
+   words "no question file at", so only the real stop satisfies it.
+2. **"the splitting word may sit any distance from the dimension" passed.** The test used a question
+   with no dimension word in it at all, so widening the gap changed nothing. Replaced with "Is the
+   burn increase driven by the hiring plan we approved for the new product line?", where "by" sits
+   eight words from "product".
+3. **"duplicates need near-identical wording" passed.** The one duplicate pair in the tests shared
+   67% of its wording, so the second rule caught it even with the first rule disabled. Added a pair
+   that only the same-metric rule can catch, and the test asserts its overlap is below the wording
+   bar, so it cannot start passing for the wrong reason.
+4. **"a metric alias matches inside a longer word" passed, twice, for two different reasons.** The
+   first time there was no test for it at all. It exposed a real gap in the code, not just the
+   tests: aliases were matched with word boundaries on both sides, so "pipelines" did not count as
+   "pipeline". Fixed (an optional plural, with the singular looked up on the way back), and tested
+   both ways: "new arrangement" must not count as "new arr", "pipelines" must count as pipeline.
+
+### Decisions you didn't specify
+
+1. **The reserved path stays empty rather than holding a placeholder.** A file at
+   `tests/fixtures/target_questions_northwind.md` would become the standard by accident, whatever a
+   warning inside it said. The explanation lives in `tests/fixtures/README.md` instead, and the code
+   stops with the same explanation.
+2. **The fixture format is markdown, not YAML or JSON.** Section 6 is prose in a markdown document,
+   so copying it across should be copying, not transcription into a data format. The parser reads
+   `## Theme:` headings and numbered lines, and stops on anything it cannot read with certainty,
+   which is the rule `clean.py` follows for a workbook.
+3. **A generated set may have no themes, a target may not.** `analyze.py` returns a flat list of 3
+   questions, so demanding themes of it would only ever fail. The target is hand-made from a source
+   and must be complete, so a missing theme or marker there stops the run.
+4. **"Overall" is an unweighted mean of the five checks, and says so in the printout.** A weighted
+   score would imply a source for the weights. There isn't one.
+5. **Metric aliases are worked out from `metrics.py`'s labels**, not typed out again, so the one
+   label set rule holds. Eleven input columns CLAUDE.md lists have no display label, so those are
+   written out with a comment saying they are recognition spellings, not display names.
+6. **A question asking for both a cause and a cut counts as a decomposition.** "Why did NRR fall,
+   and which segments drove it?" still sends management to the data.
+7. **Checked against a real generated set once**, using a throwaway target under /tmp that is not in
+   the repository. Northwind's three saved questions score: 1 of 3 decomposition (question 2 asks
+   whether the fall is "concentrated in particular segments or accounts"), 3 of 3 name a metric and
+   a value, 0 of 3 themed, no duplicates. The verdicts are right question by question, which is the
+   part worth knowing before the real target exists.
+
+### Unresolved
+
+- **The gold standard itself.** Drop section 6 into
+  `tests/fixtures/target_questions_northwind.md` in the format `tests/fixtures/README.md` sets out
+  and the scorer works with no code change. If section 6 defines the three markers differently from
+  the plain reading in that README, the marker list in `eval/score_questions.py`
+  (`PROVENANCE_MARKERS`) is the one line to change.
+- **Whatever else tonight's tasks take from that document** will hit the same wall. The tasks that
+  rebuild from saved analysis JSONs and use fake clients are unaffected.
+- **Nothing tunes the prompt yet.** The scorer measures; `analyze.py`'s question instruction is
+  untouched, and should stay untouched until there is a real target to tune against.
+- **`eval/score_questions.py` is not in README.md or STUDY_GUIDE.md.** It is in CLAUDE.md's
+  architecture list. The user-facing docs are better written once the target exists and the
+  scorecard has a real number on it.
