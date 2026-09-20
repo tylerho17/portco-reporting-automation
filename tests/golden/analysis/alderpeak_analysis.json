@@ -23,7 +23,7 @@
       },
       {
         "theme": "Retention decomposition",
-        "question": "Which cohorts sit behind GRR (annualized) at 96.0%, and which renewed below list price?"
+        "question": "Which cohorts sit behind GRR (annualized) at 96.0% this quarter?"
       },
       {
         "theme": "Burn and budget variance",
@@ -51,28 +51,20 @@
       },
       {
         "theme": "Definitions and assumptions",
-        "question": "Which definition gives GRR (annualized) at 96.0%, and does it net downgrades against upsell?"
+        "question": "Which definition gives GRR (annualized) at 96.0%: a per-customer cap or NRR minus expansion?"
       }
     ]
   },
   "run_info": {
-    "model": "claude-sonnet-5",
+    "model": "hand-written stand-in",
     "passed": true,
-    "attempts": 1,
-    "input_tokens": 5535,
-    "output_tokens": 7069,
-    "seconds": 62.31,
-    "attempt_log": [
-      {
-        "seconds": 62.31,
-        "input_tokens": 5535,
-        "output_tokens": 7069,
-        "stop_reason": "end_turn",
-        "problems": []
-      }
-    ]
+    "attempts": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "seconds": 0,
+    "attempt_log": []
   },
-  "prompt_version": "v5",
+  "prompt_version": "hand-written stand-in",
   "error": null,
   "payload": {
     "company": "Alderpeak",

@@ -9,10 +9,10 @@ otherwise with the placeholder), open the saved file, and check:
    thresholds and statuses match the Flags sheet; status cells are red / green / gray.
 3. Slide 2: two chart pictures; a blank quarter has no bar and no line through it.
 4. Slide 3: the flag count matches the company's story; every tripped flag, the combo rule, and
-   every metric with data missing (or "None").
-5. Slide 4: the JSON's headline, 3 risks and 3 questions under "AI-drafted from computed metrics -
-   review before use", and none of its wins; or exactly "AI summary unavailable" with no AI-drafted
-   line. Slides 1 to 3 carry no AI text either way.
+   every metric with data missing (or "None"); then the JSON's 3 risks under an AI-drafted line.
+5. Slide 4: the JSON's headline, diagnosis and 8 to 10 questions grouped under their themes, under
+   "AI-drafted from computed metrics - review before use"; or exactly "AI summary unavailable" with
+   no AI-drafted line. Slides 1 and 2 carry no AI text either way, and slide 3 only its 3 risks.
 6. Nothing overflows: every text box and table cell is re-measured from the saved file
    (text_fit.py), every font is at least 12 pt, and every shape sits inside the slide.
    The overflow check is itself proven by breaking a deck on purpose.

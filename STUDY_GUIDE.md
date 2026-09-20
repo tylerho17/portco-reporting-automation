@@ -63,7 +63,7 @@ It matches the code as of 2026-09-18 (branch `final-polish`, after final run Tas
 
 ### The one-sentence version
 
-A messy Excel file from a portfolio company goes in. Python tidies it, calculates the KPIs, checks them against investor thresholds and lists what's missing. Then it writes an Excel summary, asks Claude to word the commentary (checking that Claude didn't invent or calculate any number), and builds a 4-slide PowerPoint deck and a 1 to 2 page board memo.
+A messy Excel file from a portfolio company goes in. Python tidies it, calculates the KPIs, checks them against investor thresholds and lists what's missing. Then it writes an Excel summary, asks Claude to word the commentary (checking that Claude didn't invent or calculate any number), and builds a 4-slide PowerPoint deck and a 1 to 3 page board memo.
 
 ### The finance analogy
 
@@ -112,7 +112,7 @@ metrics.xlsx            check → retry once →             + charts.py (2 matp
                                                          re-checks the analysis, else "AI summary unavailable"
                                                          → output/northwind_board_pack.pptx
 
-memo.py      the same numbers and analysis as a 1 to 2 page memo: output/northwind_board_memo.docx and .pdf
+memo.py      the same numbers and analysis as a 1 to 3 page memo: output/northwind_board_memo.docx and .pdf
 diff_runs.py what changed since the last run (flags flipped, metrics moved, gaps): in the memo and on the page
 theme.py     the one palette, font and type sizes the template, deck, charts, memo and web page all use
 
@@ -141,16 +141,16 @@ check_*.py, tests/, golden.py and eval/   prove each step gives the right answer
 
 **Step 4: output.**
 - `excel_output.py` writes a 3-sheet workbook: Metrics (red = tripped, gray = data missing), Flags, and Data gaps. It does no math.
-- `analyze.py` turns the numbers into display text ("97.1%") and sends it to Claude with writing rules. It checks the answer: the right JSON shape, exactly 3 wins/risks/questions, short enough for a slide, and **every number Claude wrote must appear in the data**. If a check fails, it retries once and tells Claude what was wrong. The saved file keeps the data Claude saw next to what it wrote, so any claim can be traced back.
+- `analyze.py` turns the numbers into display text ("97.1%") and sends it to Claude with writing rules. It checks the answer: the right JSON shape (a headline, a 60 to 90 word diagnosis, exactly 3 risks, 8 to 10 questions under five themes), short enough for a slide, questions that each quote a metric and its value and ask for a breakdown rather than an explanation (and, when NRR has moved, open the retention theme by asking gross against net retention), and **every number Claude wrote must appear in the data**. If a check fails, it retries once and tells Claude what was wrong. The saved file keeps the data Claude saw next to what it wrote, so any claim can be traced back.
 - `build_deck.py` builds the 4-slide deck on the brand template (`templates/base.pptx`, made once by `make_template.py`):
   1. **Key metrics:** a table of latest quarter, prior quarter, threshold and a red / green / gray status.
   2. **ARR and cash:** two charts from `charts.py`. The blank quarter is a visible gap.
   3. **Risks and flags:** "6 of 9 flags tripped" (counted by Python), each tripped flag vs its threshold, the combo rule, and the Data gaps line.
-  4. **AI commentary:** a line under the title, "AI-drafted from computed metrics - review before use", then Claude's headline, and its 3 risks and 3 questions for management side by side. Claude still writes 3 wins, but the deck doesn't show them.
+  4. **AI commentary:** a line under the title, "AI-drafted from computed metrics - review before use", then Claude's headline, a diagnosis paragraph, and 8 to 10 questions for management in two columns, grouped under their themes. The 3 risks moved to slide 3, under the data gaps. Claude no longer writes wins.
 
   **Before it uses Claude's text, it checks it again** against numbers rebuilt from today's workbook. If the analysis is missing, failed, is for another quarter or has a number that's no longer in the data, slide 4 says "AI summary unavailable". The other slides are built as normal, because their numbers come from Python. `text_fit.py` measures every piece of text and shrinks it to fit, down to 12 pt; below that, the build stops and names the slide and box.
 
-- `memo.py` writes the board memo, 1 to 2 pages, as Word and PDF: the AI headline, what changed since the last run, the key metrics table, the flags with values and thresholds, the data gaps and the AI questions, with the deck's footer. It uses Claude's text only if the deck would, plus one more rule: every number in it must be one the metrics workbook shows. Otherwise it says "AI commentary unavailable", and every computed number is still there.
+- `memo.py` writes the board memo, 1 to 3 pages, as Word and PDF: the AI headline, what changed since the last run, the key metrics table, the flags with values and thresholds, the data gaps and the AI questions, with the deck's footer. It uses Claude's text only if the deck would, plus one more rule: every number in it must be one the metrics workbook shows. Otherwise it says "AI commentary unavailable", and every computed number is still there.
 
   **Every slide's footer says where the deck came from and whether a person has reviewed it:** `Fictional data | northwind.xlsx | 2026-09-17 | 9c1b52c | claude-sonnet-5 | AI-drafted | not reviewed`. The last part becomes `AI-drafted | reviewed by Tyler Ho on 2026-09-17` once `approve.py` has recorded a reviewer. There's **no watermark** unless you build with `--draft`, which stamps "DRAFT - NOT REVIEWED" across every slide of a deck nobody has approved.
 
@@ -756,9 +756,9 @@ page shows them in a red box instead of the portfolio.
 
 ### `memo.py`: the board memo, Word and PDF (final Task 1)
 
-**What it's for:** the same update as the deck, written as a 1 to 2 page memo for board members who read rather than present. `python memo.py data/northwind.xlsx` saves `output/northwind_board_memo.docx` and `.pdf` beside the deck; `main.py` does it for every company.
+**What it's for:** the same update as the deck, written as a 1 to 3 page memo for board members who read rather than present. `python memo.py data/northwind.xlsx` saves `output/northwind_board_memo.docx` and `.pdf` beside the deck; `main.py` does it for every company.
 
-**What's in it, top to bottom:** title and quarter; the AI headline under "AI-drafted from computed metrics - review before use"; the key metrics table (latest, prior, budget or threshold, status in red / green / gray); runway at next quarter's budgeted burn; "Flags: 6 of 9 flags tripped" with each tripped flag's value and threshold, the flags that can't be evaluated, and the combo rule; data gaps; the AI's 3 questions for management. The footer is the deck's footer, on every page.
+**What's in it, top to bottom:** title and quarter; the AI headline under "AI-drafted from computed metrics - review before use"; the key metrics table (latest, prior, budget or threshold, status in red / green / gray); runway at next quarter's budgeted burn; "Flags: 6 of 9 flags tripped" with each tripped flag's value and threshold, the flags that can't be evaluated, and the combo rule; data gaps; the AI's questions for management, grouped by theme. The footer is the deck's footer, on every page.
 
 **How it's built:** the memo is built once as a list of "blocks" (a title, a heading, a paragraph, a bullet list, a table), then written twice: `write_docx` (python-docx) and `write_pdf` (reportlab). So the Word file and the PDF can't say different things, and `check_memo.py` proves they don't.
 
@@ -772,7 +772,7 @@ page shows them in a red box instead of the portfolio.
 |---|---|---|
 | `workbook_texts(data)` | Every text the metrics workbook shows: each metric in each quarter, the quarter labels, flag names and thresholds (as Excel displays them), the combo rule's wording, runway at budget, and the flag count. | The list the AI's numbers are checked against. |
 | `workbook_numbers(data)` | The numbers in those texts, read the way analyze.py reads numbers (sign kept, %, x and mo dropped). | Thresholds count as Excel shows them: 15.0, not 0.15 (that bug is in LEARNINGS). |
-| `unlisted_numbers(summary, data)` | Numbers in the AI headline and questions that aren't in `workbook_numbers`. | The wins and risks aren't in the memo, so they aren't checked here. |
+| `unlisted_numbers(summary, data)` | Numbers in the AI headline and questions that aren't in `workbook_numbers`. | The diagnosis and risks aren't in the memo, so they aren't checked here. |
 | `memo_analysis(analysis_file, payload, data)` | First every check the deck makes (`build_deck.load_analysis`), then `unlisted_numbers`. Returns (summary, None) or (None, why not). | Northwind with "ending cash of $14,300K" in a question: fine for the deck, "AI commentary unavailable" in the memo. |
 | `no_em_dash(text)` | Swaps a spaced em dash for a colon: the deck's "Cannot evaluate" status becomes "Cannot evaluate: missing input". | The memo has no em dashes. |
 | `flag_cells(data, flag)` | One flag's row on the Flags sheet (`excel_output.flag_row`). | The combo rule's words come from here, so its "1 pt" and "3 quarters" are the workbook's own. |
@@ -978,7 +978,7 @@ page shows them in a red box instead of the portfolio.
 | `recent_runs_panel(output_dir)` | **Recent runs (Task 15).** "No runs yet ..." before any run; else the newest five runs from `output/logs` (`run_log.recent_runs`), each an expander headed by `run_log.run_label`, holding what went wrong in red, then a table of every step (company, step, seconds, result, error). | Runs from the command line show here too: the page and main.py write the same files. |
 | `company_buttons(...)` / `approve_panel(...)` | Generate, four downloads (deck, memo PDF, memo Word, Excel) and Export; the reviewer's name and Approve, greyed out until there are files built from today's workbook. | |
 | `export_button(workbook, data)` / `export_file(kind, data, workbook)` | Export (Task 11): a popover with Metrics (CSV), Flags (CSV), Metrics and flags (JSON) and Email summary (HTML), off when the workbook can't be read. Each button gets a function, so its file is built by export.py only when clicked. | Built from today's workbook, so nothing needs generating first; nothing is written to `output/`. |
-| `show_flags(data)` / `show_gaps(data)` / `show_metrics(data)` / `show_charts(data)` / `show_commentary(...)` | The company page's sections. The commentary is the headline, risks and questions, as on slide 4 (no wins), under "AI-drafted from computed metrics - review before use". | |
+| `show_flags(data)` / `show_gaps(data)` / `show_metrics(data)` / `show_charts(data)` / `show_commentary(...)` | The company page's sections. The commentary is the headline, diagnosis, risks and themed questions, all on the one page (on the deck the risks are on slide 3, the rest on slide 4), under "AI-drafted from computed metrics - review before use". | |
 | `company_page(stem, data_dir, output_dir)` | Page 2, each section in a white card. A name with no workbook says "No KPI workbook found ..."; a workbook clean.py can't read shows its message and nothing else, except Review mapping when the problem is headers to confirm. | |
 | `main(data_dir, output_dir)` | The page Streamlit draws: theme.py's style sheet, then a company's page if one was clicked, else the portfolio. | Runs only when Streamlit runs the file, so tests can import `app.py` without drawing anything; tests pass temporary folders. |
 
@@ -1181,7 +1181,7 @@ Builds each company's memo (with its saved analysis if there is one), **opens th
 | `check_numbers(texts, allowed, where)` | Every number in the texts is in the metrics workbook. |
 | `check_kpi_table(tables, table, flags, name)` | Row by row: latest and prior cells equal the Excel cells; thresholds and statuses match the Flags sheet; every flag has a row. |
 | `check_flags_and_gaps(paragraphs, company, gap_labels)` | The flag count from the story, every tripped flag, every data gap (or None). |
-| `check_ai_text(paragraphs, summary, name)` | The JSON's headline and questions under the AI-drafted line, no wins or risks; or "AI commentary unavailable" twice and no AI-drafted line. |
+| `check_ai_text(paragraphs, summary, name)` | The JSON's headline and themed questions under the AI-drafted line, never the diagnosis or the risks (those are on the deck); or "AI commentary unavailable" twice and no AI-drafted line. |
 | `expected_memo_review(workbook, output_dir)` | "reviewed by NAME on DATE" only if a still-valid approval lists the memo, else "not reviewed"; worked out from the manifest here, not with memo.py's code. |
 | `expected_footer(workbook, output_dir, model)` / `check_footer(...)` | The footer worked out here from git, the analysis and the manifest; it must be the Word footer and on every PDF page. |
 | `check_same_text_and_no_em_dash(paragraphs, tables, pages, name)` | Every piece of the Word text is in the PDF; neither has an em dash. |

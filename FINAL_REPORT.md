@@ -2904,3 +2904,144 @@ Two things to read into that before quoting it:
   behind it, so it can be written up next; it is not part of this task.
 - **Nothing has been tuned.** `analyze.py`'s question instruction is untouched. The scorer and the
   target are now in place, and the scorecard above is the baseline a prompt change is compared to.
+
+## Night two, Task 2: the v5 AI output shape (analyze.py, build_deck.py, memo.py, app.py)
+
+**API spend: $0.00.** No model was called: every check, deck, memo and golden was built from saved
+analyses and fake clients. Running total for the night: $0.00 of the $2.00 ceiling.
+
+This task was already mostly built when I started (three commits: the shape, then the tests, checks
+and goldens). "Continue earlier work" meant auditing it against your brief and the research, not
+redoing it. The section lists what was there, then what I found wrong and changed.
+
+### What the v5 shape is (all of it checked by `validate_summary`)
+
+- **The answer:** a headline (at most 30 words, asked for 25), a **diagnosis of 60 to 90 words**
+  (asked for 65 to 85; what the numbers show, then what is likely driving it, with the cause written
+  as an inference), **3 risks** for the Risks and flags slide, and **8 to 10 questions**, each under
+  one of the five themes: Retention decomposition, Burn and budget variance, Liquidity and runway,
+  Pipeline and sales efficiency, Definitions and assumptions. **Wins are gone** from the schema, the
+  prompt, the deck, the memo, the web page and every fixture.
+- **Question rules from the research:** every question names a metric and quotes its value; every
+  question asks for a decomposition, a reconciliation or a distance to breach (one with none of
+  those cues is "asking for an explanation" and fails); **whenever NRR has moved, the first
+  "Retention decomposition" question must name both NRR (annualized) and GRR (annualized)** (the
+  gross versus net divergence test); at least one question interrogates a definition, a restatement
+  or a missing input.
+- **Kept:** the sign-aware number check, the direction checks (a direction word its numbers
+  contradict, a "persistent" trend that isn't) and the slide fit check.
+- **Fit checking extended to the new slide 4:** `ai_text_problems` measures every box that holds
+  Claude's words at the 12 pt floor: the risks on slide 3 (in the space this company's own data gaps
+  leave, taken from the payload), and on slide 4 the headline, the diagnosis and each question
+  column. A too-long answer is a validation problem, so it gets the one retry.
+- **Where things sit:** slide 3 now carries the 3 risks under the data gaps, headed as AI-drafted
+  (ten questions leave no room for them on slide 4). Slide 4 is the AI-drafted line, the headline,
+  the diagnosis and the questions in two columns grouped by theme. The memo shows the headline and
+  the themed questions only, never the diagnosis or the risks, because it shows AI text only when
+  every number in it is one the metrics workbook shows.
+- **`PROMPT_VERSION = "v5"`** with its SHA-256 pinned in tests/test_analyze.py: a prompt edit
+  without a version bump fails the suite.
+
+### What I found wrong in the earlier work, and changed
+
+1. **The definitions rule was looser than the brief.** A question about an "assumption" counted as
+   interrogating a definition, a restatement or a missing input. Removed "assumption" from the cues.
+2. **Unbuilt checks presented as built.** The prompt told Claude "an automated check enforces
+   these" over "one question, not two", "no yes/no questions" and "no two questions may ask for the
+   same cut of the same metric". None is checked. The prompt now says those two rules are Claude's
+   to keep because no check enforces them, and the yes/no rule is dropped: research question 10 is
+   a yes/no form that demands a reconciliation, so banning the form would ban the standard.
+3. **A claim of an outside standard passed every check.** "Below the industry standard of 100.0%"
+   is grounded (100.0% is a config threshold in the payload), so the number check passes it, and the
+   research says that convention could not be sourced to any publication. New check
+   `outside_standard_problems` rejects "industry", "benchmark", "peers", "norm", "typical", "best
+   practice", "rule of thumb" and "conventional", and the prompt says the thresholds are the
+   tool's settings, not industry standards. This is the research's "convention, not practice"
+   caution made into code.
+4. **Fabricated provenance in the fixtures.** The three hand-written v5 analyses still carried the
+   `run_info` of an older live call (`claude-sonnet-5`, 6,115 in and 7,241 out tokens, 67 seconds)
+   and `prompt_version` "v5". The goldens' footers therefore said Sonnet 5 wrote text no model
+   wrote. They now say `hand-written stand-in` with zero tokens (zero tokens also means the cost
+   step reports none). Six goldens rebuilt; the diff is that footer text and four questions, nothing
+   else (read line by line).
+5. **Four questions in the fixtures joined two asks with "and".** Split into one ask each (Northwind's
+   definitions question, Alderpeak's second and last, Fernhollow's last). Alderpeak's now asks
+   "a per-customer cap or NRR minus expansion", which is the research's GRR definition trap.
+6. **`SMALLEST_VISIBLE_MOVE`** was documented as a decimal and compared against percent-scale
+   numbers. It worked only because any change beats 0.001. Replaced by "the trend holds two
+   different values", with a test at the 0.1 point boundary.
+7. **Stale docs.** CLAUDE.md, README.md, STUDY_GUIDE.md, DEMO.md, check_deck.py's header and memo.py's
+   header still said "3 wins, 3 risks, 3 questions" or a 1 to 2 page memo. Corrected to the v5 shape.
+
+### Proof the checks catch what they claim
+
+**36 planted bugs, 36 caught**, in a temp copy of the project (never the project). Each bug switches
+off or weakens one check: the divergence rule (three ways), the diagnosis window (three ways), the
+question count (floor and ceiling, each as a constant and as the expression), the risk count, the
+theme check, metric-and-value (dropped, and weakened to value only), the explanation check, the
+definitions check, "assumption counts as a definition", the outside-standard check (removed, and
+"benchmark" dropped), the minus sign in the number check, the number check itself, the direction
+check, the fit check, each of the four AI text boxes alone (slide 3 risks, slide 4 headline,
+diagnosis, question columns), the headline, question word and risk detail limits, blank text, and
+a prompt edit without a version bump. The script is `output/analyze_mutations.py` (git-ignored, like
+the earlier ones; about 6 minutes). It first runs the unmutated copy, which must pass, and asserts
+that every planted string appears exactly once so a typo cannot report a false catch.
+
+It found real gaps in the tests, all fixed: the first run caught 20 of 23. The question-count test
+was built from `MAX_QUESTIONS + 1`, so breaking the constant moved the test with it (now literal 7,
+8, 10, 11); nothing tested the headline limit; and the number check was tested as a helper but never
+through `validate_summary`. `check_northwind.py` also now proves the two new rules on a broken
+answer (an assumption-only definitions question; an industry standard in the headline).
+
+### Results
+
+Full suite after the last change: **1495 passed, 1 xfailed** (1468 and 1 before this pass; the
+xfail is the strict theme-coverage test from Task 1). `check_northwind.py`, `check_deck.py` and
+`check_memo.py` pass. No em dash in any file I touched.
+
+### Decisions you didn't specify
+
+1. **"Why, and which cohorts" passes.** The demand check needs a decomposition, reconciliation or
+   breach cue somewhere in the question; it does not ban "why" outright. A test written by the
+   earlier work records this on purpose, and it matches `eval/score_questions.py`. The cost: "Which
+   factors explain NRR (annualized) at 97.1%?" also passes, because "which" is a decomposition cue.
+   A stricter rule is a word list you would have to own, and the prompt still forbids it.
+2. **v5 edited in place, not bumped to v6.** v5 has never been sent to the API and no saved answer
+   was produced by it, so nothing says "v5" and was written by the older wording. The checksum moved
+   with the text. If you had already used v5 anywhere I cannot see, treat the current text as v6.
+3. **The diagnosis makes no benchmark comparison.** Research section 6's worked diagnosis anchors on
+   High Alpha's bands, but the payload holds no benchmark data, the publishers disagree with each
+   other (CAC payback 11 months against 14 to 20), and the research says never to average them. Adding
+   one publisher's bands would be a data and sourcing decision, so the prompt forbids the comparison
+   instead.
+4. **The word limits keep their buffer:** the prompt asks for a question of at most 18 words and a
+   diagnosis of 65 to 85, and the check fails 23 words and 59 or 91, the same way the headline
+   (asked for 25, fails at 31) already worked.
+5. **The retention divergence test is recognised by words,** not meaning: the first retention
+   question must name NRR (annualized) and GRR (annualized) in some spelling. A question naming both
+   that asks something else would pass.
+6. **Memo length is now 1 to 3 pages.** Northwind's memo is 3 pages (Alderpeak and Fernhollow 2).
+   Ten themed questions do not fit the old two. I changed the docs and `check_memo.py` accepts 3.
+
+### Unresolved
+
+- **The prompt has never met the real model.** Whether Claude's questions pass these checks, how
+  often the one retry is needed, and what a v5 run costs are unknown until a task that allows the API
+  runs it. My guess is more output than v4's 7,300 tokens per company (ten questions and a
+  diagnosis to write), but that is a guess, not a measurement.
+- **Slide 3 and slide 4 have not been looked at.** No LibreOffice or poppler is installed, so I could
+  not render them. check_deck.py re-measures every box in the saved file at the 12 pt floor for all
+  three companies and passes, but a picture of slide 4 with ten questions is worth ten seconds of
+  your eyes.
+- **`output/` still holds the old stand-ins.** Its three `*_analysis.json` files (git-ignored) are
+  copies of the stand-ins from before the relabel: they still say `claude-sonnet-5` (checked), and
+  so do the footers of the three decks in `output/` (checked; the manifests record no model). Run a
+  live analysis before showing anyone, or the footer credits a model for text it did not write. I
+  did not overwrite them: a rebuild through main.py risks an API call, and a live run replaces them
+  anyway.
+- **The question checks are heuristic.** A question passes on cue words ("which", "how much of",
+  "reconcile", "definition"); a vacuous question that happens to contain one passes. The 1 to 5
+  rubric (`python eval/score_questions.py --rubric`) is what judges quality, and only you can apply it.
+- **The memo drops the diagnosis and the risks** by an earlier design rule (AI text with numbers not
+  in the metrics workbook stays off it). Say if you want the diagnosis in the memo; it would need
+  the same number check.

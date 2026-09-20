@@ -1,6 +1,6 @@
 """Build the board memo: output/<company>_board_memo.docx and .pdf, beside the deck (final Task 1).
 
-A 1 to 2 page written update for board members who read rather than present:
+A 1 to 3 page written update for board members who read rather than present:
 1. Title and quarter:          "<Company> board update: Q2 2026", compared with the prior quarter
 2. Headline:                   the AI headline under "AI-drafted from computed metrics - review before use"
    What changed since the last run (Task 10, only when an earlier run is on record): flags that

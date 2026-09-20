@@ -16,14 +16,14 @@
     row 12: 'Rule of 40' 14 pt 334155 fill FFFFFF | '42.7%' 14 pt 334155 fill FFFFFF | '42.7%' 14 pt 334155 fill FFFFFF | 'trips below 40.0%' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1A7742 fill EAF6EF
     row 13: 'NRR falling while pipeline rising' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | 'rule on Risks and flags slide' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1A7742 fill EAF6EF
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 2 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'ARR and cash, Q3 2024 to Q2 2026'  28 pt bold 0B2545
   [ARR chart] picture at 0.50, 1.30 in, size 5.99 x 5.45 in
   [Cash chart] picture at 6.84, 1.30 in, size 5.99 x 5.45 in
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 3 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'Risks and flags, Q2 2026'  28 pt bold 0B2545
@@ -43,7 +43,7 @@
     'Cash cover rests on burn staying low'  15 pt bold 334155
     'Net burn is $200K and runway at current burn is 108.0 mo; if burn returns to plan it is 144.0 mo.'  15 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 4 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'AI commentary, Q2 2026'  28 pt bold 0B2545
@@ -56,7 +56,7 @@
   [Questions for management 1] text at 0.50, 3.46 in, size 5.99 x 3.29 in
     'Retention decomposition'  12 pt bold 0B2545
     '1. How much of NRR (annualized) at 109.8% is expansion rather than GRR (annualized) at 96.0%?'  12 pt 334155
-    '2. Which cohorts sit behind GRR (annualized) at 96.0%, and which renewed below list price?'  12 pt 334155
+    '2. Which cohorts sit behind GRR (annualized) at 96.0% this quarter?'  12 pt 334155
     'Burn and budget variance'  12 pt bold 0B2545
     '3. Which cost lines hold net burn vs budget at -9.1% while headcount grows?'  12 pt 334155
     '4. How much of the 0.12x burn multiple depends on net burn vs budget staying at -9.1%?'  12 pt 334155
@@ -68,6 +68,6 @@
     '7. Which segments make up the $5,350K pipeline behind CAC payback at 17.7 mo?'  12 pt 334155
     '8. How much of net new ARR vs budget at 5.8% came from deals pulled forward?'  12 pt 334155
     'Definitions and assumptions'  12 pt bold 0B2545
-    '9. Which definition gives GRR (annualized) at 96.0%, and does it net downgrades against upsell?'  12 pt 334155
+    '9. Which definition gives GRR (annualized) at 96.0%: a per-customer cap or NRR minus expansion?'  12 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B

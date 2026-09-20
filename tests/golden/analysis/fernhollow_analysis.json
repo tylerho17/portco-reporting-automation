@@ -51,28 +51,20 @@
       },
       {
         "theme": "Definitions and assumptions",
-        "question": "Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured, and who owns them?"
+        "question": "Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured?"
       }
     ]
   },
   "run_info": {
-    "model": "claude-sonnet-5",
+    "model": "hand-written stand-in",
     "passed": true,
-    "attempts": 1,
-    "input_tokens": 6156,
-    "output_tokens": 9828,
-    "seconds": 89.3,
-    "attempt_log": [
-      {
-        "seconds": 89.3,
-        "input_tokens": 6156,
-        "output_tokens": 9828,
-        "stop_reason": "end_turn",
-        "problems": []
-      }
-    ]
+    "attempts": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "seconds": 0,
+    "attempt_log": []
   },
-  "prompt_version": "v5",
+  "prompt_version": "hand-written stand-in",
   "error": null,
   "payload": {
     "company": "Fernhollow",

@@ -199,6 +199,16 @@ def check_analysis_validation(payload_text):
     problems = validate_summary(wrong_theme, payload_text)
     assert any("has the theme 'Retention'" in p for p in problems), f"Unknown theme not caught: {problems}"
 
+    assumption_only = replace_question(good_summary(), 8, "Definitions and assumptions",
+                                       "Which assumption sits behind runway at current burn of 11.0 mo?")
+    problems = validate_summary(assumption_only, payload_text)
+    assert any("interrogates a definition" in p for p in problems), f"An assumption stood in for a definition: {problems}"
+
+    industry_standard = good_summary()
+    industry_standard.headline = "NRR fell to 97.1%, below the industry standard of 100.0%."
+    problems = validate_summary(industry_standard, payload_text)
+    assert any("outside standard" in p for p in problems), f"An industry standard was not caught: {problems}"
+
 
 def check_recommendation_rule():
     """Haiku only with avg score >= 4.0 AND 100% pass rate; scores must be complete and 1-5."""
@@ -234,7 +244,7 @@ def main():
     check_analysis_validation(payload_to_text(build_payload("Northwind", actuals, next_budget, config)))
     print("✓ Analysis validation passes a good answer, catches calculated/rounded numbers, wrong counts, a short "
           "diagnosis, and questions that explain, quote no value, skip the gross versus net test, leave out "
-          "definitions or use an unknown theme")
+          "definitions (an assumption is not one), use an unknown theme, or cite an industry standard")
     check_recommendation_rule()
     print("✓ Model recommendation rule and score entry behave as agreed")
     print("All checks passed")

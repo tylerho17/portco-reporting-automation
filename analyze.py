@@ -180,12 +180,14 @@ What to write:
 Rules for every question - an automated check enforces these too:
 - Name the metric and quote its value from the data. A question without a figure in it sends management nowhere.
 - Ask for one of three things: a decomposition (which parts of a figure make it up), a reconciliation (how one figure ties to another) or a distance to breach (how far a figure sits from its threshold, or what would move it there). Never ask for an explanation: a question whose whole demand is "why", "what is driving" or "what caused" is rejected.
-- At most 18 words. One question, not two. No yes/no questions. Ten questions share one slide.
-- No two questions may ask for the same cut of the same metric.
+- At most 18 words. Ten questions share one slide.
 - Whenever NRR (annualized) has moved at all, the first question under "Retention decomposition" must be the gross versus net divergence test: ask how much of the move sits in gross retention rather than in expansion, quoting both NRR (annualized) and GRR (annualized). Gross retention falling while net retention holds up means the retention engine is broken and new sales are paying for it, and the board cannot see that unless the two are asked about together.
 - At least one question must interrogate a definition, a restatement or a missing input: which definition a figure is on, what a restatement would change, or when a missing input will exist and who owns it. Put it under "Definitions and assumptions".
 
+Two more rules no check can enforce, so they are yours to keep: one question each, never two joined by "and", and no two questions asking for the same cut of the same metric.
+
 Accuracy of framing:
+- The flag thresholds are this tool's settings, not industry standards, and the data holds no benchmarks or peer figures. Write "against its 100.0% threshold"; never call a threshold a norm or a standard, and never compare a figure with peers, the industry or a benchmark. Answers that do are rejected.
 - When a flag passed, say so explicitly, quoting its value next to its threshold (for example: "passed, but close to its threshold (value vs threshold) - watch"). Never place a passing metric where it reads as a breach.
 - Describe a trend from its peak, or from the start of the flag's lookback window, not from the first quarter in the data.
 - Never call a quarter a "significant" (or large, major, sharp) miss or beat against budget unless you quote its value and that value is more than 10% away from budget - above +10.0% or below -10.0%. Smaller variances are described plainly, with their value.
@@ -489,14 +491,10 @@ BREACH_CUES = ("how far", "how long before", "how many months", "at what point",
                "back below", "back above")
 DEMAND_CUES = DECOMPOSITION_CUES + RECONCILIATION_CUES + BREACH_CUES
 
-# A question interrogating a definition, a restatement or a missing input.
+# A question interrogating a definition, a restatement or a missing input. A question about an
+# assumption is not one of these three, so "assumption" is not a cue.
 DEFINITION_CUES = ("definition", "defined", "restate", "restated", "restatement", "same basis",
-                   "like for like", "assumption", "data missing", "missing input", "missing",
-                   "blank", "not meaningful")
-
-# The smallest NRR move the payload's trend can show: values are formatted to one decimal place as a
-# percentage, so 0.1 of a point (0.001 as a decimal) is the smallest visible change.
-SMALLEST_VISIBLE_MOVE = 0.001
+                   "like for like", "data missing", "missing input", "missing", "blank", "not meaningful")
 
 
 def metric_spellings():
@@ -541,12 +539,15 @@ def has_any(text, cues):
 def nrr_has_moved(payload_text):
     """True when the payload's NRR trend shows two different values (so the divergence test applies).
 
+    The payload formats NRR to one decimal place, so two values are the same figure exactly when
+    their text is the same number: any change the payload can show, down to 0.1 of a point, counts.
+
     Known limit: a workbook where every NRR value is missing has nothing to compare, and the rule
     doesn't apply. That is the right answer, not a miss: there is no move to decompose.
     """
     trend = payload_trends(payload_text).get(METRIC_LABELS["nrr"]) or {}
-    values = [value for value in (series_value(text) for text in trend.values()) if value is not None]
-    return len(values) > 1 and max(values) - min(values) >= SMALLEST_VISIBLE_MOVE
+    values = {value for value in (series_value(text) for text in trend.values()) if value is not None}
+    return len(values) > 1
 
 
 def divergence_problems(summary, payload_text):
@@ -591,6 +592,23 @@ def question_problems(summary, payload_text):
     return problems + divergence_problems(summary, payload_text)
 
 
+# Words that present an outside benchmark or an industry standard. The data holds this tool's own
+# thresholds (config.yaml) and nothing from outside: the research finds no citable source for NRR
+# under 100%, runway under 12 months or CAC payback over 24 months as practice, and its benchmark
+# publishers disagree with each other. A number like "100.0%" is grounded in the payload, so the
+# number check alone would pass "below the industry standard of 100.0%".
+OUTSIDE_STANDARD_PATTERN = re.compile(
+    r"\b(?:industry|benchmarks?|benchmarked|peers?|best[- ]practices?|standard practice|rule of thumb|"
+    r"typical(?:ly)?|norms?|conventional(?:ly)?|market (?:average|norm|standard))\b", re.IGNORECASE)
+
+
+def outside_standard_problems(summary):
+    """Problems where the answer leans on a standard or benchmark the data does not hold."""
+    return [f"'{preview(text)}' cites an outside standard ('{found.group()}'): the data holds this tool's "
+            f"thresholds only, so write \"against its 100.0% threshold\", never a norm, benchmark or peers"
+            for text in summary_texts(summary) if (found := OUTSIDE_STANDARD_PATTERN.search(text))]
+
+
 def validate_summary(summary, payload_text):
     """Return a list of problems with Claude's answer. Empty list = pass."""
     problems = []
@@ -611,6 +629,7 @@ def validate_summary(summary, payload_text):
             problems.append(f"risks #{number} detail has {words} words and {sentences} sentences; "
                             f"max is {MAX_DETAIL_WORDS} words and {MAX_DETAIL_SENTENCES} sentences")
     problems += question_problems(summary, payload_text)
+    problems += outside_standard_problems(summary)
     ungrounded = find_ungrounded_numbers(summary, payload_text)
     if ungrounded:
         problems.append("these numbers are not in the data (rounded or calculated?): "

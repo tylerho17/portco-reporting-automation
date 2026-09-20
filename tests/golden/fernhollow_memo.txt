@@ -52,11 +52,11 @@
   'Which segments make up the $2,500K pipeline behind CAC payback at 134.4 mo?'  List Bullet, 9.5 pt, 334155, keep with next
   'How much of net new ARR vs budget at -150.0% is deals lost rather than delayed?'  List Bullet, 9.5 pt, 334155
   'Definitions and assumptions'  9.5 pt, bold, 0B2545
-  'Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured, and who owns them?'  List Bullet, 9.5 pt, 334155
+  'Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured?'  List Bullet, 9.5 pt, 334155
 -- Footer --
-  'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
+  'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
 == PDF page 1 ==
-  Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Fernhollow board update: Q2 2026
   Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI
   workbook; the headline and questions are drafted by AI.
@@ -170,7 +170,7 @@
   •
   Q2 2026: Flag: Rule of 40
 == PDF page 2 ==
-  Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Questions for management
   AI-drafted from computed metrics - review before use
   Retention decomposition
@@ -195,4 +195,4 @@
   How much of net new ARR vs budget at -150.0% is deals lost rather than delayed?
   Definitions and assumptions
   •
-  Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured, and who owns them?
+  Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured?

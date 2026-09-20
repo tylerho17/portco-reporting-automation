@@ -16,14 +16,14 @@
     row 12: 'Rule of 40' 14 pt 334155 fill FFFFFF | 'data missing' 14 pt 334155 fill FFFFFF | '-78.0%' 14 pt 334155 fill FFFFFF | 'trips below 40.0%' 14 pt 334155 fill FFFFFF | 'Cannot evaluate: missing input' 14 pt 334155 fill EDF0F3
     row 13: 'NRR falling while pipeline rising' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | 'rule on Risks and flags slide' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1A7742 fill EAF6EF
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 2 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'ARR and cash, Q3 2024 to Q2 2026'  28 pt bold 0B2545
   [ARR chart] picture at 0.50, 1.30 in, size 5.99 x 5.45 in
   [Cash chart] picture at 6.84, 1.30 in, size 5.99 x 5.45 in
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 3 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'Risks and flags, Q2 2026'  28 pt bold 0B2545
@@ -54,7 +54,7 @@
     'New sales cannot replace the churn'  12 pt bold 334155
     'CAC payback is 134.4 mo against a 24.0 mo threshold and pipeline fell to $2,500K, so net new ARR vs budget is -150.0%.'  12 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 4 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'AI commentary, Q2 2026'  28 pt bold 0B2545
@@ -79,6 +79,6 @@
     '7. Which segments make up the $2,500K pipeline behind CAC payback at 134.4 mo?'  12 pt 334155
     '8. How much of net new ARR vs budget at -150.0% is deals lost rather than delayed?'  12 pt 334155
     'Definitions and assumptions'  12 pt bold 0B2545
-    '9. Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured, and who owns them?'  12 pt 334155
+    '9. Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured?'  12 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B

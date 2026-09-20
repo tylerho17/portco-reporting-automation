@@ -51,28 +51,20 @@
       },
       {
         "theme": "Definitions and assumptions",
-        "question": "Which definition gives NRR (annualized) at 97.1%, and will Q1 2025's missing net burn be restated?"
+        "question": "Which definition of NRR (annualized) gives 97.1% against 108.9% in Q3 2025?"
       }
     ]
   },
   "run_info": {
-    "model": "claude-sonnet-5",
+    "model": "hand-written stand-in",
     "passed": true,
-    "attempts": 1,
-    "input_tokens": 6115,
-    "output_tokens": 7241,
-    "seconds": 67.16,
-    "attempt_log": [
-      {
-        "seconds": 67.16,
-        "input_tokens": 6115,
-        "output_tokens": 7241,
-        "stop_reason": "end_turn",
-        "problems": []
-      }
-    ]
+    "attempts": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "seconds": 0,
+    "attempt_log": []
   },
-  "prompt_version": "v5",
+  "prompt_version": "hand-written stand-in",
   "error": null,
   "payload": {
     "company": "Northwind",

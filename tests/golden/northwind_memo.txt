@@ -48,11 +48,11 @@
   'Which segments make up the $12,500K pipeline behind the 20.7 mo CAC payback?'  List Bullet, 9.5 pt, 334155, keep with next
   'How much of net new ARR vs budget at -19.0% is deals slipping rather than lost?'  List Bullet, 9.5 pt, 334155
   'Definitions and assumptions'  9.5 pt, bold, 0B2545
-  "Which definition gives NRR (annualized) at 97.1%, and will Q1 2025's missing net burn be restated?"  List Bullet, 9.5 pt, 334155
+  'Which definition of NRR (annualized) gives 97.1% against 108.9% in Q3 2025?'  List Bullet, 9.5 pt, 334155
 -- Footer --
-  'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
+  'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
 == PDF page 1 ==
-  Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Northwind board update: Q2 2026
   Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI
   workbook; the headline and questions are drafted by AI.
@@ -156,7 +156,7 @@
   •
   Q1 2025 + Q1 2026: ARR growth YoY, Revenue growth YoY, Rule of 40
 == PDF page 2 ==
-  Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Questions for management
   AI-drafted from computed metrics - review before use
   Retention decomposition
@@ -181,4 +181,4 @@
   How much of net new ARR vs budget at -19.0% is deals slipping rather than lost?
   Definitions and assumptions
   •
-  Which definition gives NRR (annualized) at 97.1%, and will Q1 2025's missing net burn be restated?
+  Which definition of NRR (annualized) gives 97.1% against 108.9% in Q3 2025?

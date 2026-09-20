@@ -31,7 +31,7 @@
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
   'Retention decomposition'  9.5 pt, bold, 0B2545
   'How much of NRR (annualized) at 109.8% is expansion rather than GRR (annualized) at 96.0%?'  List Bullet, 9.5 pt, 334155, keep with next
-  'Which cohorts sit behind GRR (annualized) at 96.0%, and which renewed below list price?'  List Bullet, 9.5 pt, 334155
+  'Which cohorts sit behind GRR (annualized) at 96.0% this quarter?'  List Bullet, 9.5 pt, 334155
   'Burn and budget variance'  9.5 pt, bold, 0B2545
   'Which cost lines hold net burn vs budget at -9.1% while headcount grows?'  List Bullet, 9.5 pt, 334155, keep with next
   'How much of the 0.12x burn multiple depends on net burn vs budget staying at -9.1%?'  List Bullet, 9.5 pt, 334155
@@ -42,11 +42,11 @@
   'Which segments make up the $5,350K pipeline behind CAC payback at 17.7 mo?'  List Bullet, 9.5 pt, 334155, keep with next
   'How much of net new ARR vs budget at 5.8% came from deals pulled forward?'  List Bullet, 9.5 pt, 334155
   'Definitions and assumptions'  9.5 pt, bold, 0B2545
-  'Which definition gives GRR (annualized) at 96.0%, and does it net downgrades against upsell?'  List Bullet, 9.5 pt, 334155
+  'Which definition gives GRR (annualized) at 96.0%: a per-customer cap or NRR minus expansion?'  List Bullet, 9.5 pt, 334155
 -- Footer --
-  'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
+  'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
 == PDF page 1 ==
-  Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Alderpeak board update: Q2 2026
   Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI
   workbook; the headline and questions are drafted by AI.
@@ -136,14 +136,14 @@
   •
   None: every metric and flag has the data it needs
 == PDF page 2 ==
-  Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Questions for management
   AI-drafted from computed metrics - review before use
   Retention decomposition
   •
   How much of NRR (annualized) at 109.8% is expansion rather than GRR (annualized) at 96.0%?
   •
-  Which cohorts sit behind GRR (annualized) at 96.0%, and which renewed below list price?
+  Which cohorts sit behind GRR (annualized) at 96.0% this quarter?
   Burn and budget variance
   •
   Which cost lines hold net burn vs budget at -9.1% while headcount grows?
@@ -161,4 +161,4 @@
   How much of net new ARR vs budget at 5.8% came from deals pulled forward?
   Definitions and assumptions
   •
-  Which definition gives GRR (annualized) at 96.0%, and does it net downgrades against upsell?
+  Which definition gives GRR (annualized) at 96.0%: a per-customer cap or NRR minus expansion?

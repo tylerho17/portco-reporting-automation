@@ -12,7 +12,8 @@ import pytest
 
 from analyze import (MAX_DETAIL_WORDS, MAX_QUESTIONS, MIN_QUESTIONS, PROMPT_VERSION, SYSTEM_PROMPT, THEMES,
                      BoardSummary, Point, Question, build_payload, claim_problems, find_ungrounded_numbers,
-                     grouped_questions, numbers_in, save_analysis, slide_fit_problems, validate_summary)
+                     grouped_questions, nrr_has_moved, numbers_in, save_analysis, slide_fit_problems,
+                     validate_summary)
 from build_deck import load_analysis
 from clean import clean_workbook
 from make_data import OUTPUT_PATH as NORTHWIND
@@ -138,7 +139,7 @@ def test_the_analysis_records_which_prompt_wrote_it(northwind, tmp_path):
 # The checksum of each prompt wording. A change to SYSTEM_PROMPT without a new PROMPT_VERSION fails
 # here: a version number nobody remembers to bump is worse than no version number at all.
 PROMPT_CHECKSUMS = {"v4": "1500e06a2299c7717b87f248a60a47404b32ebcefcb70eac4e1c83f22a3fa6d2",
-                    "v5": "9c15b357297c1e58ed1a6a558f94a96fdb5b525563599a3ee6e5fad4eb790ed5"}
+                    "v5": "296456665a4290d042fd07bf35fb25d9730dafc21bb9a9a2f4aebea42858239a"}
 
 
 def test_the_prompt_version_is_bumped_whenever_the_prompt_changes():
@@ -269,12 +270,51 @@ def test_the_diagnosis_must_be_60_to_90_words(words, caught):
     assert any("diagnosis has" in problem for problem in problems) == caught
 
 
-@pytest.mark.parametrize("count, caught", [(MIN_QUESTIONS - 1, True), (MIN_QUESTIONS, False),
-                                           (MAX_QUESTIONS, False), (MAX_QUESTIONS + 1, True)])
+@pytest.mark.parametrize("count, caught", [(7, True), (8, False), (10, False), (11, True)])
 def test_there_must_be_8_to_10_questions(count, caught):
+    # Literal counts from the brief, not the constants: a test built from MAX_QUESTIONS would move
+    # with a mistake in it.
+    assert (MIN_QUESTIONS, MAX_QUESTIONS) == (8, 10)
     summary = summary_with(questions=questions(count))
     problems = validate_summary(summary, MOVING_NRR)
     assert any("questions must have" in problem for problem in problems) == caught
+
+
+@pytest.mark.parametrize("field", ["headline", "diagnosis", "detail"])
+def test_a_blank_text_field_is_caught(field):
+    problems = validate_summary(summary_with(**{field: "   "}), MOVING_NRR)
+    assert any("empty" in problem for problem in problems)
+
+
+@pytest.mark.parametrize("words, caught", [(30, False), (31, True)])
+def test_the_headline_is_at_most_30_words(words, caught):
+    problems = validate_summary(summary_with(headline="retention " * words), MOVING_NRR)
+    assert any("headline has" in problem for problem in problems) == caught
+
+
+@pytest.mark.parametrize("words, caught", [(22, False), (23, True)])
+def test_a_question_is_at_most_22_words(words, caught):
+    # "How much of NRR (annualized) at 97.1% sits in GRR (annualized)?" is 11 words; pad to size.
+    text = "How much of NRR (annualized) at 97.1% sits in GRR (annualized) " + "again " * (words - 11)
+    long_first = Question(theme="Retention decomposition", question=text.strip() + "?")
+    problems = validate_summary(summary_with(questions=questions(first=long_first)), MOVING_NRR)
+    assert any("words, max is 22" in problem for problem in problems) == caught
+
+
+@pytest.mark.parametrize("detail, caught", [
+    ("customers " * 45, False), ("customers " * 46, True),                # the 45 word cap
+    ("Customers stayed. Spend held.", False), ("Customers stayed. Spend held. Cash fell.", True),  # 2 sentences
+])
+def test_a_risk_detail_is_at_most_45_words_and_2_sentences(detail, caught):
+    problems = validate_summary(summary_with(detail=detail), MOVING_NRR)
+    assert any("risks #1 detail" in problem for problem in problems) == caught
+
+
+def test_a_number_the_data_does_not_hold_fails_validation():
+    # 96.4% is in neither payload trend: the number check must be part of validate_summary itself,
+    # not only a function the tests call directly.
+    problems = validate_summary(summary_with(headline="NRR (annualized) was 96.4% this quarter."), MOVING_NRR)
+    assert any("not in the data" in problem and "96.4" in problem for problem in problems)
 
 
 def test_a_theme_that_is_not_one_of_the_five_is_caught():
@@ -326,6 +366,63 @@ def test_one_question_must_interrogate_a_definition_a_restatement_or_a_missing_i
     assert any("interrogates a definition" in problem for problem in problems)
     assert not any("interrogates a definition" in problem
                    for problem in validate_summary(summary_with(questions=questions()), FLAT_NRR))
+
+
+@pytest.mark.parametrize("text", [
+    "NRR (annualized) of 97.1% is below the industry standard of 100.0%.",
+    "Runway of 11.0 mo is short against peers.",
+    "CAC payback of 20.7 mo is above the benchmark.",
+    "Best practice is a burn multiple under 2.00x.",
+    "A burn multiple of 2.35x is typical for this stage.",
+    "NRR (annualized) at 97.1% is under the norm.",
+])
+def test_an_outside_benchmark_or_industry_standard_is_caught_wherever_it_appears(text):
+    # The data holds thresholds from config.yaml and nothing else: the research finds no citable
+    # source for NRR under 100%, runway under 12 months or CAC payback over 24 months as practice, so
+    # the commentary may quote a threshold as a threshold and never as a standard.
+    for summary in (summary_with(headline=text), summary_with(diagnosis=text + " retention " * 60),
+                    summary_with(detail=text)):
+        problems = validate_summary(summary, MOVING_NRR)
+        assert any("outside standard" in problem for problem in problems), text
+
+
+def test_a_threshold_quoted_as_a_threshold_is_not_a_standard():
+    plain = "NRR (annualized) is 97.1% against its 100.0% threshold and GRR (annualized) is 88.1%."
+    assert not any("outside standard" in problem
+                   for problem in validate_summary(summary_with(headline=plain), MOVING_NRR))
+
+
+def test_the_prompt_says_thresholds_are_settings_not_standards():
+    assert "not industry standards" in SYSTEM_PROMPT
+
+
+def test_a_question_about_an_assumption_alone_is_not_a_definition_question():
+    # The brief says a definition, a restatement or a missing input. An assumption is a different
+    # thing to ask about, so it does not stand in for one of those three.
+    assumption = Question(theme="Definitions and assumptions",
+                          question="Which assumption sits behind runway at current burn of 11.0 mo?")
+    problems = validate_summary(summary_with(questions=questions()[:-1] + [assumption]), FLAT_NRR)
+    assert any("interrogates a definition" in problem for problem in problems)
+
+
+@pytest.mark.parametrize("question", [
+    "Which restatement would change GRR (annualized) at 88.1%?",       # a restatement
+    "Which quarters of GRR (annualized) at 88.1% are missing input?",  # a missing input
+    "Which definition gives GRR (annualized) at 88.1%?",               # a definition
+])
+def test_each_of_the_three_things_counts_as_the_definitions_question(question):
+    item = Question(theme="Definitions and assumptions", question=question)
+    problems = validate_summary(summary_with(questions=questions()[:-1] + [item]), FLAT_NRR)
+    assert not any("interrogates a definition" in problem for problem in problems)
+
+
+@pytest.mark.parametrize("first, second, moved", [
+    ("108.0%", "97.1%", True), ("97.1%", "97.0%", True),   # a tenth of a point is a move
+    ("97.1%", "97.1%", False),
+])
+def test_nrr_counts_as_moved_by_any_change_the_payload_can_show(first, second, moved):
+    payload = json.dumps({"trends_by_quarter": {"NRR (annualized)": {"Q1 2026": first, "Q2 2026": second}}})
+    assert nrr_has_moved(payload) == moved
 
 
 def test_when_nrr_has_moved_the_first_retention_question_is_the_gross_versus_net_test():
