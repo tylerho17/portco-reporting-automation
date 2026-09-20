@@ -10,6 +10,7 @@ and the command line.
 """
 
 import json
+import re
 
 import pytest
 
@@ -85,13 +86,14 @@ def test_a_missing_target_file_stops_and_names_it(tmp_path):
     assert "not_here.md" in str(stopped.value)
 
 
-def test_the_missing_gold_standard_points_at_section_6():
-    # Until section 6 is copied across, the default target does not exist. The stop has to say
-    # where it comes from, not just that a file is absent.
-    if sq.TARGET_PATH.exists():
-        return
+def test_the_missing_gold_standard_points_at_section_6(tmp_path, monkeypatch):
+    # The default target is missing only if someone deletes it, so this test points the default at
+    # an empty spot. The stop has to say where the file comes from, not just that it is absent.
+    # (It used to return early when the real file existed, which made it pass without checking.)
+    absent = tmp_path / "target_questions_northwind.md"
+    monkeypatch.setattr(sq, "TARGET_PATH", absent)
     with pytest.raises(ValueError) as stopped:
-        sq.load_target()
+        sq.load_target(absent)
     assert "section 6" in str(stopped.value)
     assert "RESEARCH_BOARD_PACKS.md" in str(stopped.value)
 
@@ -145,6 +147,119 @@ def test_an_analysis_json_with_no_questions_stops(tmp_path):
     with pytest.raises(ValueError) as stopped:
         sq.load_generated(path)
     assert "questions" in str(stopped.value)
+
+
+# ---------------------------------------------------------------------------
+# The real gold standard: tests/fixtures/target_questions_northwind.md
+#
+# Every expected value below was read off the table in section 6 of docs/RESEARCH_BOARD_PACKS.md
+# by hand: the theme of each row, and its provenance mark ([V] verbatim, [V+] verbatim with the
+# company's values, [C] constructed). The fixture is the standard the prompt is tuned against, so
+# a stray edit to it must fail a test rather than quietly move the goalposts.
+# ---------------------------------------------------------------------------
+
+SECTION_6_THEMES = ["Retention decomposition", "Burn variance and efficiency", "Liquidity and downside",
+                    "Pipeline versus bookings", "Definitions and assumptions"]
+
+# Rows 1 to 10 of section 6's table. A question here takes exactly one marker, and two rows mix:
+# row 3 is [V] with a [C] scoping clause, so it keeps the table's own [V]; row 10 is a [C] clause
+# plus a [V] clause with no lead named, so it takes the weaker marker, constructed. The source line
+# under each of the two says which part is which (a test below checks it does).
+SECTION_6_MARKERS = ["verbatim with values", "constructed", "verbatim", "constructed", "verbatim with values",
+                     "verbatim with values", "verbatim", "verbatim with values", "verbatim", "constructed"]
+
+
+@pytest.fixture(scope="module")
+def gold():
+    """The real target set, parsed with the strict rules the scorer applies to it."""
+    return sq.load_target(sq.TARGET_PATH)
+
+
+def test_the_gold_standard_has_the_ten_questions_and_five_themes_of_section_6(gold):
+    assert len(gold.questions) == 10
+    assert gold.themes == SECTION_6_THEMES
+    assert [sum(q.theme == theme for q in gold.questions) for theme in SECTION_6_THEMES] == [3, 2, 2, 2, 1]
+
+
+def test_the_gold_standard_keeps_every_provenance_marker_of_section_6(gold):
+    assert [q.provenance for q in gold.questions] == SECTION_6_MARKERS
+
+
+@pytest.mark.parametrize("number, opening", [
+    (1, "NRR fell from 108% to 97% over three quarters. Rebuild the monthly waterfall for the last eight quarters"),
+    (4, "Burn is 20% over budget. Split the burn multiple"),
+    (6, "At 11 months of runway, how much cushion remains after downside sensitivity"),
+    (8, "Pipeline is up while bookings are flat. What is conversion at each stage entered"),
+    (10, "Is the 97% computed on exactly the same basis as the 108%"),
+])
+def test_the_gold_standard_questions_open_with_section_6s_own_words(gold, number, opening):
+    assert gold.questions[number - 1].text.startswith(opening)
+
+
+def test_the_gold_standard_keeps_a_short_verbatim_question_word_for_word(gold):
+    assert gold.questions[6].text == "What is the worst outcome here, and how likely is that outcome?"
+
+
+EM_DASH = chr(0x2014)    # section 6 uses them; written by number so this file holds none
+
+
+def section_6_words(text):
+    """The words of one section 6 table cell or fixture question: no quotes, no em dashes, lowercase."""
+    plain = text.replace(chr(0x201C), "").replace(chr(0x201D), "").replace('"', "").replace(EM_DASH, " ")
+    return re.findall(r"[\w$%.'–-]+", plain.lower())
+
+
+def test_the_gold_standard_is_word_for_word_section_6_apart_from_one_stated_edit(gold):
+    # Reads the question column of the table in docs/RESEARCH_BOARD_PACKS.md and compares it with
+    # the fixture. The only difference allowed is the one the fixture's header owns up to: row 3's
+    # trailing "applied to" note written as "Apply this to". Anything else means the fixture drifted
+    # from its source, or the source changed and the fixture was not updated.
+    doc = (sq.PROJECT_DIR / "docs" / "RESEARCH_BOARD_PACKS.md").read_text()
+    rows = {int(m.group(1)): m.group(2) for m in
+            re.finditer(r"^\| (\d+) \| [^|]+\| (.+?) \| .+ \|$", doc, flags=re.MULTILINE) if int(m.group(1)) <= 10}
+    assert sorted(rows) == list(range(1, 11))
+    rows[3] = rows[3].replace(EM_DASH + " applied to", "Apply this to")    # the one stated edit
+    for question in gold.questions:
+        assert section_6_words(question.text) == section_6_words(rows[question.number]), \
+            f"question {question.number} differs from section 6"
+
+
+def test_every_gold_standard_question_is_followed_by_the_source_it_was_taken_from():
+    # The marker says how a question relates to its source; the source line says which source.
+    # The scorer ignores these lines, so only a test can notice one going missing.
+    lines = sq.TARGET_PATH.read_text().splitlines()
+    for index, line in enumerate(lines):
+        if sq.QUESTION_LINE.match(line):
+            following = next(later for later in lines[index + 1:] if later.strip())
+            assert following.strip().startswith("Source:"), f"no source line under: {line[:60]}"
+
+
+def test_the_two_mixed_questions_say_which_part_is_which():
+    # Rows 3 and 10 of section 6 mix a quoted part and a constructed part. One marker cannot say
+    # that, so the source line under each must, or the fixture claims more than its source does.
+    text = sq.TARGET_PATH.read_text()
+    third = text.split("3. [verbatim]")[1].split("4. [constructed]")[0]
+    assert "scoping clause" in third and "constructed" in third
+    tenth = text.split("10. [constructed]")[1]
+    assert "second clause" in tenth and "verbatim" in tenth
+
+
+def test_the_gold_standard_says_where_it_came_from_and_what_it_leaves_out():
+    text = sq.TARGET_PATH.read_text()
+    assert "docs/RESEARCH_BOARD_PACKS.md" in text
+    assert "section 6" in text
+    assert "reserve" in text.lower()      # the two reserve questions are named as left out, not silently dropped
+
+
+def test_the_gold_standard_reaches_every_one_of_its_own_themes(gold):
+    # Score the target's questions, flattened to a plain list, against the target: a set that is the
+    # standard itself must miss no theme. Its other rates are deliberately not asserted here:
+    # section 6's own rule says every question names a metric and a value, and some of its ten do
+    # not, so demanding 100% would demand something the source does not meet.
+    flat = "\n".join(f"{q.number}. {q.text}" for q in gold.questions)
+    report = sq.score_set(gold, sq.parse_markdown(flat, "itself", strict=False))
+    assert report["theme_coverage"]["missed"] == []
+    assert report["counts"]["questions"] == 10
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +398,19 @@ def test_a_set_that_misses_a_theme_has_it_named(target, tmp_path):
     assert missed == ["Retention"]
 
 
+@pytest.mark.xfail(strict=True, reason="known limit: a shared metric name counts as covering a theme, and "
+                                       "the real target's themes share metrics (see covers())")
+def test_a_theme_is_missed_when_only_a_neighbouring_theme_shares_its_metric(gold):
+    # The real target: "Definitions and assumptions" is target question 10, which names GRR. A set
+    # with one retention question that names GRR reaches "Retention decomposition" and nothing
+    # about definitions, so the right answer is that "Definitions and assumptions" is missed.
+    # Today the shared GRR counts as covering it. strict=True: when the check is made stricter,
+    # this starts passing, the suite says so, and the marker comes off.
+    generated = sq.QuestionSet("one", [sq.Question("Which accounts explain GRR at 88.1%?", None, None, 1)], [])
+    _, missed = sq.theme_coverage(gold, generated)
+    assert "Definitions and assumptions" in missed
+
+
 def test_a_set_that_covers_every_theme_misses_none(target, tmp_path):
     both = "1. Which cost lines carry the rise in net burn?\n2. Which cohorts drove NRR to 97.1%?\n"
     generated = sq.load_generated(write(tmp_path / "gen.md", both))
@@ -307,6 +435,19 @@ def test_the_scorecard_counts_every_check(target, tmp_path):
     assert report["counts"]["themed"] == 0               # a flat list has no themes
     assert report["counts"]["duplicate_pairs"] == 0
     assert report["theme_coverage"]["missed"] == []
+
+
+def test_the_scorecard_shows_what_the_target_itself_scores(target, tmp_path):
+    # In the small target: all three questions ask for the parts (1.0), and two of three quote a
+    # metric and a value (question 1 names net burn but no figure). A set cannot be asked to beat
+    # the standard on a check the standard does not pass, so the printout shows this next to it.
+    generated = sq.load_generated(write(tmp_path / "gen.md", "1. Which cohorts drove NRR to 97.1%?\n"))
+    report = sq.score_set(target, generated)
+    assert report["target_reference"]["decomposition"] == 1.0
+    assert report["target_reference"]["metric_and_value"] == pytest.approx(2 / 3)
+    text = sq.format_report(report)
+    assert "the target itself: 100%" in text
+    assert "the target itself: 67%" in text
 
 
 def test_the_report_prints_every_question_with_its_verdict(target, tmp_path):

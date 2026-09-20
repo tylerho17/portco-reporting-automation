@@ -335,7 +335,15 @@ COVERS_OVERLAP = 0.3
 
 
 def covers(question, target_question):
-    """True when the generated question is about the same thing as this target question."""
+    """True when the generated question is about the same thing as this target question.
+
+    Known limit, found by scoring Northwind's saved set against the real target: a shared metric
+    name is enough, and the target's themes share metrics (NRR and GRR sit in both "Retention
+    decomposition" and "Definitions and assumptions"; net burn in both burn and liquidity). Drop
+    every "Definitions" question from a set and the theme still reads as covered. So a theme the
+    scorer reports as missed is missed, but one it reports as covered may only be a neighbour's.
+    Theme coverage is the loosest of the five checks: read it beside the questions, not on its own.
+    """
     shared = set(metric_names_in(question.text)) & set(metric_names_in(target_question.text))
     return bool(shared) or overlap(question.text, target_question.text) >= COVERS_OVERLAP
 
@@ -374,6 +382,15 @@ def score_set(target, generated):
             for q in questions]
 
     total = len(questions)
+    # What the target scores on the two checks that vary question by question. The target is section
+    # 6's own set, and some of its questions ask for a comparison or a sensitivity rather than a cut,
+    # or quote no figure, so it does not pass either check at 100%. Shown beside a set's rate so a
+    # 50% is read against the standard's 50%, not against a perfect score nobody has.
+    target_reference = {
+        "decomposition": sum(demand_label(q.text) == DECOMPOSITION for q in target.questions)
+        / len(target.questions),
+        "metric_and_value": sum(names_metric_and_value(q.text) for q in target.questions)
+        / len(target.questions)}
     counts = {"questions": total,
               "decomposition": sum(row["demand"] == DECOMPOSITION for row in rows),
               "explanation": sum(row["demand"] == EXPLANATION for row in rows),
@@ -390,6 +407,7 @@ def score_set(target, generated):
             "questions": rows,
             "counts": counts,
             "rates": rates,
+            "target_reference": target_reference,
             "theme_coverage": {"covered": covered, "missed": missed},
             "duplicates": [(a.number, b.number, score) for a, b, score in duplicates],
             # An unweighted mean of the five checks. A convenience number for watching a prompt
@@ -415,13 +433,13 @@ def format_report(report):
         lines.append(f"   asks for: {row['demand']} | metric: {metrics} | value: {values}")
         if row["duplicate_of"]:
             lines.append(f"   duplicates: {', '.join(str(n) for n in row['duplicate_of'])}")
-    counts, rates = report["counts"], report["rates"]
+    counts, rates, reference = report["counts"], report["rates"], report["target_reference"]
     total = counts["questions"]
     lines += ["",
               f"Decomposition, not explanation: {counts['decomposition']} of {total} "
-              f"({percent(rates['decomposition'])})",
+              f"({percent(rates['decomposition'])}; the target itself: {percent(reference['decomposition'])})",
               f"Names a metric and a value:     {counts['metric_and_value']} of {total} "
-              f"({percent(rates['metric_and_value'])})",
+              f"({percent(rates['metric_and_value'])}; the target itself: {percent(reference['metric_and_value'])})",
               f"Grouped under a theme:          {counts['themed']} of {total} ({percent(rates['themed'])})",
               f"Not a duplicate:                {percent(rates['unique'])} "
               f"({counts['duplicate_pairs']} duplicate pairs)",

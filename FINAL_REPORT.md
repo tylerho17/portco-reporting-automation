@@ -2777,3 +2777,130 @@ what each one taught:
 - **`eval/score_questions.py` is not in README.md or STUDY_GUIDE.md.** It is in CLAUDE.md's
   architecture list. The user-facing docs are better written once the target exists and the
   scorecard has a real number on it.
+
+## Night two, Task 1, second pass: the gold standard is saved (tests/fixtures/target_questions_northwind.md)
+
+**API spend: $0.00.** No model was called. Running total for the night: $0.00 of the $2.00 ceiling.
+
+The blocker in the section above is gone: docs/RESEARCH_BOARD_PACKS.md is in the repository, so the
+target set could be written from its source. The scorer from the first pass was already built and
+is unchanged apart from one addition, below.
+
+### What I built
+
+- **`tests/fixtures/target_questions_northwind.md`**: section 6's ten questions in the format the
+  scorer reads. Five themes in section 6's order (Retention decomposition 3, Burn variance and
+  efficiency 2, Liquidity and downside 2, Pipeline versus bookings 2, Definitions and assumptions
+  1). Every question carries its marker, mapped from section 6's own: `[V]` is `verbatim`, `[V+]`
+  is `verbatim with values`, `[C]` is `constructed` (3 verbatim, 4 with values, 3 constructed).
+  Under each question is a `Source:` line with the URL section 6 cites, so a question can be
+  traced. The header says what the set is, what it leaves out and what it does not pass.
+- **`tests/fixtures/README.md`** rewritten: the file exists, the markers use section 6's own
+  definitions instead of my guess from their names, and it says the target does not score 100%.
+- **A `target_reference` block in the scorecard** (`eval/score_questions.py`): the target's own
+  rate on decomposition and on naming a metric and a value, printed beside a set's rate.
+- **15 new tests** (44 to 58 passing plus 1 strict `xfail`, in tests/test_score_questions.py): the ten questions and five themes,
+  the ten markers in order, the opening words of five questions, one short question word for word,
+  a source line under every question, the two mixed questions saying which part is which, the
+  reserve-questions note, the target reaching all its own themes, the target's reference rates,
+  a **word-for-word comparison of every question against the table in section 6**, and the
+  `xfail` described under "What the real run showed".
+- **CLAUDE.md**: two words removed from its architecture line for the research document ("NOT IN THE
+  REPOSITORY YET (docs/ is empty)" and "to be"), because both had become false. It is your
+  instructions file, so this is called out here rather than done quietly. `git diff CLAUDE.md`
+  shows exactly that.
+
+### Proof the checks catch what they claim
+
+Ten deliberate breaks in a temp copy of the project (never the project): a marker dropped, a
+marker flipped, one word changed in question 6, a source line deleted, a theme renamed, question
+10's second-clause note removed, the reserve note removed, a question deleted, the scorer's target
+reference forced to 100%, and the section 6 pointer removed from the missing-file stop. **10 of 10
+were caught, each by the test written for it**, and the restored copy passed 58 of 58. The
+temp-copy script is `/tmp/bp_mut_run.py`, outside the repository.
+
+### Decisions you didn't specify
+
+1. **One marker per question, so two mixed questions had to pick.** Section 6 marks question 3 as
+   `[V]` with a `[C]` scoping clause, and question 10 as a `[C]` clause plus a `[V]` clause with no
+   lead named. Question 3 keeps section 6's `[V]`. Question 10 takes `constructed`, the weaker
+   marker, so the set does not claim more sourcing than its source does. Both are recorded in the
+   fixture header and in the source line under each. The alternative, letting a question carry two
+   markers, needs a parser change; it is a small one if you want it.
+2. **Two forced wording edits, and no others.** Em dashes became a comma, a colon or a full stop
+   (the project has none in a .md file), and question 3's trailing note "applied to the accounts
+   comprising the eleven-point decline" became the sentence "Apply this to the accounts comprising
+   the eleven-point decline". A word-level diff against section 6 shows question 3 differing by
+   those three words and every other question identical, and a test keeps it that way.
+3. **The two reserve questions and the generic follow-up are not in the set.** They are for a
+   covenant or ownership context Northwind does not have, and section 6 counts the set as ten.
+   The fixture header names them as left out.
+4. **The scorecard now shows the target's own rate on two checks.** You asked for the five checks;
+   this is not a sixth. It is context for reading two of them, see below. It does not change the
+   overall number, which is still the unweighted mean of the five.
+5. **The `Source:` lines are ignored by the scorer.** The parser skips any line that is not a theme
+   heading or a numbered question, which is the existing behavior; a test checks that no question
+   loses its source line, since nothing else would notice.
+
+### What failed and how I fixed it
+
+1. **I wrote two false statements into the fixture header before checking.** I said questions 3, 7
+   and 9 quote no metric and value (the scorer says 3, 7, 8 and 9), and that no word was changed
+   (question 3 lost "applied" and gained "apply this"). Caught by running the scorer on the file
+   and by a word-level diff, then corrected, and the diff became a test.
+2. **A test from the first pass went vacuous.** `test_the_missing_gold_standard_points_at_section_6`
+   returned early when the fixture existed, so saving the fixture made it pass without checking
+   anything. It now points the default path at an empty folder, and breaking the message in the temp
+   copy makes it fail.
+3. **The first mutation script was refused by the shell** (a brace-and-quote pattern in an inline
+   heredoc, then `rm`/`rsync` on /tmp). Rewritten as a Python file that makes its own temp copy
+   with `tempfile` and `shutil`; nothing else about the proof changed.
+
+### What the target scores against its own checks (worth knowing before tuning)
+
+Scored against itself, section 6's set gets **decomposition 5 of 10, metric and value 6 of 10,
+themes 5 of 5, no duplicates**. Section 6's own third generation rule says every question names a
+metric and its value, and four of its ten do not (3, 7, 8, 9). Five of its ten ask for something
+other than a cut of the data (2 a comparison, 6 a sensitivity, 7 a worst outcome, 9 a deal
+checklist, 10 a consistency check). I read the ten by hand and the scorer's verdicts are right, so
+this is not a scorer fault. It means **a generated set cannot be tuned toward 100% on those two
+checks**; the target is the reference, and it is now printed beside the set's rate.
+
+### What the real run showed (Northwind's saved analysis against the real target, no API call)
+
+`python eval/score_questions.py output/northwind_analysis.json` reads the saved v5 analysis (9
+questions, 5 themes): decomposition 7 of 9 (target itself 50%), metric and value 9 of 9 (target
+itself 60%), themed 9 of 9, no duplicates, themes covered 5 of 5, overall 96%.
+
+Two things to read into that before quoting it:
+
+- **The generated set beats the target on the string checks, and that is not a sign it is better.**
+  The checks measure form. Section 6's questions are the standard because of what they are sourced
+  to, and only the 1 to 5 rubric, applied by you reading, can compare quality.
+- **Theme coverage is the loosest check, and it leaks.** A shared metric name counts as reaching a
+  theme, and the target's themes share metrics (NRR and GRR sit in both Retention and Definitions,
+  net burn in both burn and liquidity). Dropping every "Definitions and assumptions" question from
+  Northwind's set still reports Definitions as covered, and the same happens for burn. A theme
+  reported as missed is missed; one reported as covered may only be a neighbour's. Documented in
+  `covers()`'s docstring and pinned by a strict `xfail` test that flips to a failure the day the
+  check is tightened. **I did not fix it**: any fix (trust the model's own theme labels, require
+  wording overlap on top of the metric, list a signal word per theme) is a decision about what
+  "covers" means, and the first two each have a way to be gamed.
+
+### Unresolved
+
+- **Theme coverage over-reports** (above). It needs a decision on what counts as covering a theme.
+- **Two tests fail in tests/test_docs.py, neither caused by this task, both failing at HEAD before
+  my changes.**
+  - `test_no_markdown_file_has_an_em_dash`: docs/RESEARCH_BOARD_PACKS.md has 43 lines with an em
+    dash, and the test walks every .md file. Fixing it means rewriting your specification (inside
+    quotations from named sources) or exempting that one file from your own rule. I did neither.
+  - `test_study_guide_names_only_functions_that_exist`: STUDY_GUIDE.md names `points_paragraphs
+    (build_deck.py)`, which is Task 2's work in progress, not this task.
+- **Whether the scorer should count a "compare" or "what happens if" question as a demand for the
+  parts.** Under the current rule five of section 6's own questions are not decompositions. That is
+  a judgement about the standard, so I left it.
+- **The scorer is still not in README.md or STUDY_GUIDE.md.** The scorecard now has a real target
+  behind it, so it can be written up next; it is not part of this task.
+- **Nothing has been tuned.** `analyze.py`'s question instruction is untouched. The scorer and the
+  target are now in place, and the scorecard above is the baseline a prompt change is compared to.
