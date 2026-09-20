@@ -109,12 +109,34 @@ def test_a_generated_set_may_be_a_flat_markdown_list_with_no_theme(tmp_path):
     assert [q.provenance for q in generated.questions] == [None, None]
 
 
-def test_a_generated_set_may_be_an_analysis_json(tmp_path):
+def test_a_generated_set_may_be_an_analysis_json_from_before_v5(tmp_path):
+    # v4 saved summary.questions as plain strings, with no themes. Those files still score.
     path = tmp_path / "example_analysis.json"
     path.write_text(json.dumps({"summary": {"questions": ["Why did NRR fall?", "Which cohorts churned?"]}}))
     generated = sq.load_generated(path)
     assert [q.text for q in generated.questions] == ["Why did NRR fall?", "Which cohorts churned?"]
-    assert all(q.theme is None for q in generated.questions)   # analyze.py returns a flat list
+    assert all(q.theme is None for q in generated.questions)
+
+
+def test_an_analysis_json_carries_the_theme_each_question_sits_under(tmp_path):
+    # Since v5 analyze.py groups its questions, so the "grouped under a theme" check can see them.
+    path = tmp_path / "example_analysis.json"
+    path.write_text(json.dumps({"summary": {"questions": [
+        {"theme": "Retention decomposition", "question": "Which cohorts churned?"},
+        {"theme": "Liquidity and runway", "question": "How far is runway from 12.0 mo?"},
+        {"theme": "Retention decomposition", "question": "How much of NRR at 97.1% is expansion?"}]}}))
+    generated = sq.load_generated(path)
+    assert [q.theme for q in generated.questions] == [
+        "Retention decomposition", "Liquidity and runway", "Retention decomposition"]
+    assert generated.themes == ["Retention decomposition", "Liquidity and runway"]   # in the order first seen
+
+
+def test_a_question_that_is_neither_a_string_nor_a_theme_and_question_stops(tmp_path):
+    path = tmp_path / "example_analysis.json"
+    path.write_text(json.dumps({"summary": {"questions": [{"text": "Which cohorts churned?"}]}}))
+    with pytest.raises(ValueError) as stopped:
+        sq.load_generated(path)
+    assert "neither a string nor" in str(stopped.value)
 
 
 def test_an_analysis_json_with_no_questions_stops(tmp_path):
