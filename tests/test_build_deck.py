@@ -60,12 +60,20 @@ def deck_data(company="Testco", blank=None):
     return collect_deck_data(company, "testco.xlsx", three_quarters(blank), None, TEST_CONFIG)
 
 
+# 69 words, no numbers in it, so only the length and fit checks can fail it.
+PLAIN_DIAGNOSIS = ("Retention is the question this quarter. " + "The installed base shrank while new sales held "
+                   "up, and spend stayed where the plan put it. ") * 3
+
+
 def summary_dict():
-    """A valid summary with no numbers in it, so the number check has nothing to reject."""
+    """A valid v5 summary whose only number is $100K, which is what every Testco input is."""
     point = {"title": "Steady base", "detail": "Customers stayed."}
+    question = {"theme": "Definitions and assumptions",
+                "question": "Which definition gives net burn at $100K this quarter?"}
     return {"headline": "Retention is the main question for the board.",
-            "wins": [point] * 3, "risks": [point] * 3,
-            "questions": ["What drives churn?", "Where is pipeline coming from?", "How is hiring going?"]}
+            "diagnosis": PLAIN_DIAGNOSIS,
+            "risks": [point] * 3,
+            "questions": [question] * 8}
 
 
 def shape(slide, name):
@@ -173,22 +181,14 @@ def test_analysis_too_long_for_the_slides_gives_the_placeholder(tmp_path, payloa
     too_long = summary_dict()
     too_long["risks"] = [{"title": "Steady base", "detail": "customers " * 45}] * 3
     summary, reason = load_analysis(write_analysis(tmp_path, too_long), payload)
-    assert summary is None and "does not fit slide 4" in reason
+    assert summary is None and "does not fit slide 3" in reason
 
 
-def test_long_wins_do_not_cost_the_deck_its_ai_text(tmp_path, payload):
-    # Wins aren't on the deck any more (Task 2), so their length can't make the text "not fit".
-    long_wins = summary_dict()
-    long_wins["wins"] = [{"title": "Steady base", "detail": "customers " * 45}] * 3
-    summary, reason = load_analysis(write_analysis(tmp_path, long_wins), payload)
-    assert reason is None and summary is not None
-
-
-def test_analysis_with_two_questions(tmp_path, payload):
+def test_analysis_with_seven_questions(tmp_path, payload):
     short = summary_dict()
-    short["questions"] = short["questions"][:2]
+    short["questions"] = short["questions"][:7]
     summary, reason = load_analysis(write_analysis(tmp_path, short), payload)
-    assert summary is None and "exactly 3" in reason
+    assert summary is None and "questions must have 8 to 10 items" in reason
 
 
 # ---------------------------------------------------------------------------
@@ -224,10 +224,11 @@ def test_placeholder_on_slide_4_when_there_is_no_analysis(tmp_path):
 def test_analysis_text_on_slide_4(tmp_path):
     slide = build(tmp_path, summary=summary_dict()).slides[3]
     assert shape(slide, "Headline").text_frame.text == summary_dict()["headline"]
-    assert "Steady base" in shape(slide, "Risks").text_frame.text
-    questions = shape(slide, "Questions").text_frame.text
-    assert all(question in questions for question in summary_dict()["questions"])
-    assert PLACEHOLDER_TEXT not in all_text(slide)
+    assert shape(slide, "Diagnosis").text_frame.text == summary_dict()["diagnosis"]
+    questions = all_text(slide)
+    assert all(item["question"] in questions for item in summary_dict()["questions"])
+    assert "Definitions and assumptions" in questions, "the theme heads its questions"
+    assert PLACEHOLDER_TEXT not in questions
 
 
 def test_the_ai_line_sits_under_the_title_and_above_the_headline(tmp_path):
@@ -238,11 +239,19 @@ def test_the_ai_line_sits_under_the_title_and_above_the_headline(tmp_path):
     assert line.top + line.height <= shape(slide, "Headline").top
 
 
-def test_wins_are_not_on_the_deck(tmp_path):
+def test_the_risks_are_on_slide_3_under_the_data_gaps(tmp_path):
     summary = summary_dict()
-    summary["wins"] = [{"title": "A win nobody sees", "detail": "Customers stayed."}] * 3
+    summary["risks"] = [{"title": "Retention slipping", "detail": "Customers left."}] * 3
     slides = build(tmp_path, summary=summary).slides
-    assert all("A win nobody sees" not in all_text(slide) and "Wins" not in all_text(slide) for slide in slides)
+    column = shape(slides[2], "Data gaps and risks").text_frame.text
+    assert column.index("Data gaps") < column.index("Risks (AI-drafted"), "the gaps come first"
+    assert "Retention slipping" in column and "Customers left." in column
+    assert "Retention slipping" not in all_text(slides[3]), "the risks are not on slide 4 as well"
+
+
+def test_without_an_analysis_slide_3_says_the_risks_are_unavailable(tmp_path):
+    column = shape(build(tmp_path).slides[2], "Data gaps and risks").text_frame.text
+    assert "Risks (AI-drafted" in column and PLACEHOLDER_TEXT in column
 
 
 def test_the_flag_count_is_on_the_risks_slide(tmp_path):
@@ -302,8 +311,8 @@ def test_type_sizes_on_the_slides(tmp_path):
     # Title 28, section 20, body 15, caption 13, table 14; the footer stays at the 12 pt floor.
     deck = build(tmp_path)
     assert run_sizes(deck.slides[0].shapes.title) == {28}
-    assert max(run_sizes(shape(deck.slides[2], "Data gaps"))) == 20       # its heading
-    assert min(run_sizes(shape(deck.slides[2], "Data gaps"))) == 15       # its lines
+    assert max(run_sizes(shape(deck.slides[2], "Data gaps and risks"))) == 20   # its heading
+    assert min(run_sizes(shape(deck.slides[2], "Data gaps and risks"))) == 15   # its lines
     slide_4 = build(tmp_path, summary=summary_dict()).slides[3]
     assert run_sizes(shape(slide_4, "AI-drafted line")) == {13}
     assert run_sizes(shape(slide_4, "Headline")) == {20}
@@ -328,7 +337,7 @@ def test_risks_slide_lists_tripped_flags_combo_and_data_gaps(tmp_path):
     text = shape(slide, "Risks and flags").text_frame.text
     assert "NRR (annualized): -300.0% (trips below 100.0%)" in text
     assert "NRR falling while pipeline rising: Cannot evaluate: missing input" in text
-    gaps = shape(slide, "Data gaps").text_frame.text
+    gaps = shape(slide, "Data gaps and risks").text_frame.text
     assert gaps.startswith("Data gaps") and "Q1 2026 + Q2 2026: ARR growth QoQ" in gaps
 
 
@@ -337,13 +346,11 @@ def run_sizes(text_shape):
 
 
 def test_side_by_side_columns_use_the_same_font_sizes(tmp_path):
-    # Risks are long, questions are short: the questions column must shrink along with the risks column.
-    summary = summary_dict()
-    summary["risks"] = [{"title": "Steady base", "detail": " ".join(["Customers stayed with the product."] * 5)}] * 3
-    slide = build(tmp_path, summary=summary).slides[3]
-    risks, questions = shape(slide, "Risks"), shape(slide, "Questions")
-    assert max(run_sizes(risks)) < 20      # the risks heading had to shrink from 20 pt...
-    assert run_sizes(risks) == run_sizes(questions)  # ...and the questions column shrank with it
+    # Slide 3's flags column is long and its gaps column short, so the gaps column must shrink with it.
+    slide = build(tmp_path, blank="Q1 2026").slides[2]
+    flags, gaps = shape(slide, "Risks and flags"), shape(slide, "Data gaps and risks")
+    assert max(run_sizes(flags)) == max(run_sizes(gaps))   # both headings at the same size
+    assert min(run_sizes(flags)) == min(run_sizes(gaps))   # and both bodies too
 
 
 def test_charts_slide_has_two_pictures(tmp_path):

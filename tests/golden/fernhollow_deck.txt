@@ -28,45 +28,57 @@
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'Risks and flags, Q2 2026'  28 pt bold 0B2545
   [Risks and flags] text at 0.50, 1.30 in, size 5.99 x 5.45 in
-    'Tripped flags (7 of 9 flags tripped, 1 cannot evaluate)'  18 pt bold 0B2545
-    '• NRR (annualized): 77.9% (trips below 100.0%)'  13 pt 334155
-    '• GRR (annualized): 74.7% (trips below 85.0%)'  13 pt 334155
-    '• Burn multiple: ∞ (ARR shrank) (trips above 2.00x)'  13 pt 334155
-    '• Net burn vs budget: 19.6% (trips above 15.0%)'  13 pt 334155
-    '• Runway at current burn: 6.0 mo (trips below 12.0 mo)'  13 pt 334155
-    '• CAC payback: 134.4 mo (trips above 24.0 mo)'  13 pt 334155
-    '• Net new ARR vs budget: -150.0% (trips below -20.0%)'  13 pt 334155
-    'Cannot evaluate'  18 pt bold 0B2545
-    '• Rule of 40: Cannot evaluate: missing input'  13 pt 334155
-    'Combo rule'  18 pt bold 0B2545
-    '• NRR falling while pipeline rising: Passed (trips when NRR falls by at least 1.0 pts and pipeline rises at every step over the last 3 quarters)'  13 pt 334155
-  [Data gaps] text at 6.84, 1.30 in, size 5.99 x 5.45 in
-    'Data gaps (data missing)'  18 pt bold 0B2545
-    '• Q2 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  13 pt 334155
-    '• Q2 2025 + Q3 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  13 pt 334155
-    '• Q2 2025 + Q2 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  13 pt 334155
-    '• Q2 2026: Flag: Rule of 40'  13 pt 334155
+    'Tripped flags (7 of 9 flags tripped, 1 cannot evaluate)'  17 pt bold 0B2545
+    '• NRR (annualized): 77.9% (trips below 100.0%)'  12 pt 334155
+    '• GRR (annualized): 74.7% (trips below 85.0%)'  12 pt 334155
+    '• Burn multiple: ∞ (ARR shrank) (trips above 2.00x)'  12 pt 334155
+    '• Net burn vs budget: 19.6% (trips above 15.0%)'  12 pt 334155
+    '• Runway at current burn: 6.0 mo (trips below 12.0 mo)'  12 pt 334155
+    '• CAC payback: 134.4 mo (trips above 24.0 mo)'  12 pt 334155
+    '• Net new ARR vs budget: -150.0% (trips below -20.0%)'  12 pt 334155
+    'Cannot evaluate'  17 pt bold 0B2545
+    '• Rule of 40: Cannot evaluate: missing input'  12 pt 334155
+    'Combo rule'  17 pt bold 0B2545
+    '• NRR falling while pipeline rising: Passed (trips when NRR falls by at least 1.0 pts and pipeline rises at every step over the last 3 quarters)'  12 pt 334155
+  [Data gaps and risks] text at 6.84, 1.30 in, size 5.99 x 5.45 in
+    'Data gaps (data missing)'  17 pt bold 0B2545
+    '• Q2 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  12 pt 334155
+    '• Q2 2025 + Q3 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  12 pt 334155
+    '• Q2 2025 + Q2 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  12 pt 334155
+    '• Q2 2026: Flag: Rule of 40'  12 pt 334155
+    'Risks (AI-drafted from computed metrics, review before use)'  12 pt bold 0B2545
+    'Cash runs out inside two quarters'  12 pt bold 334155
+    'Runway at current burn is 6.0 mo on ending cash of $3,300K, and 7.6 mo if burn returns to plan.'  12 pt 334155
+    'The base is shrinking, not just growing slower'  12 pt bold 334155
+    'NRR (annualized) is 77.9% and GRR (annualized) 74.7%, both under their 100.0% and 85.0% thresholds, with net new ARR at -$240K.'  12 pt 334155
+    'New sales cannot replace the churn'  12 pt bold 334155
+    'CAC payback is 134.4 mo against a 24.0 mo threshold and pipeline fell to $2,500K, so net new ARR vs budget is -150.0%.'  12 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
     'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 4 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'AI commentary, Q2 2026'  28 pt bold 0B2545
-  [AI-drafted line] text at 0.50, 1.30 in, size 12.33 x 0.40 in
+  [AI-drafted line] text at 0.50, 1.30 in, size 12.33 x 0.33 in
     'AI-drafted from computed metrics - review before use'  13 pt 64748B
-  [Headline] text at 0.50, 1.85 in, size 12.33 x 1.05 in
-    'Runway has fallen to 6.0 mo (threshold 12.0 mo) and burn multiple is now ∞ (threshold 2.00x), signaling an urgent cash crisis.'  20 pt bold 0B2545
-  [Risks] text at 0.50, 3.05 in, size 5.99 x 3.70 in
-    'Risks'  17 pt bold 0B2545
-    'Cash runway critical'  12 pt bold 334155
-    'Runway fell to 6.0 mo (threshold 12.0 mo), burn multiple is ∞ (threshold 2.00x), and net burn ran 19.6% over budget (threshold 15.0%), leaving little cash cushion.'  12 pt 334155
-    'Retention and growth engine failing'  12 pt bold 334155
-    'NRR fell to 77.9% (threshold 100.0%) and GRR to 74.7% (threshold 85.0%), while net new ARR vs budget hit -150.0% (threshold -20.0%) as net new ARR itself turned negative at $-240K.'  12 pt 334155
-    'Unit economics deteriorating'  12 pt bold 334155
-    'CAC payback stretched to 134.4 mo (threshold 24.0 mo) while gross margin fell to 57.1% and FCF margin stands at -93.2%, signaling worsening capital efficiency.'  12 pt 334155
-  [Questions] text at 6.84, 3.05 in, size 5.99 x 3.70 in
-    'Questions for management'  17 pt bold 0B2545
-    '1. What is driving the decline in GRR from 88.7% in Q3 2024 to 74.7% in Q2 2026, and what retention initiatives are underway?'  12 pt 334155
-    '2. What is causing net burn to run 19.6% over budget (threshold 15.0%), and what specific actions will bring spending back in line with plan?'  12 pt 334155
-    '3. What is driving the continuous contraction in pipeline from $4,200K in Q3 2024 to $2,500K in Q2 2026, and how will this affect future bookings?'  12 pt 334155
+  [Headline] text at 0.50, 1.73 in, size 12.33 x 0.70 in
+    'Fernhollow tripped 7 of 9 flags: ARR fell to $7,350K, NRR is 77.9% and runway is 6.0 mo.'  18 pt bold 0B2545
+  [Diagnosis] text at 0.50, 2.53 in, size 12.33 x 0.83 in
+    'Net new ARR was -$240K in Q2 2026 and ending ARR fell to $7,350K, with NRR (annualized) at 77.9% and GRR (annualized) at 74.7%. Net burn vs budget is 19.6%, leaving runway at current burn of 6.0 mo on ending cash of $3,300K. Pipeline is $2,500K and CAC payback is 134.4 mo, which is consistent with a company losing its installed base faster than a shrinking pipeline can replace it.'  13 pt 334155
+  [Questions for management 1] text at 0.50, 3.46 in, size 5.99 x 3.29 in
+    'Retention decomposition'  12 pt bold 0B2545
+    '1. How much of the NRR (annualized) fall to 77.9% is GRR (annualized) at 74.7% rather than lost expansion?'  12 pt 334155
+    '2. Which accounts make up the churn behind GRR (annualized) at 74.7% this quarter?'  12 pt 334155
+    'Burn and budget variance'  12 pt bold 0B2545
+    '3. Which cost lines carry net burn vs budget at 19.6%, against 14.8% in Q3 2025?'  12 pt 334155
+    '4. How much of net burn vs budget at 19.6% is committed cost next quarter cannot remove?'  12 pt 334155
+  [Questions for management 2] text at 6.84, 3.46 in, size 5.99 x 3.29 in
+    'Liquidity and runway'  12 pt bold 0B2545
+    '5. How far must net burn fall for runway at current burn to clear 12.0 mo?'  12 pt 334155
+    '6. Which creditors sit ahead of the 6.0 mo runway at current burn if cash runs out?'  12 pt 334155
+    'Pipeline and sales efficiency'  12 pt bold 0B2545
+    '7. Which segments make up the $2,500K pipeline behind CAC payback at 134.4 mo?'  12 pt 334155
+    '8. How much of net new ARR vs budget at -150.0% is deals lost rather than delayed?'  12 pt 334155
+    'Definitions and assumptions'  12 pt bold 0B2545
+    '9. Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured, and who owns them?'  12 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
     'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B

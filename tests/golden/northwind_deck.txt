@@ -28,40 +28,52 @@
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'Risks and flags, Q2 2026'  28 pt bold 0B2545
   [Risks and flags] text at 0.50, 1.30 in, size 5.99 x 5.45 in
-    'Tripped flags (6 of 9 flags tripped)'  20 pt bold 0B2545
-    '• NRR (annualized): 97.1% (trips below 100.0%)'  15 pt 334155
-    '• Burn multiple: 2.35x (trips above 2.00x)'  15 pt 334155
-    '• Net burn vs budget: 20.0% (trips above 15.0%)'  15 pt 334155
-    '• Runway at current burn: 11.0 mo (trips below 12.0 mo)'  15 pt 334155
-    '• Rule of 40: -12.2% (trips below 40.0%)'  15 pt 334155
-    'Combo rule'  20 pt bold 0B2545
-    '• NRR falling while pipeline rising: Tripped (trips when NRR falls by at least 1.0 pts and pipeline rises at every step over the last 3 quarters)'  15 pt 334155
-  [Data gaps] text at 6.84, 1.30 in, size 5.99 x 5.45 in
-    'Data gaps (data missing)'  20 pt bold 0B2545
-    '• Q1 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  15 pt 334155
-    '• Q1 2025 + Q2 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  15 pt 334155
-    '• Q1 2025 + Q1 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  15 pt 334155
+    'Tripped flags (6 of 9 flags tripped)'  17 pt bold 0B2545
+    '• NRR (annualized): 97.1% (trips below 100.0%)'  12 pt 334155
+    '• Burn multiple: 2.35x (trips above 2.00x)'  12 pt 334155
+    '• Net burn vs budget: 20.0% (trips above 15.0%)'  12 pt 334155
+    '• Runway at current burn: 11.0 mo (trips below 12.0 mo)'  12 pt 334155
+    '• Rule of 40: -12.2% (trips below 40.0%)'  12 pt 334155
+    'Combo rule'  17 pt bold 0B2545
+    '• NRR falling while pipeline rising: Tripped (trips when NRR falls by at least 1.0 pts and pipeline rises at every step over the last 3 quarters)'  12 pt 334155
+  [Data gaps and risks] text at 6.84, 1.30 in, size 5.99 x 5.45 in
+    'Data gaps (data missing)'  17 pt bold 0B2545
+    '• Q1 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  12 pt 334155
+    '• Q1 2025 + Q2 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  12 pt 334155
+    '• Q1 2025 + Q1 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  12 pt 334155
+    'Risks (AI-drafted from computed metrics, review before use)'  12 pt bold 0B2545
+    'Burn over plan, runway inside a year'  12 pt bold 334155
+    'Net burn vs budget is 20.0% against a 15.0% threshold, the burn multiple is 2.35x and runway at current burn is 11.0 mo.'  12 pt 334155
+    'Retention, not demand, is the problem'  12 pt bold 334155
+    "NRR (annualized) is 97.1% and GRR (annualized) 88.1%, both under Q3 2025's 108.9% and 92.9%, while pipeline reached $12,500K."  12 pt 334155
+    'Rule of 40 deeply negative'  12 pt bold 334155
+    'Rule of 40 is -12.2% against a 40.0% threshold, with FCF margin at -58.6% and ARR growth QoQ down to 6.4%.'  12 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
     'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 4 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'AI commentary, Q2 2026'  28 pt bold 0B2545
-  [AI-drafted line] text at 0.50, 1.30 in, size 12.33 x 0.40 in
+  [AI-drafted line] text at 0.50, 1.30 in, size 12.33 x 0.33 in
     'AI-drafted from computed metrics - review before use'  13 pt 64748B
-  [Headline] text at 0.50, 1.85 in, size 12.33 x 1.05 in
-    "Northwind's burn is outpacing budget and eroding runway to 11.0 mo, while NRR fell to 97.1% and Rule of 40 hit -12.2%."  20 pt bold 0B2545
-  [Risks] text at 0.50, 3.05 in, size 5.99 x 3.70 in
-    'Risks'  17 pt bold 0B2545
-    'Burn accelerating, runway breached'  12 pt bold 334155
-    'Burn multiple hit 2.35x (threshold 2.00x), net burn ran 20.0% over budget (threshold 15.0%), and runway fell to 11.0 mo (threshold 12.0 mo); runway if burn returns to plan is 13.0 mo.'  12 pt 334155
-    'Retention weakening despite pipeline growth'  12 pt bold 334155
-    'NRR fell each quarter from 108.0% (Q4 2025) to 97.1% (Q2 2026), tripping the 100.0% threshold, while pipeline rose from $10,100K to $12,500K over the same period - a warning sign on retention.'  12 pt 334155
-    'Growth decelerating, profitability target missed'  12 pt bold 334155
-    'Rule of 40 was -12.2% in Q2 2026, well below the 40.0% threshold. ARR growth QoQ fell from 12.8% (Q4 2024) to 6.4% (Q2 2026) while FCF margin stayed at -58.6%.'  12 pt 334155
-  [Questions] text at 6.84, 3.05 in, size 5.99 x 3.70 in
-    'Questions for management'  17 pt bold 0B2545
-    '1. What specific cost actions are planned to bring net burn back toward budget and extend runway beyond 11.0 mo?'  12 pt 334155
-    '2. What is driving the decline in NRR from 108.0% to 97.1% even as pipeline keeps growing - is it concentrated in particular segments or accounts?'  12 pt 334155
-    '3. What is causing ARR growth QoQ to decelerate from 12.8% to 6.4%, and what levers does management see to reverse that trend?'  12 pt 334155
+  [Headline] text at 0.50, 1.73 in, size 12.33 x 0.70 in
+    "Northwind's ARR reached $27,470K, but NRR fell to 97.1%, net burn ran 20.0% over budget and runway is down to 11.0 mo."  18 pt bold 0B2545
+  [Diagnosis] text at 0.50, 2.53 in, size 12.33 x 0.83 in
+    'Ending ARR reached $27,470K in Q2 2026 and ARR growth YoY was 42.8%, but NRR (annualized) went from 108.9% to 97.1% and GRR (annualized) from 92.9% to 88.1% since Q3 2025. Net burn vs budget widened to 20.0%, the burn multiple is 2.35x and runway at current burn is 11.0 mo. The pattern is consistent with new sales carrying a weakening installed base while spend stayed at plan.'  13 pt 334155
+  [Questions for management 1] text at 0.50, 3.46 in, size 5.99 x 3.29 in
+    'Retention decomposition'  12 pt bold 0B2545
+    '1. How much of the NRR (annualized) fall from 108.9% to 97.1% sits in GRR (annualized) at 88.1%?'  12 pt 334155
+    '2. Which accounts make up the contraction and churn behind GRR (annualized) at 88.1%?'  12 pt 334155
+    'Burn and budget variance'  12 pt bold 0B2545
+    '3. Which cost lines carry net burn vs budget at 20.0%, against 10.0% in Q3 2025?'  12 pt 334155
+    "4. How much of the 2.35x burn multiple is headcount added since Q4 2025's 1.46x?"  12 pt 334155
+  [Questions for management 2] text at 6.84, 3.46 in, size 5.99 x 3.29 in
+    'Liquidity and runway'  12 pt bold 0B2545
+    '5. How far must net burn vs budget fall for runway at current burn to clear 12.0 mo?'  12 pt 334155
+    '6. How much of the 13.0 mo runway if burn returns to plan depends on cost actions not yet taken?'  12 pt 334155
+    'Pipeline and sales efficiency'  12 pt bold 0B2545
+    '7. Which segments make up the $12,500K pipeline behind the 20.7 mo CAC payback?'  12 pt 334155
+    '8. How much of net new ARR vs budget at -19.0% is deals slipping rather than lost?'  12 pt 334155
+    'Definitions and assumptions'  12 pt bold 0B2545
+    "9. Which definition gives NRR (annualized) at 97.1%, and will Q1 2025's missing net burn be restated?"  12 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
     'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B

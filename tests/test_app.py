@@ -31,6 +31,7 @@ from metrics import CANNOT_EVALUATE, PASS, TRIP, load_config
 from provenance import NOT_REVIEWED, manifest_path, read_manifest
 from test_mapping import RENAMES, renamed_copy
 from theme import STATUS_COLORS
+from valid_answer import summary_dict
 
 PROJECT_DIR = Path(__file__).parent.parent
 COMPANIES = ["alderpeak", "fernhollow", "northwind"]
@@ -451,15 +452,14 @@ def test_approve_on_the_company_page_records_the_reviewer(folders):
 def test_the_company_page_shows_saved_commentary_for_these_numbers(folders):
     actuals, next_budget = clean_workbook(folders[0] / "northwind.xlsx")
     payload = build_payload("Northwind", actuals, next_budget, load_config())
-    point = {"title": "Retention", "detail": "Churn is rising."}
-    answer = BoardSummary.model_validate({"headline": "Retention needs a plan.", "wins": [point] * 3,
-                                          "risks": [point] * 3, "questions": ["Why?", "Who?", "When?"]})
+    answer = BoardSummary.model_validate(summary_dict("Retention needs a plan."))
     save_analysis(folders[1] / "northwind_analysis.json", payload, answer, {"model": "claude-sonnet-5"})
     test = page(folders, company="northwind")
     assert not test.exception
     shown = [markdown.value for markdown in test.markdown]
     assert "**Retention needs a plan.**" in shown
-    assert any("Churn is rising." in text for text in shown) and any("When?" in text for text in shown)
+    assert any("Customers stayed." in text for text in shown), "the risks are shown"
+    assert any("Retention decomposition" in text for text in shown), "the questions sit under their themes"
     assert app.AI_DRAFTED_LINE in [caption.value for caption in test.caption]
 
 

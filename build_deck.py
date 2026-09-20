@@ -119,7 +119,7 @@ WATERMARK_HEIGHT = Inches(1.2)
 
 GAP = Inches(0.15)            # vertical gap between boxes
 COLUMN_GAP = Inches(0.35)     # between two columns (the charts, flags/data gaps, risks/questions)
-AI_LINE_HEIGHT = Inches(0.3)  # the "AI-drafted ... review before use" line: one line at 13 pt
+AI_LINE_HEIGHT = Inches(0.33)  # the "AI-drafted ... review before use" line: one line at 13 pt
 HEADLINE_HEIGHT = Inches(0.7)     # two lines: a 25-word headline, shrunk a little from 20 pt
 DIAGNOSIS_HEIGHT = Inches(0.83)   # the 60 to 90 word diagnosis paragraph, full width
 AI_GAP = Inches(0.1)              # between slide 4's boxes: tighter than GAP, since what is left

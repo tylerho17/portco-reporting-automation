@@ -32,6 +32,7 @@ from provenance import NOT_REVIEWED, manifest_path, read_manifest
 from rollup import rollup_paths
 from test_app import render
 from test_docs import code_strings
+from valid_answer import summary_dict
 
 PROJECT_DIR = Path(__file__).parent.parent
 DEMO_MD = PROJECT_DIR / "DEMO.md"
@@ -40,11 +41,8 @@ LEFTOVERS = ["notes.txt", "task_logs/run.log"]   # files a person put in output/
 
 
 def summary():
-    """A valid answer with no numbers in it, so the number check has nothing to reject."""
-    point = {"title": "Steady base", "detail": "Customers stayed."}
-    return BoardSummary.model_validate({
-        "headline": "A steady quarter.", "wins": [point] * 3, "risks": [point] * 3,
-        "questions": ["What drives churn?", "Where is pipeline coming from?", "How is hiring going?"]})
+    """A valid answer whose only numbers are thresholds every company's payload holds (valid_answer.py)."""
+    return BoardSummary.model_validate(summary_dict("A steady quarter."))
 
 
 def save_matching_analysis(data_dir, output_dir, stem, stale=False):

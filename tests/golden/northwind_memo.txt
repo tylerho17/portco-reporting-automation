@@ -4,7 +4,7 @@
   "Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI workbook; the headline and questions are drafted by AI."  9.5 pt, 64748B
   'Headline'  12 pt, bold, 0B2545, keep with next
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
-  "Northwind's burn is outpacing budget and eroding runway to 11.0 mo, while NRR fell to 97.1% and Rule of 40 hit -12.2%."  11 pt, bold, 0B2545
+  "Northwind's ARR reached $27,470K, but NRR fell to 97.1%, net burn ran 20.0% over budget and runway is down to 11.0 mo."  11 pt, bold, 0B2545
   'Key metrics'  12 pt, bold, 0B2545, keep with next
   table, aligned center
   row 1: 'Metric' fill 0B2545 | 'Q2 2026' fill 0B2545 | 'Q1 2026' fill 0B2545 | 'Budget or threshold' fill 0B2545 | 'Status' fill 0B2545
@@ -35,9 +35,20 @@
   'Q1 2025 + Q1 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  List Bullet, 9.5 pt, 334155
   'Questions for management'  12 pt, bold, 0B2545, keep with next
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
-  'What specific cost actions are planned to bring net burn back toward budget and extend runway beyond 11.0 mo?'  List Bullet, 9.5 pt, 334155, keep with next
-  'What is driving the decline in NRR from 108.0% to 97.1% even as pipeline keeps growing - is it concentrated in particular segments or accounts?'  List Bullet, 9.5 pt, 334155, keep with next
-  'What is causing ARR growth QoQ to decelerate from 12.8% to 6.4%, and what levers does management see to reverse that trend?'  List Bullet, 9.5 pt, 334155
+  'Retention decomposition'  9.5 pt, bold, 0B2545
+  'How much of the NRR (annualized) fall from 108.9% to 97.1% sits in GRR (annualized) at 88.1%?'  List Bullet, 9.5 pt, 334155, keep with next
+  'Which accounts make up the contraction and churn behind GRR (annualized) at 88.1%?'  List Bullet, 9.5 pt, 334155
+  'Burn and budget variance'  9.5 pt, bold, 0B2545
+  'Which cost lines carry net burn vs budget at 20.0%, against 10.0% in Q3 2025?'  List Bullet, 9.5 pt, 334155, keep with next
+  "How much of the 2.35x burn multiple is headcount added since Q4 2025's 1.46x?"  List Bullet, 9.5 pt, 334155
+  'Liquidity and runway'  9.5 pt, bold, 0B2545
+  'How far must net burn vs budget fall for runway at current burn to clear 12.0 mo?'  List Bullet, 9.5 pt, 334155, keep with next
+  'How much of the 13.0 mo runway if burn returns to plan depends on cost actions not yet taken?'  List Bullet, 9.5 pt, 334155
+  'Pipeline and sales efficiency'  9.5 pt, bold, 0B2545
+  'Which segments make up the $12,500K pipeline behind the 20.7 mo CAC payback?'  List Bullet, 9.5 pt, 334155, keep with next
+  'How much of net new ARR vs budget at -19.0% is deals slipping rather than lost?'  List Bullet, 9.5 pt, 334155
+  'Definitions and assumptions'  9.5 pt, bold, 0B2545
+  "Which definition gives NRR (annualized) at 97.1%, and will Q1 2025's missing net burn be restated?"  List Bullet, 9.5 pt, 334155
 -- Footer --
   'Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
 == PDF page 1 ==
@@ -47,8 +58,8 @@
   workbook; the headline and questions are drafted by AI.
   Headline
   AI-drafted from computed metrics - review before use
-  Northwind's burn is outpacing budget and eroding runway to 11.0 mo, while NRR fell to 97.1%
-  and Rule of 40 hit -12.2%.
+  Northwind's ARR reached $27,470K, but NRR fell to 97.1%, net burn ran 20.0% over budget and
+  runway is down to 11.0 mo.
   Key metrics
   Metric
   Q2 2026
@@ -148,11 +159,26 @@
   Fictional data | northwind.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
   Questions for management
   AI-drafted from computed metrics - review before use
+  Retention decomposition
   •
-  What specific cost actions are planned to bring net burn back toward budget and extend runway beyond 11.0 mo?
+  How much of the NRR (annualized) fall from 108.9% to 97.1% sits in GRR (annualized) at 88.1%?
   •
-  What is driving the decline in NRR from 108.0% to 97.1% even as pipeline keeps growing - is it concentrated in
-  particular segments or accounts?
+  Which accounts make up the contraction and churn behind GRR (annualized) at 88.1%?
+  Burn and budget variance
   •
-  What is causing ARR growth QoQ to decelerate from 12.8% to 6.4%, and what levers does management see to
-  reverse that trend?
+  Which cost lines carry net burn vs budget at 20.0%, against 10.0% in Q3 2025?
+  •
+  How much of the 2.35x burn multiple is headcount added since Q4 2025's 1.46x?
+  Liquidity and runway
+  •
+  How far must net burn vs budget fall for runway at current burn to clear 12.0 mo?
+  •
+  How much of the 13.0 mo runway if burn returns to plan depends on cost actions not yet taken?
+  Pipeline and sales efficiency
+  •
+  Which segments make up the $12,500K pipeline behind the 20.7 mo CAC payback?
+  •
+  How much of net new ARR vs budget at -19.0% is deals slipping rather than lost?
+  Definitions and assumptions
+  •
+  Which definition gives NRR (annualized) at 97.1%, and will Q1 2025's missing net burn be restated?

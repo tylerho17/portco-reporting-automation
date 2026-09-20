@@ -26,6 +26,7 @@ from diff_runs import HEADING, NO_EARLIER_RUN
 from main import quarter_mismatch_warning, write_summary_csv
 from provenance import NOT_REVIEWED, file_sha256, git_commit, manifest_path, read_manifest, save_manifest
 from text_fit import TextDoesNotFitError
+from valid_answer import summary_dict
 
 PROJECT_DIR = Path(__file__).parent.parent
 NORTHWIND = PROJECT_DIR / "data" / "northwind.xlsx"
@@ -130,11 +131,8 @@ class FakeClient:
 
 
 def summary(headline="Retention is the main question for the board."):
-    """A valid answer with no numbers in it, so the number check has nothing to reject."""
-    point = {"title": "Steady base", "detail": "Customers stayed."}
-    return BoardSummary.model_validate({
-        "headline": headline, "wins": [point] * 3, "risks": [point] * 3,
-        "questions": ["What drives churn?", "Where is pipeline coming from?", "How is hiring going?"]})
+    """A valid answer whose only numbers are thresholds every company's payload holds (valid_answer.py)."""
+    return BoardSummary.model_validate(summary_dict(headline))
 
 
 def run_northwind(tmp_path, skip_ai=False, client=None, draft=False):
@@ -250,15 +248,13 @@ def test_ai_text_too_long_for_the_slides_is_ai_failed_not_a_failed_company(tmp_p
     # Review finding 1a, the last line of defence: an analysis that passed when it was made but
     # doesn't fit the slides still gets a deck, with the placeholder, and the run reads OK (AI failed).
     long_point = {"title": "Steady base", "detail": "customers " * 45}
-    saved = {"summary": {"headline": "Retention is the main question for the board.",
-                         "wins": [long_point] * 3, "risks": [long_point] * 3,
-                         "questions": ["What drives churn?", "Where is pipeline from?", "How is hiring?"]},
+    saved = {"summary": {**summary_dict(), "risks": [long_point] * 3},
              "payload": {"company": "Northwind", "latest_quarter": "Q2 2026"}}
     path = tmp_path / "northwind_analysis.json"
     path.write_text(json.dumps(saved))
 
     why_unavailable = main.deck_step(NORTHWIND, main.load_config(), path, tmp_path)
-    assert "does not fit slide 4" in why_unavailable
+    assert "does not fit slide 3" in why_unavailable
     assert headline_on_deck(tmp_path) == PLACEHOLDER_TEXT
     assert main.RESULT_TEXTS[main.ai_status(False, why_unavailable)] == "OK (AI failed)"
 
@@ -317,7 +313,7 @@ def test_ai_text_quoting_a_number_the_metrics_workbook_lacks_stays_off_the_memo_
     # 14,300 is Northwind's latest ending cash: in Claude's payload (so analyze.py and the deck accept it),
     # but not in the metrics workbook, and every number in the memo must be.
     answer = summary()
-    answer.questions[0] = "How long will the ending cash of $14,300K last at the current burn?"
+    answer.questions[4].question = "How much of the $14,300K ending cash covers the 12.0 mo runway threshold?"
     result = run_northwind(tmp_path, client=FakeClient(answer))
     assert main.result_text(result) == "OK"   # the deck has the AI text
     assert headline_on_deck(tmp_path) == "Retention is the main question for the board."

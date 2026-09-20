@@ -180,7 +180,7 @@ What to write:
 Rules for every question - an automated check enforces these too:
 - Name the metric and quote its value from the data. A question without a figure in it sends management nowhere.
 - Ask for one of three things: a decomposition (which parts of a figure make it up), a reconciliation (how one figure ties to another) or a distance to breach (how far a figure sits from its threshold, or what would move it there). Never ask for an explanation: a question whose whole demand is "why", "what is driving" or "what caused" is rejected.
-- At most 20 words. One question, not two. No yes/no questions.
+- At most 18 words. One question, not two. No yes/no questions. Ten questions share one slide.
 - No two questions may ask for the same cut of the same metric.
 - Whenever NRR (annualized) has moved at all, the first question under "Retention decomposition" must be the gross versus net divergence test: ask how much of the move sits in gross retention rather than in expansion, quoting both NRR (annualized) and GRR (annualized). Gross retention falling while net retention holds up means the retention engine is broken and new sales are paying for it, and the board cannot see that unless the two are asked about together.
 - At least one question must interrogate a definition, a restatement or a missing input: which definition a figure is on, what a restatement would change, or when a missing input will exist and who owns it. Put it under "Definitions and assumptions".
