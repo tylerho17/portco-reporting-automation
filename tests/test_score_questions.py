@@ -507,3 +507,64 @@ def test_the_command_line_says_which_file_is_missing(tmp_path, capsys):
 def test_the_command_line_prints_the_rubric_on_its_own(capsys):
     assert sq.main(["--rubric"]) == 0
     assert "1." in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# A run that failed validation has no summary (Night two, Task 3, live run 1)
+# ---------------------------------------------------------------------------
+
+REJECTED_QUESTIONS = [{"theme": "Retention decomposition", "question": "Which cohorts drove NRR to 97.1%?"},
+                      {"theme": "Liquidity and runway", "question": "How far is runway from 12.0 mo?"}]
+
+
+def failed_analysis(tmp_path, attempts):
+    """What analyze.py saves when both answers fail validation: no summary, an error, and the attempts."""
+    path = tmp_path / "failed_analysis.json"
+    path.write_text(json.dumps({"summary": None, "error": "Claude's answer failed validation twice.\n- too long",
+                                "run_info": {"passed": False, "attempt_log": attempts}}))
+    return path
+
+
+def test_an_analysis_that_failed_validation_stops_in_plain_words_not_a_traceback(tmp_path):
+    # summary is null, not missing: data.get("summary", {}) returned None and .get on it crashed.
+    path = failed_analysis(tmp_path, [{"problems": ["too long"], "answer": {"questions": REJECTED_QUESTIONS}}])
+    with pytest.raises(ValueError) as stopped:
+        sq.load_generated(path)
+    assert "no validated answer" in str(stopped.value) and "--rejected" in str(stopped.value)
+
+
+def test_the_last_rejected_answer_can_be_scored_on_request(tmp_path):
+    first = {"problems": ["a"], "answer": {"questions": [{"theme": "Liquidity and runway", "question": "Old?"}]}}
+    last = {"problems": ["b"], "answer": {"questions": REJECTED_QUESTIONS}}
+    generated = sq.load_generated(failed_analysis(tmp_path, [first, last]), rejected=True)
+    assert [q.text for q in generated.questions] == [item["question"] for item in REJECTED_QUESTIONS]
+    assert generated.themes == ["Retention decomposition", "Liquidity and runway"]
+
+
+def test_asking_for_the_rejected_answer_when_none_was_kept_says_so(tmp_path):
+    # Analyses saved before the rejected answer was kept have nothing to score.
+    path = failed_analysis(tmp_path, [{"problems": ["too long"]}, {"problems": ["too long"]}])
+    with pytest.raises(ValueError) as stopped:
+        sq.load_generated(path, rejected=True)
+    assert "no rejected answer was kept" in str(stopped.value)
+
+
+def test_a_validated_analysis_is_scored_as_it_always_was_even_with_rejected(tmp_path):
+    path = tmp_path / "ok_analysis.json"
+    path.write_text(json.dumps({"summary": {"questions": REJECTED_QUESTIONS}, "run_info": {"attempt_log": [
+        {"problems": ["x"], "answer": {"questions": [{"theme": "Liquidity and runway", "question": "Old?"}]}}]}}))
+    assert [q.text for q in sq.load_generated(path, rejected=True).questions] == [i["question"] for i in REJECTED_QUESTIONS]
+
+
+def test_the_command_line_stops_with_2_on_a_failed_analysis_and_names_the_way_out(tmp_path, capsys):
+    target_path = write(tmp_path / "target.md", TARGET_MD)
+    path = failed_analysis(tmp_path, [{"problems": ["x"], "answer": {"questions": REJECTED_QUESTIONS}}])
+    assert sq.main([str(path), "--target", str(target_path)]) == 2
+    assert "--rejected" in capsys.readouterr().out
+
+
+def test_the_command_line_says_when_it_is_scoring_a_rejected_answer(tmp_path, capsys):
+    target_path = write(tmp_path / "target.md", TARGET_MD)
+    path = failed_analysis(tmp_path, [{"problems": ["x"], "answer": {"questions": REJECTED_QUESTIONS}}])
+    assert sq.main([str(path), "--target", str(target_path), "--rejected"]) == 0
+    assert "REJECTED" in capsys.readouterr().out

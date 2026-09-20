@@ -52,7 +52,8 @@ from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches, Pt
 from pydantic import ValidationError
 
-from analyze import BoardSummary, build_payload, grouped_questions, payload_to_text, validate_summary
+from analyze import (MAX_QUESTIONS, MIN_QUESTIONS, RISK_COUNT, THEMES, BoardSummary, Point, Question, build_payload,
+                     grouped_questions, payload_to_text, validate_summary)
 from charts import arr_chart, cash_chart, save_chart
 from clean import clean_workbook
 from excel_output import INFINITE_LABELS, NO_GAPS_LABEL, gap_label, status_label, tripped_cells
@@ -957,22 +958,145 @@ def ai_boxes(summary, payload_text):
     return boxes
 
 
+def box_fits(name, summary, payload_text):
+    """True when every box holding Claude's words whose label has `name` in it takes its text at the 12 pt floor."""
+    for where, box, paragraphs, _ in ai_boxes(summary, payload_text):
+        if name in where:
+            try:
+                fitted(paragraphs, box[2], box[3], where)
+            except TextDoesNotFitError:
+                return False
+    return True
+
+
+def most_that_fit(fits, ceiling):
+    """The largest whole number from 0 to `ceiling` that fits(number) accepts, found by halving.
+
+    Assumes a bigger number never fits where a smaller one does not, which is true of a word count.
+    """
+    low, high = 0, ceiling
+    while low < high:
+        middle = (low + high + 1) // 2
+        if fits(middle):
+            low = middle
+        else:
+            high = middle - 1
+    return low
+
+
+# Text to measure a box with: a sentence like the commentary's own, figures and units in it, so its
+# average word is about as wide as a real answer's. Real answers vary, so a limit keeps a margin.
+# Letters stand in for the figures (a capital X is a little wider than a digit, so the limits err short):
+# no number typed into this file may reach a reader, and a test holds the file to that.
+SAMPLE_SENTENCE = ("NRR (annualized) fell from XXX.X% to XX.X% while net burn ran XX.X% over its budget of $X,XXXK, "
+                   "leaving runway at XX.X mo, which is consistent with churn outpacing expansion in the base")
+SAMPLE_CEILING = 150          # the most words tried in any one box
+LIMIT_MARGIN = 2              # words taken off a measured limit before Claude is told it
+
+
+def sample_text(count):
+    """`count` words of the sample sentence, repeated as needed."""
+    return " ".join((SAMPLE_SENTENCE.split() * SAMPLE_CEILING)[:count])
+
+
+def sample_summary(diagnosis_words=1, detail_words=1, question_words=1, question_count=MIN_QUESTIONS):
+    """An answer made of sample text, with the given number of words in each part, for measuring the boxes."""
+    risks = [Point(title="Net burn is over budget", detail=sample_text(detail_words)) for _ in range(RISK_COUNT)]
+    questions = [Question(theme=THEMES[number % len(THEMES)], question=sample_text(question_words))
+                 for number in range(question_count)]
+    return BoardSummary(headline="Headline", diagnosis=sample_text(diagnosis_words), risks=risks, questions=questions)
+
+
+@lru_cache(maxsize=None)
+def slide_word_limits(payload_text):
+    """The words the slides hold for this company, measured: the diagnosis, one risk detail, one question.
+
+    The risks share slide 3 with this company's data gaps (read from the payload), so a company with a
+    blank quarter has far less room for them than one with none. The questions have two columns of slide
+    4 between them, so the room for each falls as their number rises: {8: words, 9: words, 10: words},
+    with the questions spread over the five themes. Each limit is the measured one less LIMIT_MARGIN.
+    The dictionary is shared between callers: read it, do not change it.
+    """
+    def diagnosis_fits(words):
+        return box_fits("(Diagnosis)", sample_summary(diagnosis_words=words), payload_text)
+
+    def detail_fits(words):
+        return box_fits("(Risks)", sample_summary(detail_words=words), payload_text)
+
+    def questions_fit(count):
+        return lambda words: box_fits("(Questions", sample_summary(question_words=words, question_count=count),
+                                      payload_text)
+
+    def with_margin(fits):
+        return max(most_that_fit(fits, SAMPLE_CEILING) - LIMIT_MARGIN, 0)
+
+    return {"diagnosis": with_margin(diagnosis_fits), "risk_detail": with_margin(detail_fits),
+            "questions": {count: with_margin(questions_fit(count))
+                          for count in range(MIN_QUESTIONS, MAX_QUESTIONS + 1)}}
+
+
+def cut_to(text, count):
+    """The first `count` words of a text."""
+    return " ".join(text.split()[:count])
+
+
+def listed(numbers):
+    """[40, 40, 38] -> '40, 40 and 38'."""
+    words = [str(number) for number in numbers]
+    return " and ".join([", ".join(words[:-1]), words[-1]]) if len(words) > 1 else words[0]
+
+
+def fit_advice(where, advice, summary, payload_text):
+    """What to change for a box that does not hold its text, with the words that would fit.
+
+    Live run 1 said only "shorten the diagnosis", and the retry did not shorten it enough, twice. The
+    number is worked out from Claude's own words: the most of them the box takes, less the margin.
+    """
+    if "(Diagnosis)" in where:
+        def cut(words):
+            return summary.model_copy(update={"diagnosis": cut_to(summary.diagnosis, words)})
+        length = len(summary.diagnosis.split())
+        room = most_that_fit(lambda words: box_fits("(Diagnosis)", cut(words), payload_text), length)
+        return f"shorten the diagnosis to {max(room - LIMIT_MARGIN, 0)} words or fewer (it has {length})"
+    if "(Risks)" in where:
+        def cut(words):
+            risks = [point.model_copy(update={"detail": cut_to(point.detail, words)}) for point in summary.risks]
+            return summary.model_copy(update={"risks": risks})
+        lengths = [len(point.detail.split()) for point in summary.risks]
+        room = most_that_fit(lambda words: box_fits("(Risks)", cut(words), payload_text), max(lengths))
+        return (f"shorten each risk detail to {max(room - LIMIT_MARGIN, 0)} words or fewer "
+                f"(yours have {listed(lengths)})")
+    if "(Questions" in where:
+        def cut(words):
+            asked = [item.model_copy(update={"question": cut_to(item.question, words)}) for item in summary.questions]
+            return summary.model_copy(update={"questions": asked})
+        longest = max(len(item.question.split()) for item in summary.questions)
+        room = most_that_fit(lambda words: box_fits("(Questions", cut(words), payload_text), longest)
+        return (f"shorten the questions: with {len(summary.questions)} questions the slide holds about "
+                f"{max(room - LIMIT_MARGIN, 0)} words each (yours run to {longest})")
+    return advice
+
+
 def ai_text_problems(summary, payload_text):
     """Problems if Claude's text is too long for its boxes on the deck, even at the 12 pt floor.
 
     Measures the risks (slide 3) and the headline, diagnosis and question columns (slide 4) - the
     same boxes the slides draw (risks_slide, commentary_boxes). analyze.validate_summary calls
     this, so an over-long answer is caught with the other validation problems and gets the one
-    retry. If it still doesn't fit, load_analysis rejects it and the deck is built with the
-    placeholder - a company is never left without a deck (decision K).
+    retry, and each problem says how many words would fit (fit_advice). If it still doesn't fit,
+    load_analysis rejects it and the deck is built with the placeholder - a company is never left
+    without a deck (decision K).
     """
-    problems = []
+    problems, said = [], set()
     for where, box, paragraphs, advice in ai_boxes(summary, payload_text):
         _, _, width, height = box
         try:
             fitted(paragraphs, width, height, where)
         except TextDoesNotFitError:
-            problems.append(f"AI text does not fit {where}: {advice}")
+            message = fit_advice(where, advice, summary, payload_text)
+            if message not in said:   # both question columns fail together: say it once
+                said.add(message)
+                problems.append(f"AI text does not fit {where}: {message}")
     return problems
 
 

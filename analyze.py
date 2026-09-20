@@ -43,9 +43,10 @@ DEFAULT_MODEL = "claude-sonnet-5"
 # The wording of SYSTEM_PROMPT below. Bump this whenever that text changes, so a saved answer
 # says which instructions produced it. A test pins each version's checksum, so the bump isn't
 # something anyone has to remember (tests/test_analyze.py). v1-v4 are logged in LEARNINGS.md.
-PROMPT_VERSION = "v5"
+PROMPT_VERSION = "v6"
 MAX_ATTEMPTS = 2           # first try + one retry
-MAX_TOKENS = 16000         # room for thinking + the answer
+MAX_TOKENS = 20000         # room for thinking + the answer. Live run 1 used up to 14,527 of the old 16,000;
+                           # the SDK refuses a non-streaming call above about 21,300
 MAX_HEADLINE_WORDS = 30    # prompt asks for 25; small buffer before we fail it
 MIN_DIAGNOSIS_WORDS = 60   # prompt asks for 65 to 85; a small buffer each way before we fail it
 MAX_DIAGNOSIS_WORDS = 90
@@ -173,18 +174,20 @@ Rules for numbers - an automated check enforces these, and any violation fails y
 
 What to write:
 - headline: one sentence, at most 25 words, with the single most important takeaway for the board.
-- diagnosis: one paragraph of 65 to 85 words, in two parts: what the numbers show this quarter, then what is most likely driving it. Name the metrics and quote their values. The data shows what moved, not why, so write an inferred cause as an inference ("consistent with", "most likely"), never as a fact.
-- risks: exactly 3, starting with the most serious tripped flags. Explain why each matters to an investor, not just that a threshold was crossed. Where several flags point to one underlying problem, combine them into one risk. Each title is a short phrase. Each detail is at most 2 sentences and about 40 words - it goes on a slide, so pick the evidence that matters most rather than listing everything. Answers with longer details are rejected.
+- diagnosis: one paragraph of at least 60 words and no more than the diagnosis limit under "Slide space" after the data, in two parts: what the numbers show this quarter, then what is most likely driving it. Name the metrics and quote their values. The data shows what moved, not why, so write an inferred cause as an inference ("consistent with", "most likely"), never as a fact.
+- risks: exactly 3, starting with the most serious tripped flags. Explain why each matters to an investor, not just that a threshold was crossed. Where several flags point to one underlying problem, combine them into one risk. Each title is a short phrase. Each detail is at most 2 sentences and within the risk detail limit under "Slide space": it goes on a slide beside this company's data gaps, so pick the evidence that matters most rather than listing everything. Answers with longer details are rejected.
 - questions: 8 to 10 questions for management, each one under exactly one of these themes, spelled as written here: "Retention decomposition", "Burn and budget variance", "Liquidity and runway", "Pipeline and sales efficiency", "Definitions and assumptions". Leave a theme out rather than filling it: a theme this quarter's data does not raise gets no question.
 
 Rules for every question - an automated check enforces these too:
-- Name the metric and quote its value from the data. A question without a figure in it sends management nowhere.
-- Ask for one of three things: a decomposition (which parts of a figure make it up), a reconciliation (how one figure ties to another) or a distance to breach (how far a figure sits from its threshold, or what would move it there). Never ask for an explanation: a question whose whole demand is "why", "what is driving" or "what caused" is rejected.
-- At most 18 words. Ten questions share one slide.
+- Name the metric and quote its value from the data, with its unit as the data gives it: 97.1%, $2,500K, 11.0 mo. A question without a figure in it sends management nowhere. The one exception is a question about a missing input: a missing input has no value to quote, so name the metric and the quarter, and ask when the figure will exist and who owns it.
+- Ask for one of three things: a decomposition (which parts of a figure make it up), a reconciliation (how one figure ties to another) or a distance to breach (how far a figure sits from its threshold, or what would move it there). Never ask for an explanation: a question whose whole demand is "why", "what is driving" or "what caused" is rejected. Phrase the ask plainly, in forms like these: "Which parts of ... make up ...", "How much of ... sits in ...", "How does ... reconcile to ...", "How far is ... from its threshold ...".
+- Stay within the question limit under "Slide space". It falls as the number of questions rises, because they all share one slide: fewer, fuller questions are worth more than ten fragments.
 - Whenever NRR (annualized) has moved at all, the first question under "Retention decomposition" must be the gross versus net divergence test: ask how much of the move sits in gross retention rather than in expansion, quoting both NRR (annualized) and GRR (annualized). Gross retention falling while net retention holds up means the retention engine is broken and new sales are paying for it, and the board cannot see that unless the two are asked about together.
 - At least one question must interrogate a definition, a restatement or a missing input: which definition a figure is on, what a restatement would change, or when a missing input will exist and who owns it. Put it under "Definitions and assumptions".
 
 Two more rules no check can enforce, so they are yours to keep: one question each, never two joined by "and", and no two questions asking for the same cut of the same metric.
+
+Slide space: after these instructions you are given the words each part of the answer may have, measured for this company. They are hard limits: text over them is rejected because it would not fit the slide.
 
 Accuracy of framing:
 - The flag thresholds are this tool's settings, not industry standards, and the data holds no benchmarks or peer figures. Write "against its 100.0% threshold"; never call a threshold a norm or a standard, and never compare a figure with peers, the industry or a benchmark. Answers that do are rejected.
@@ -482,6 +485,7 @@ EXTRA_SPELLINGS = NET_RETENTION_WORDS + GROSS_RETENTION_WORDS + ("expansion", "c
 DECOMPOSITION_CUES = ("which ", "how much of", "how many of", "what share", "what portion",
                       "what proportion", "what percentage of", "break down", "broken down", "breakdown",
                       "split", "decompose", "disaggregate", "made up of", "composed of",
+                      "make up", "makes up", "making up",   # "what line items make up net burn" (live run 1)
                       "concentrated in", "attributable to", "sits in", "sit in")
 RECONCILIATION_CUES = ("reconcile", "reconciliation", "bridge", "tie out", "ties to", "tie to",
                        "agree to", "agrees to", "restate", "restated", "restatement", "definition",
@@ -525,9 +529,26 @@ def names_a_metric(text):
     return bool(METRIC_PATTERN.search(text.lower()))
 
 
+# A bare figure straight after a label that carries the unit: "Pipeline ($K) at 2,500". The unit is
+# in the label, so the figure has one. A bare figure with no such label ("Pipeline at 2,500") still has none.
+LABELLED_VALUE_PATTERN = re.compile(r"\(\$K\)\s*(?:at|of|is|was|to|from|=|:)?\s*\$?[-−–]?\d[\d,]*")
+
+
 def names_a_value(text):
-    """True when the question quotes a figure with a unit ("97.1%", "$3,900K", "11.0 mo")."""
-    return bool(unit_numbers(text))
+    """True when the question quotes a figure with a unit ("97.1%", "$3,900K", "11.0 mo", "Pipeline ($K) at 2,500")."""
+    return bool(unit_numbers(text)) or bool(LABELLED_VALUE_PATTERN.search(text))
+
+
+def asks_about_a_missing_input(text):
+    """True for a question about a figure that is not there: "who owns the missing Q1 2025 NRR, and when?"
+
+    It names a metric and a quarter, says the input is missing or blank, and asks who or when. It has
+    no value to quote, and what it asks for (when the number will exist, who owns it) is what the
+    prompt tells Claude to ask, so the value and decomposition rules cannot apply to it. Live run 1
+    rejected two of these as having no value and asking for an explanation.
+    """
+    return (names_a_metric(text) and bool(QUARTER_PATTERN.search(text))
+            and has_any(text, ("missing", "blank")) and has_any(text, ("when ", "who ")))
 
 
 def has_any(text, cues):
@@ -582,8 +603,11 @@ def question_problems(summary, payload_text):
         words = len(item.question.split())
         if words > MAX_QUESTION_WORDS:
             problems.append(f"{where} has {words} words, max is {MAX_QUESTION_WORDS}")
+        if asks_about_a_missing_input(item.question):
+            continue   # nothing to quote or decompose: it asks when the figure will exist and who owns it
         if not names_a_metric(item.question) or not names_a_value(item.question):
-            problems.append(f"{where} must name a metric and quote its value")
+            problems.append(f"{where} must name a metric and quote its value with its unit "
+                            f"(97.1%, $2,500K, 11.0 mo)")
         if not has_any(item.question, DEMAND_CUES):
             problems.append(f"{where} asks for an explanation; ask for a decomposition, a reconciliation "
                             f"or a distance to breach")
@@ -687,6 +711,25 @@ def api_error_text(error):
     return f"{api_error_advice(error)}. {STILL_BUILT} Details: {error}"
 
 
+def slide_space_text(payload_text):
+    """The words the slides hold for this company, added after SYSTEM_PROMPT (which points at it).
+
+    Measured, not guessed: the diagnosis box is the same for every company, but the risks share slide 3
+    with the company's data gaps, so a company with a blank quarter has a fifth of the room. Live run 1
+    asked for 65 to 85 words and 40 per risk detail; the slides held about 70 and, for two companies,
+    about 20, and all three failed twice. This is not in SYSTEM_PROMPT because it differs by company,
+    and not in the data message because that message is the payload alone.
+    """
+    from build_deck import slide_word_limits   # imported here: build_deck imports this module
+    limits = slide_word_limits(payload_text)
+    rooms = limits["questions"]
+    by_count = ", ".join(f"{rooms[count]} if you write {count}" for count in range(MIN_QUESTIONS, MAX_QUESTIONS + 1))
+    return ("\n\nSlide space, measured for this company (hard limits, in words):\n"
+            f"- diagnosis: {MIN_DIAGNOSIS_WORDS} to {limits['diagnosis']} words\n"
+            f"- each risk detail: at most {limits['risk_detail']} words\n"
+            f"- each question: at most {by_count}")
+
+
 def build_messages(payload_text, previous=None):
     """The conversation to send. On a retry, include the last answer and what was wrong with it."""
     messages = [{"role": "user", "content": f"KPI data:\n\n{payload_text}"}]
@@ -706,7 +749,7 @@ def call_claude(client, model, payload_text, previous=None):
         response = client.messages.parse(
             model=model,
             max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
+            system=SYSTEM_PROMPT + slide_space_text(payload_text),
             messages=build_messages(payload_text, previous),
             output_format=BoardSummary,  # structured outputs: forces this JSON shape
         )
@@ -733,6 +776,8 @@ def call_claude(client, model, payload_text, previous=None):
            "output_tokens": response.usage.output_tokens,
            "stop_reason": response.stop_reason,
            "problems": problems}
+    if problems and summary is not None:   # keep what was rejected: live run 1 threw it away, so no one could read it
+        log["answer"] = summary.model_dump()
     return {"summary": summary, "problems": problems, "answer_text": answer_text, "log": log}
 
 

@@ -139,7 +139,8 @@ def test_the_analysis_records_which_prompt_wrote_it(northwind, tmp_path):
 # The checksum of each prompt wording. A change to SYSTEM_PROMPT without a new PROMPT_VERSION fails
 # here: a version number nobody remembers to bump is worse than no version number at all.
 PROMPT_CHECKSUMS = {"v4": "1500e06a2299c7717b87f248a60a47404b32ebcefcb70eac4e1c83f22a3fa6d2",
-                    "v5": "296456665a4290d042fd07bf35fb25d9730dafc21bb9a9a2f4aebea42858239a"}
+                    "v5": "296456665a4290d042fd07bf35fb25d9730dafc21bb9a9a2f4aebea42858239a",
+                    "v6": "627d7ec91c30778a8c6d65d9344435c36bb460c8456a13360dd9a0c340bf7c23"}
 
 
 def test_the_prompt_version_is_bumped_whenever_the_prompt_changes():

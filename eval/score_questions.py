@@ -123,10 +123,30 @@ def question_and_theme(found, source):
                      f"a theme and question: {found!r}")
 
 
-def parse_analysis_json(text, source):
-    """Read analyze.py's summary.questions: since v5 each one carries the theme it sits under."""
+def last_rejected_answer(data, source):
+    """The last answer a failed run rejected, from run_info.attempt_log, or a stop saying why there is none."""
+    attempts = (data.get("run_info") or {}).get("attempt_log") or []
+    kept = [attempt["answer"] for attempt in attempts if attempt.get("answer")]
+    if not kept:
+        raise ValueError(f"{source}: no rejected answer was kept (analyses saved before Night two, Task 3 "
+                         "threw the rejected answer away)")
+    return kept[-1]
+
+
+def parse_analysis_json(text, source, rejected=False):
+    """Read analyze.py's summary.questions: since v5 each one carries the theme it sits under.
+
+    A run that failed validation twice has a null summary. That stops in plain words, unless
+    rejected=True asks for the last answer it rejected (kept in run_info.attempt_log since v6).
+    """
     data = json.loads(text)
-    found = data.get("summary", {}).get("questions")
+    summary = data.get("summary")
+    if summary is None and "summary" in data:
+        if not rejected:
+            raise ValueError(f"{source}: the analysis has no validated answer (it failed validation). "
+                             "Add --rejected to score the last answer it rejected")
+        summary = last_rejected_answer(data, source)
+    found = (summary or {}).get("questions")
     if not isinstance(found, list) or not found:
         raise ValueError(f"{source}: no summary.questions list in the analysis JSON")
     pairs = [question_and_theme(item, source) for item in found]
@@ -154,12 +174,21 @@ def load_target(path=TARGET_PATH):
     return parse_markdown(read_text(path), str(path), strict=True)
 
 
-def load_generated(path):
+def is_failed_analysis(path):
+    """True for an analysis JSON whose summary is null: both of its answers failed validation."""
+    path = Path(path)
+    if path.suffix != ".json":
+        return False
+    data = json.loads(read_text(path))
+    return "summary" in data and data["summary"] is None
+
+
+def load_generated(path, rejected=False):
     """A set to score: an analysis JSON from analyze.py, or the same markdown format, themes optional."""
     path = Path(path)
     text = read_text(path)
     if path.suffix == ".json":
-        return parse_analysis_json(text, str(path))
+        return parse_analysis_json(text, str(path), rejected)
     return parse_markdown(text, str(path), strict=False)
 
 
@@ -503,6 +532,8 @@ def build_parser():
     parser.add_argument("--target", default=str(TARGET_PATH), help=f"the gold standard (default: {TARGET_PATH})")
     parser.add_argument("--fail-under", type=float, default=None,
                         help="exit 1 if the overall percentage is below this")
+    parser.add_argument("--rejected", action="store_true",
+                        help="for an analysis that failed validation, score the last answer it rejected")
     parser.add_argument("--json", action="store_true", help="print the scorecard as JSON")
     parser.add_argument("--rubric", action="store_true", help="print the 1 to 5 rubric and stop")
     return parser
@@ -519,10 +550,12 @@ def main(argv=None):
         return 2
     try:
         target = load_target(args.target)
-        generated = load_generated(args.generated)
+        generated = load_generated(args.generated, args.rejected)
     except ValueError as stopped:
         print(f"Stopped: {stopped}")
         return 2
+    if args.rejected and is_failed_analysis(args.generated):
+        print("Scoring the last REJECTED answer: it failed validation and is not on any deck.\n")
     report = score_set(target, generated)
     print(json.dumps(report, indent=2) if args.json else format_report(report))
     if args.fail_under is not None and report["overall"] * 100 < args.fail_under:
