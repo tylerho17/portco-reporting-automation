@@ -46,7 +46,8 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.util import Emu
 
-from build_deck import FICTIONAL_NOTE, PLACEHOLDER_TEXT, analysis_path, save_deck
+from build_deck import (AI_RISKS_HEADING, FICTIONAL_NOTE, GAPS_AND_RISKS_BOX, PLACEHOLDER_TEXT, QUESTIONS_HEADING,
+                        analysis_path, save_deck)
 from charts import arr_chart, cash_chart
 from check_companies import COMPANIES
 from clean import clean_workbook
@@ -188,33 +189,41 @@ def expected_flag_count(company):
 
 
 def check_ai_slide(slides, summary, name):
-    """Slide 4: the analysis text under the AI-drafted line, or the placeholder (never a mix).
+    """Slide 4: the headline, diagnosis and questions under the AI-drafted line, or the placeholder
+    (never a mix). Slide 3: the same analysis's 3 risks under the AI-drafted risks heading.
 
-    Also: the wins are nowhere on the deck, and slides 1 to 3 carry no AI text or placeholder.
+    Also: slides 1 and 2 carry no AI text or placeholder at all.
     """
     slides = list(slides)   # python-pptx's slide list can't be sliced
-    slide = slides[3]
+    slide, risks_slide = slides[3], slides[2]
     headline = shape(slide, "Headline").text_frame.text
     names = [item.name for item in slide.shapes]
-    for other in slides[:3]:
-        assert "Headline" not in [item.name for item in other.shapes], f"{name}: AI text off slide 4"
-        assert PLACEHOLDER_TEXT not in slide_text(other), f"{name}: placeholder off slide 4"
+    risks_text = shape(risks_slide, GAPS_AND_RISKS_BOX).text_frame.text
+    assert AI_RISKS_HEADING in risks_text, f"{name}: slide 3 has no AI-drafted risks heading"
+    for other in slides[:2]:
+        assert "Headline" not in [item.name for item in other.shapes], f"{name}: AI text on slide 1 or 2"
+        assert PLACEHOLDER_TEXT not in slide_text(other), f"{name}: placeholder on slide 1 or 2"
     if summary is None:
         assert headline == PLACEHOLDER_TEXT, f"{name}: headline should be the placeholder, got {headline!r}"
         assert "AI-drafted line" not in names, f"{name}: 'AI-drafted' line on a slide with no AI text"
+        assert PLACEHOLDER_TEXT in risks_text, f"{name}: slide 3's risks should say {PLACEHOLDER_TEXT!r}"
         return
     line = shape(slide, "AI-drafted line").text_frame.text
     assert line == "AI-drafted from computed metrics - review before use", f"{name}: AI-drafted line {line!r}"
     assert headline == summary["headline"], f"{name}: headline {headline!r} != JSON {summary['headline']!r}"
-    risks, questions = shape(slide, "Risks").text_frame.text, shape(slide, "Questions").text_frame.text
+    diagnosis = shape(slide, "Diagnosis").text_frame.text
+    assert diagnosis == summary["diagnosis"], f"{name}: diagnosis {diagnosis!r} != JSON"
     for point in summary["risks"]:
-        assert point["title"] in risks and point["detail"] in risks, f"{name}: risk missing: {point}"
-    for question in summary["questions"]:
-        assert question in questions, f"{name}: question missing from slide 4: {question!r}"
-    deck_text = "\n".join(slide_text(each) for each in slides)
-    for point in summary["wins"]:
-        assert point["detail"] not in deck_text, f"{name}: a win is on the deck: {point}"
+        assert point["title"] in risks_text and point["detail"] in risks_text, \
+            f"{name}: risk missing from slide 3: {point}"
+        assert point["detail"] not in slide_text(slide), f"{name}: a risk is on slide 4 as well: {point}"
+    questions = "\n".join(item.text_frame.text for item in slide.shapes
+                          if item.has_text_frame and item.name.startswith(QUESTIONS_HEADING))
+    for item in summary["questions"]:
+        assert item["question"] in questions, f"{name}: question missing from slide 4: {item['question']!r}"
+        assert item["theme"] in questions, f"{name}: theme missing from slide 4: {item['theme']!r}"
     assert PLACEHOLDER_TEXT not in slide_text(slide), f"{name}: placeholder shown"
+    assert PLACEHOLDER_TEXT not in risks_text, f"{name}: placeholder shown beside the AI risks"
 
 
 def check_kpi_numbers(slide, table, flags, name):
@@ -280,7 +289,7 @@ def check_risks_slide(slide, company, table_flags, gap_labels):
             assert f"• {flag}: " in text, f"{company['name']}: tripped flag {flag!r} missing from slide 3"
     combo_status = table_flags[COMBO_FLAG_NAME]["Status"]
     assert f"{COMBO_FLAG_NAME}: {combo_status}" in text, f"{company['name']}: combo result missing"
-    text = shape(slide, "Data gaps").text_frame.text
+    text = shape(slide, GAPS_AND_RISKS_BOX).text_frame.text
     assert text.startswith("Data gaps"), f"{company['name']}: no Data gaps line"
     for label in gap_labels:
         assert label in text, f"{company['name']}: data gap {label!r} missing from slide 3"

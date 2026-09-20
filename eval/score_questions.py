@@ -22,7 +22,8 @@ Input formats:
 - .md   a numbered list, optionally under "## Theme: name" headings, optionally with a
         "[verbatim]", "[verbatim with values]" or "[constructed]" provenance marker per question.
         The target must have a theme and a marker on every question; a generated set need not.
-- .json an analysis file written by analyze.py: summary.questions, a flat list of strings.
+- .json an analysis file written by analyze.py: summary.questions, each one a theme and a question
+        since prompt v5 (a plain string in the v4 files, which had no themes).
 
 Exit codes: 0 scored, 1 below --fail-under, 2 a file could not be read.
 """
@@ -111,13 +112,27 @@ def parse_markdown(text, source, strict):
     return QuestionSet(source, questions, themes)
 
 
+def question_and_theme(found, source):
+    """One saved question as (text, theme). v5 saves {"theme": ..., "question": ...}; v4 saved a string."""
+    if isinstance(found, str):
+        return found, None
+    if isinstance(found, dict) and isinstance(found.get("question"), str):
+        theme = found.get("theme")
+        return found["question"], theme if isinstance(theme, str) else None
+    raise ValueError(f"{source}: a question in summary.questions is neither a string nor "
+                     f"a theme and question: {found!r}")
+
+
 def parse_analysis_json(text, source):
-    """Read analyze.py's summary.questions: a flat list of strings, so no themes and no markers."""
+    """Read analyze.py's summary.questions: since v5 each one carries the theme it sits under."""
     data = json.loads(text)
     found = data.get("summary", {}).get("questions")
     if not isinstance(found, list) or not found:
         raise ValueError(f"{source}: no summary.questions list in the analysis JSON")
-    return QuestionSet(source, [Question(q, None, None, i + 1) for i, q in enumerate(found)], [])
+    pairs = [question_and_theme(item, source) for item in found]
+    themes = list(dict.fromkeys(theme for _, theme in pairs if theme is not None))
+    return QuestionSet(source, [Question(text, theme, None, number)
+                                for number, (text, theme) in enumerate(pairs, start=1)], themes)
 
 
 def read_text(path):

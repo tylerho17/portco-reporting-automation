@@ -10,7 +10,7 @@ Run: python check_northwind.py  -> prints "All checks passed" or stops at the fi
 
 import math
 
-from analyze import BoardSummary, Point, build_payload, payload_to_text, validate_summary
+from analyze import BoardSummary, Point, Question, build_payload, payload_to_text, validate_summary
 from clean import clean_workbook
 from compare_models import HAIKU, SONNET, parse_scores, recommend
 from make_data import BLANK_QUARTER, NEXT_QUARTER_BUDGET, OUTPUT_PATH, QUARTERS, TRUE_DATA
@@ -95,29 +95,50 @@ def check_gaps(gaps, metrics):
 
 
 def good_summary():
-    """A hand-written answer that quotes only numbers from the payload, exactly as shown."""
+    """A hand-written v5 answer that quotes only numbers from the payload, exactly as shown."""
     return BoardSummary(
         headline="ARR reached $27,470K but NRR fell to 97.1% and runway is 11.0 mo, tripping 6 of 9 flags.",
-        wins=[
-            Point(title="ARR growth", detail="Ending ARR grew 42.8% YoY to $27,470K in Q2 2026."),
-            Point(title="Pipeline building", detail="Pipeline went from $6,000K to $12,500K."),
-            Point(title="Efficient acquisition", detail="CAC payback of 20.7 mo is inside the 24.0 mo limit."),
-        ],
+        diagnosis=(
+            "Ending ARR reached $27,470K in Q2 2026 with ARR growth YoY of 42.8%, but NRR (annualized) is "
+            "97.1% and GRR (annualized) 88.1%, both under Q3 2025's 108.9% and 92.9%. Net burn vs budget is "
+            "20.0%, the burn multiple is 2.35x and runway at current burn is 11.0 mo. The pattern is "
+            "consistent with new sales carrying a weakening installed base while spend stayed at plan."),
         risks=[
             Point(title="Retention slipping", detail="NRR went from 108.0% to 97.1% while pipeline rose."),
             Point(title="Burn over plan", detail="Net burn is 20.0% over budget with a 2.35x burn multiple."),
-            Point(title="Short runway", detail="Runway is 11.0 mo at current burn, 13.0 mo at budgeted burn."),
+            Point(title="Short runway", detail="Runway is 11.0 mo at current burn, 13.0 mo if burn returns to plan."),
         ],
         questions=[
-            "What is driving churned ARR higher since Q4 2025?",
-            "Which spending lines explain burn running over budget?",
-            "What financing options is management preparing given runway?",
+            Question(theme="Retention decomposition",
+                     question="How much of the NRR (annualized) fall to 97.1% sits in GRR (annualized) at 88.1%?"),
+            Question(theme="Retention decomposition",
+                     question="Which accounts make up the churn behind GRR (annualized) at 88.1%?"),
+            Question(theme="Burn and budget variance",
+                     question="Which cost lines carry net burn vs budget at 20.0%, against 10.0% in Q3 2025?"),
+            Question(theme="Burn and budget variance",
+                     question="How much of the 2.35x burn multiple is headcount added since Q4 2025's 1.46x?"),
+            Question(theme="Liquidity and runway",
+                     question="How far must net burn vs budget fall for runway at current burn to clear 12.0 mo?"),
+            Question(theme="Liquidity and runway",
+                     question="Which cost actions stand behind the 13.0 mo runway if burn returns to plan?"),
+            Question(theme="Pipeline and sales efficiency",
+                     question="Which segments make up the $12,500K pipeline behind the 20.7 mo CAC payback?"),
+            Question(theme="Pipeline and sales efficiency",
+                     question="How much of net new ARR vs budget at -19.0% is deals slipping rather than lost?"),
+            Question(theme="Definitions and assumptions",
+                     question="Which definition gives NRR (annualized) at 97.1%, and was Q1 2025 ever restated?"),
         ],
     )
 
 
+def replace_question(summary, position, theme, text):
+    """The same answer with one question swapped, so one rule at a time is broken."""
+    summary.questions[position] = Question(theme=theme, question=text)
+    return summary
+
+
 def check_analysis_validation(payload_text):
-    """validate_summary passes a good answer and catches calculated, rounded and miscounted ones."""
+    """validate_summary passes a good answer and catches every way a v5 answer can go wrong."""
     assert validate_summary(good_summary(), payload_text) == [], \
         f"Good summary should pass: {validate_summary(good_summary(), payload_text)}"
 
@@ -141,6 +162,42 @@ def check_analysis_validation(payload_text):
     two_risks.risks = two_risks.risks[:2]
     problems = validate_summary(two_risks, payload_text)
     assert any("risks must have exactly 3" in p for p in problems), f"Wrong risk count not caught: {problems}"
+
+    short_diagnosis = good_summary()
+    short_diagnosis.diagnosis = "Retention is falling and burn is over budget."
+    problems = validate_summary(short_diagnosis, payload_text)
+    assert any("diagnosis has 8 words" in p for p in problems), f"Short diagnosis not caught: {problems}"
+
+    few_questions = good_summary()
+    few_questions.questions = few_questions.questions[:7]
+    problems = validate_summary(few_questions, payload_text)
+    assert any("questions must have 8 to 10 items" in p for p in problems), f"7 questions not caught: {problems}"
+
+    explaining = replace_question(good_summary(), 2, "Burn and budget variance",
+                                  "What is driving net burn vs budget to 20.0% this quarter?")
+    problems = validate_summary(explaining, payload_text)
+    assert any("asks for an explanation" in p for p in problems), f"Explanation question not caught: {problems}"
+
+    no_value = replace_question(good_summary(), 2, "Burn and budget variance",
+                                "Which cost lines carry the net burn vs budget variance?")
+    problems = validate_summary(no_value, payload_text)
+    assert any("must name a metric and quote its value" in p for p in problems), \
+        f"Question without a value not caught: {problems}"
+
+    no_divergence = replace_question(good_summary(), 0, "Retention decomposition",
+                                     "Which accounts make up the NRR (annualized) fall to 97.1%?")
+    problems = validate_summary(no_divergence, payload_text)
+    assert any("divergence test" in p for p in problems), f"Missing gross versus net test not caught: {problems}"
+
+    no_definitions = replace_question(good_summary(), 8, "Pipeline and sales efficiency",
+                                      "Which segments carry the $12,500K pipeline into next quarter?")
+    problems = validate_summary(no_definitions, payload_text)
+    assert any("interrogates a definition" in p for p in problems), f"Missing definitions question: {problems}"
+
+    wrong_theme = replace_question(good_summary(), 1, "Retention",
+                                   "Which accounts make up the churn behind GRR (annualized) at 88.1%?")
+    problems = validate_summary(wrong_theme, payload_text)
+    assert any("has the theme 'Retention'" in p for p in problems), f"Unknown theme not caught: {problems}"
 
 
 def check_recommendation_rule():
@@ -175,7 +232,9 @@ def main():
     check_gaps(data_gaps(actuals, metrics, flags), metrics)
     print("✓ Data gaps are exactly where the rules say")
     check_analysis_validation(payload_to_text(build_payload("Northwind", actuals, next_budget, config)))
-    print("✓ Analysis validation passes a good answer, catches calculated/rounded numbers and wrong counts")
+    print("✓ Analysis validation passes a good answer, catches calculated/rounded numbers, wrong counts, a short "
+          "diagnosis, and questions that explain, quote no value, skip the gross versus net test, leave out "
+          "definitions or use an unknown theme")
     check_recommendation_rule()
     print("✓ Model recommendation rule and score entry behave as agreed")
     print("All checks passed")

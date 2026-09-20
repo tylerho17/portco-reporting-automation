@@ -1,38 +1,58 @@
 {
   "summary": {
-    "headline": "Northwind's burn is outpacing budget and eroding runway to 11.0 mo, while NRR fell to 97.1% and Rule of 40 hit -12.2%.",
-    "wins": [
-      {
-        "title": "Still-strong ARR growth",
-        "detail": "ARR growth YoY was 42.8% in Q2 2026, following 58.0% in Q3 2025 and 55.3% in Q4 2025."
-      },
-      {
-        "title": "Gross margin expansion",
-        "detail": "Gross margin went from 71.9% in Q3 2024 to 75.1% in Q2 2026."
-      },
-      {
-        "title": "ARR consistently beat budget",
-        "detail": "Ending ARR vs budget was positive every quarter shown, peaking at 4.8% in Q4 2025 before easing to 2.5% in Q2 2026."
-      }
-    ],
+    "headline": "Northwind's ARR reached $27,470K, but NRR fell to 97.1%, net burn ran 20.0% over budget and runway is down to 11.0 mo.",
+    "diagnosis": "Ending ARR reached $27,470K in Q2 2026 and ARR growth YoY was 42.8%, but NRR (annualized) went from 108.9% to 97.1% and GRR (annualized) from 92.9% to 88.1% since Q3 2025. Net burn vs budget widened to 20.0%, the burn multiple is 2.35x and runway at current burn is 11.0 mo. The pattern is consistent with new sales carrying a weakening installed base while spend stayed at plan.",
     "risks": [
       {
-        "title": "Burn accelerating, runway breached",
-        "detail": "Burn multiple hit 2.35x (threshold 2.00x), net burn ran 20.0% over budget (threshold 15.0%), and runway fell to 11.0 mo (threshold 12.0 mo); runway if burn returns to plan is 13.0 mo."
+        "title": "Burn over plan, runway inside a year",
+        "detail": "Net burn vs budget is 20.0% against a 15.0% threshold, the burn multiple is 2.35x and runway at current burn is 11.0 mo."
       },
       {
-        "title": "Retention weakening despite pipeline growth",
-        "detail": "NRR fell each quarter from 108.0% (Q4 2025) to 97.1% (Q2 2026), tripping the 100.0% threshold, while pipeline rose from $10,100K to $12,500K over the same period - a warning sign on retention."
+        "title": "Retention, not demand, is the problem",
+        "detail": "NRR (annualized) is 97.1% and GRR (annualized) 88.1%, both under Q3 2025's 108.9% and 92.9%, while pipeline reached $12,500K."
       },
       {
-        "title": "Growth decelerating, profitability target missed",
-        "detail": "Rule of 40 was -12.2% in Q2 2026, well below the 40.0% threshold. ARR growth QoQ fell from 12.8% (Q4 2024) to 6.4% (Q2 2026) while FCF margin stayed at -58.6%."
+        "title": "Rule of 40 deeply negative",
+        "detail": "Rule of 40 is -12.2% against a 40.0% threshold, with FCF margin at -58.6% and ARR growth QoQ down to 6.4%."
       }
     ],
     "questions": [
-      "What specific cost actions are planned to bring net burn back toward budget and extend runway beyond 11.0 mo?",
-      "What is driving the decline in NRR from 108.0% to 97.1% even as pipeline keeps growing - is it concentrated in particular segments or accounts?",
-      "What is causing ARR growth QoQ to decelerate from 12.8% to 6.4%, and what levers does management see to reverse that trend?"
+      {
+        "theme": "Retention decomposition",
+        "question": "How much of the NRR (annualized) fall from 108.9% to 97.1% sits in GRR (annualized) at 88.1%?"
+      },
+      {
+        "theme": "Retention decomposition",
+        "question": "Which accounts make up the contraction and churn behind GRR (annualized) at 88.1%?"
+      },
+      {
+        "theme": "Burn and budget variance",
+        "question": "Which cost lines carry net burn vs budget at 20.0%, against 10.0% in Q3 2025?"
+      },
+      {
+        "theme": "Burn and budget variance",
+        "question": "How much of the 2.35x burn multiple is headcount added since Q4 2025's 1.46x?"
+      },
+      {
+        "theme": "Liquidity and runway",
+        "question": "How far must net burn vs budget fall for runway at current burn to clear 12.0 mo?"
+      },
+      {
+        "theme": "Liquidity and runway",
+        "question": "How much of the 13.0 mo runway if burn returns to plan depends on cost actions not yet taken?"
+      },
+      {
+        "theme": "Pipeline and sales efficiency",
+        "question": "Which segments make up the $12,500K pipeline behind the 20.7 mo CAC payback?"
+      },
+      {
+        "theme": "Pipeline and sales efficiency",
+        "question": "How much of net new ARR vs budget at -19.0% is deals slipping rather than lost?"
+      },
+      {
+        "theme": "Definitions and assumptions",
+        "question": "Which definition gives NRR (annualized) at 97.1%, and will Q1 2025's missing net burn be restated?"
+      }
     ]
   },
   "run_info": {
@@ -52,7 +72,7 @@
       }
     ]
   },
-  "prompt_version": "v4",
+  "prompt_version": "v5",
   "error": null,
   "payload": {
     "company": "Northwind",

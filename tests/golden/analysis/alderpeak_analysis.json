@@ -1,38 +1,58 @@
 {
   "summary": {
-    "headline": "All 9 flags passed this quarter, but ARR growth YoY declined every quarter from 53.9% to 47.5%, signaling decelerating momentum despite strong scale.",
-    "wins": [
-      {
-        "title": "ARR growth and scale",
-        "detail": "Ending ARR grew from $9,000K in Q3 2024 to $18,450K in Q2 2026, with net new ARR rising every quarter to $1,630K."
-      },
-      {
-        "title": "Highly efficient burn",
-        "detail": "Burn multiple passed at 0.12x versus a 2.00x threshold, with net burn falling every quarter from $700K to $200K and runway rising to 108.0 mo (vs 12.0 mo threshold)."
-      },
-      {
-        "title": "Strong retention",
-        "detail": "NRR passed at 109.8% (threshold 100.0%) and GRR passed at 96.0% (threshold 85.0%), both comfortably above their thresholds this quarter."
-      }
-    ],
+    "headline": "Alderpeak passed all 9 flags: ARR grew to $18,450K, Rule of 40 is 42.7% and runway is 108.0 mo.",
+    "diagnosis": "Every one of the 9 flags passed. Ending ARR reached $18,450K with ARR growth YoY at 47.5%, Rule of 40 at 42.7% and a burn multiple of 0.12x. Net burn vs budget is -9.1%, so runway at current burn is 108.0 mo. ARR growth QoQ has eased at every step from 12.1% to 9.7%, which is consistent with a larger base rather than weaker demand, since NRR (annualized) is 109.8% and GRR (annualized) 96.0%.",
     "risks": [
       {
-        "title": "Decelerating ARR growth",
-        "detail": "ARR growth YoY fell every quarter from 53.9% in Q3 2025 to 47.5% in Q2 2026, and ARR growth QoQ fell every quarter from 12.1% to 9.7%, signaling slowing momentum."
+        "title": "Growth slowing as the base grows",
+        "detail": "ARR growth QoQ eased from 12.1% to 9.7% and ARR growth YoY from 53.9% to 47.5%, while Rule of 40 sits at 42.7%."
       },
       {
-        "title": "Rule of 40 margin thinning",
-        "detail": "Rule of 40 passed at 42.7% versus a 40.0% threshold, but slipped from a peak of 43.1% in Q4 2025, leaving little cushion if growth keeps decelerating."
+        "title": "Rule of 40 closest to its threshold",
+        "detail": "Rule of 40 is 42.7% against a 40.0% threshold, the narrowest margin of any flag that passed this quarter."
       },
       {
-        "title": "CAC payback creeping up",
-        "detail": "CAC payback passed at 17.7 mo (threshold 24.0 mo) but has moved from 17.3 mo in Q3 2024 to 17.7 mo in Q2 2026 without any quarter improving."
+        "title": "Cash cover rests on burn staying low",
+        "detail": "Net burn is $200K and runway at current burn is 108.0 mo; if burn returns to plan it is 144.0 mo."
       }
     ],
     "questions": [
-      "What specific factors are driving the steady deceleration in ARR growth YoY from 53.9% to 47.5% over the past year?",
-      "What is causing CAC payback to lengthen gradually from 17.3 mo to 17.7 mo despite continued net new ARR growth?",
-      "What levers does management plan to pull to keep Rule of 40 above the 40.0% threshold if growth continues decelerating?"
+      {
+        "theme": "Retention decomposition",
+        "question": "How much of NRR (annualized) at 109.8% is expansion rather than GRR (annualized) at 96.0%?"
+      },
+      {
+        "theme": "Retention decomposition",
+        "question": "Which cohorts sit behind GRR (annualized) at 96.0%, and which renewed below list price?"
+      },
+      {
+        "theme": "Burn and budget variance",
+        "question": "Which cost lines hold net burn vs budget at -9.1% while headcount grows?"
+      },
+      {
+        "theme": "Burn and budget variance",
+        "question": "How much of the 0.12x burn multiple depends on net burn vs budget staying at -9.1%?"
+      },
+      {
+        "theme": "Liquidity and runway",
+        "question": "How far must net burn vs budget rise before runway at current burn falls under 12.0 mo?"
+      },
+      {
+        "theme": "Liquidity and runway",
+        "question": "Which quarters of the 108.0 mo runway assume the planned burn that gives 144.0 mo?"
+      },
+      {
+        "theme": "Pipeline and sales efficiency",
+        "question": "Which segments make up the $5,350K pipeline behind CAC payback at 17.7 mo?"
+      },
+      {
+        "theme": "Pipeline and sales efficiency",
+        "question": "How much of net new ARR vs budget at 5.8% came from deals pulled forward?"
+      },
+      {
+        "theme": "Definitions and assumptions",
+        "question": "Which definition gives GRR (annualized) at 96.0%, and does it net downgrades against upsell?"
+      }
     ]
   },
   "run_info": {
@@ -52,7 +72,7 @@
       }
     ]
   },
-  "prompt_version": "v4",
+  "prompt_version": "v5",
   "error": null,
   "payload": {
     "company": "Alderpeak",

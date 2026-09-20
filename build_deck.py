@@ -4,19 +4,20 @@ Slides (every one on templates/base.pptx's "Title and Content" layout, with a fo
 1. Key metrics:      company, latest quarter, prior quarter, budget or threshold, status (red / green / gray)
 2. ARR and cash:     two matplotlib charts (charts.py); a blank quarter shows as a gap
 3. Risks and flags:  "6 of 9 flags tripped", each tripped flag with value vs threshold, the combo rule;
-                     the Data gaps line beside them
+                     beside them the Data gaps line, and under it the AI's 3 risks, headed
+                     "Risks (AI-drafted from computed metrics, review before use)"
 4. AI commentary:    "AI-drafted from computed metrics - review before use" under the title, then the
-                     AI headline, and its 3 risks and 3 questions for management side by side
+                     AI headline, its diagnosis paragraph, and its 8 to 10 questions for management
+                     in two columns, grouped under their themes
 With --appendix, one more slide after these four:
    Appendix:         every metric for every quarter (the last 8 if a workbook has more), with a key
                      under the table. Off by default.
 
-The analysis also has 3 wins (analyze.py still asks for them); they aren't on the deck.
-
 Inputs: metrics, flags and data gaps (metrics.py) and the AI analysis JSON (analyze.py).
 The analysis is checked again here against today's numbers; if it's missing or fails,
-slide 4 says "AI summary unavailable" and everything else is built as normal
-(CLAUDE.md step 4 decisions K and L). Slides 1 to 3 have no AI text at all.
+slide 4 says "AI summary unavailable", slide 3's risks say the same, and everything else is
+built as normal (CLAUDE.md step 4 decisions K and L). Slides 1 and 2 have no AI text at all,
+and every piece of AI text on slides 3 and 4 sits under a heading that says so.
 
 Rules:
 - No math and no hand-typed numbers: every number comes from metrics.py, config.yaml or the
@@ -51,7 +52,7 @@ from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches, Pt
 from pydantic import ValidationError
 
-from analyze import BoardSummary, build_payload, payload_to_text, validate_summary
+from analyze import BoardSummary, build_payload, grouped_questions, payload_to_text, validate_summary
 from charts import arr_chart, cash_chart, save_chart
 from clean import clean_workbook
 from excel_output import INFINITE_LABELS, NO_GAPS_LABEL, gap_label, status_label, tripped_cells
@@ -70,9 +71,9 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 CHART_FOLDER = "charts"   # PNGs go in output/charts/
 
 PLACEHOLDER_TEXT = "AI summary unavailable"
-PLACEHOLDER_NOTE = ("The headline, risks and questions are written by Claude, and no validated version "
-                    "is available for this deck. Every number on the other slides is computed in Python "
-                    "and is unaffected.")
+PLACEHOLDER_NOTE = ("The headline, diagnosis, risks and questions are written by Claude, and no validated "
+                    "version is available for this deck. Every number on the other slides is computed in "
+                    "Python and is unaffected.")
 FICTIONAL_NOTE = "Fictional data"     # short: the footer line has no room to spare (add_footer)
 AI_DRAFTED_LINE = "AI-drafted from computed metrics - review before use"   # under slide 4's title
 NO_AI_MODEL = "no AI text"            # the footer's model when the deck shows the placeholder
@@ -84,6 +85,8 @@ UNKNOWN_PROMPT_VERSION = "unknown (saved before prompt versions)"
 NOT_APPLICABLE = "-"
 COMBO_TABLE_TEXT = "rule on Risks and flags slide"
 QUESTIONS_HEADING = "Questions for management"
+AI_RISKS_HEADING = "Risks (AI-drafted from computed metrics, review before use)"   # slide 3's AI block
+GAPS_AND_RISKS_BOX = "Data gaps and risks"    # slide 3's right-hand column: computed gaps, then AI risks
 
 # ---------------------------------------------------------------------------
 # Look: font sizes (pt), spacing (pt) and layout sizes. Positions come from the template;
@@ -103,6 +106,9 @@ HEADING_SPACE = 6     # after a heading
 POINT_TITLE_SPACE = 2  # between a point's title and its detail
 ITEM_SPACE = 10       # after each list item
 SECTION_SPACE = 14    # after the last item of a section
+THEME_SPACE = 3       # after a theme heading on slide 4 (tighter: ten questions share the slide)
+QUESTION_SPACE = 5    # after each question
+RISK_SPACE = 6        # after each risk on slide 3, which shares its column with the data gaps
 
 # The DRAFT watermark (--draft only), on decks no person has approved (provenance.py, approve.py).
 WATERMARK_SIZE = 48
@@ -113,8 +119,11 @@ WATERMARK_HEIGHT = Inches(1.2)
 
 GAP = Inches(0.15)            # vertical gap between boxes
 COLUMN_GAP = Inches(0.35)     # between two columns (the charts, flags/data gaps, risks/questions)
-AI_LINE_HEIGHT = Inches(0.4)  # the "AI-drafted ... review before use" line: one line at 13 pt
-HEADLINE_HEIGHT = Inches(1.05)
+AI_LINE_HEIGHT = Inches(0.3)  # the "AI-drafted ... review before use" line: one line at 13 pt
+HEADLINE_HEIGHT = Inches(0.7)     # two lines: a 25-word headline, shrunk a little from 20 pt
+DIAGNOSIS_HEIGHT = Inches(0.83)   # the 60 to 90 word diagnosis paragraph, full width
+AI_GAP = Inches(0.1)              # between slide 4's boxes: tighter than GAP, since what is left
+                                  # of the slide goes to the questions and ten of them need it all
 TEXT_MARGIN_X = Inches(0.1)
 TEXT_MARGIN_Y = Inches(0.05)
 CELL_MARGIN_X = Inches(0.08)
@@ -195,17 +204,22 @@ def flag_count_text(flags):
     return text
 
 
+def labelled_gap_lines(gaps):
+    """The Data gaps lines from gaps already keyed by their display label (as the payload keeps them)."""
+    if not gaps:
+        return [NO_GAPS_LABEL]
+    groups = {}  # quarters -> labels, in the order first seen
+    for label, quarters in gaps.items():
+        groups.setdefault(" + ".join(quarters), []).append(label)
+    return [f"{quarters}: {', '.join(labels)}" for quarters, labels in groups.items()]
+
+
 def gaps_lines(gaps):
     """Every metric and flag with data missing, one line per set of quarters they miss.
 
     ['Q1 2025: Ending ARR ($K), NRR (annualized)', 'Q1 2025 + Q2 2025: ARR growth QoQ']
     """
-    if not gaps:
-        return [NO_GAPS_LABEL]
-    groups = {}  # quarters -> labels, in the order first seen
-    for name, quarters in gaps.items():
-        groups.setdefault(" + ".join(quarters), []).append(gap_label(name))
-    return [f"{quarters}: {', '.join(labels)}" for quarters, labels in groups.items()]
+    return labelled_gap_lines({gap_label(name): quarters for name, quarters in gaps.items()})
 
 
 def gaps_text(gaps):
@@ -319,10 +333,10 @@ def content_area():
     return layout_box(find_content_layout(open_template()), BODY_TYPES)
 
 
-def column_box(box, position):
-    """One of two side-by-side columns inside `box` (EMU): position 0 is the left one."""
+def column_box(box, position, count=2):
+    """One of `count` side-by-side columns inside `box` (EMU): position 0 is the left one."""
     left, top, width, height = box
-    column_width = (width - COLUMN_GAP) // 2
+    column_width = (width - (count - 1) * COLUMN_GAP) // count
     return left + position * (column_width + COLUMN_GAP), top, column_width, height
 
 
@@ -363,13 +377,13 @@ def add_text_box(slide, name, box, paragraphs, deck):
 
 
 def add_columns(slide, columns, top, height, deck):
-    """Two text boxes side by side across the content area, at matching font sizes.
+    """Text boxes side by side across the content area, at matching font sizes.
 
-    columns = [(name, paragraphs), (name, paragraphs)]. Each column is fitted on its own first;
-    then both use the bigger shrink, so the two sides never show different sizes.
+    columns = [(name, paragraphs), ...], usually two. Each column is fitted on its own first;
+    then all of them use the biggest shrink, so no two sides show different sizes.
     """
     left, _, width, _ = deck["area"]
-    boxes = [column_box((left, top, width, height), position) for position in range(len(columns))]
+    boxes = [column_box((left, top, width, height), position, len(columns)) for position in range(len(columns))]
     shrink = 0
     for (name, paragraphs), box in zip(columns, boxes):
         sized = fitted(paragraphs, box[2], box[3], f"{deck['where']}, {name}")
@@ -639,9 +653,14 @@ def charts_slide(slide, deck):
 # 7. Slide 3: Risks and flags
 # ---------------------------------------------------------------------------
 
+def column_heading(text):
+    """The bold navy heading at the top of a column, or above a block inside one."""
+    return paragraph(text, HEADING_SIZE, bold=True, color=NAVY, space_after=HEADING_SPACE)
+
+
 def section(heading, lines):
     """A bold heading and its bullet lines; extra space after the last line."""
-    result = [paragraph(heading, HEADING_SIZE, bold=True, color=NAVY, space_after=HEADING_SPACE)]
+    result = [column_heading(heading)]
     for number, line in enumerate(lines, start=1):
         space = SECTION_SPACE if number == len(lines) else ITEM_SPACE
         result.append(paragraph(f"• {line}", LIST_SIZE, space_after=space))
@@ -664,13 +683,40 @@ def flags_paragraphs(data):
     return result
 
 
+def risk_paragraphs(summary):
+    """The AI's 3 risks: a heading saying they are AI-drafted, then each title (bold) and its detail.
+
+    With no validated summary, the heading is followed by the gray "AI summary unavailable" line,
+    so the reader is told the risks are missing rather than left to notice the empty space.
+    """
+    # A block heading inside a column, not the column's own heading, so it takes the body size:
+    # at slide 3's heading size it costs two lines the data gaps above it need.
+    result = [paragraph(AI_RISKS_HEADING, BODY_SIZE, bold=True, color=NAVY, space_after=HEADING_SPACE)]
+    if summary is None:
+        return result + [paragraph(PLACEHOLDER_TEXT, BODY_SIZE, color=MID_GRAY)]
+    for point in summary.risks:
+        result.append(paragraph(point.title, BODY_SIZE, bold=True, space_after=POINT_TITLE_SPACE))
+        result.append(paragraph(point.detail, BODY_SIZE, space_after=RISK_SPACE))
+    return result
+
+
+def gaps_and_risks_paragraphs(gap_lines, summary):
+    """The right-hand column of slide 3: the computed data gaps, then the AI-drafted risks under them.
+
+    One box, not two: for a company with a blank quarter the gaps take half the column, and a fixed
+    split would leave the risks a box they cannot fit in while the space above them went unused.
+    """
+    return section("Data gaps (data missing)", gap_lines) + risk_paragraphs(summary)
+
+
 def risks_slide(slide, deck):
-    """Flags on the left; the Data gaps line (one bullet per set of quarters) on the right."""
+    """Flags on the left; the Data gaps line and the AI's 3 risks on the right."""
     data = deck["data"]
     set_title(slide, f"Risks and flags, {data['latest']}", deck)
     _, top, _, height = deck["area"]
     add_columns(slide, [("Risks and flags", flags_paragraphs(data)),
-                        ("Data gaps", section("Data gaps (data missing)", gaps_lines(data["gaps"])))], top, height, deck)
+                        (GAPS_AND_RISKS_BOX, gaps_and_risks_paragraphs(gaps_lines(data["gaps"]), deck["summary"]))],
+                top, height, deck)
 
 
 # ---------------------------------------------------------------------------
@@ -678,15 +724,18 @@ def risks_slide(slide, deck):
 # ---------------------------------------------------------------------------
 
 def commentary_boxes(area):
-    """Slide 4's three boxes, top to bottom: the AI-drafted line, the headline, the risks/questions columns.
+    """Slide 4's four boxes, top to bottom: the AI-drafted line, the headline, the diagnosis, the
+    question columns.
 
     ai_text_problems measures the same boxes, so what is measured can't drift from what is drawn.
     """
     left, top, width, height = area
-    headline_top = top + AI_LINE_HEIGHT + GAP
-    columns_top = headline_top + HEADLINE_HEIGHT + GAP
+    headline_top = top + AI_LINE_HEIGHT + AI_GAP
+    diagnosis_top = headline_top + HEADLINE_HEIGHT + AI_GAP
+    columns_top = diagnosis_top + DIAGNOSIS_HEIGHT + AI_GAP
     return ((left, top, width, AI_LINE_HEIGHT),
             (left, headline_top, width, HEADLINE_HEIGHT),
+            (left, diagnosis_top, width, DIAGNOSIS_HEIGHT),
             (left, columns_top, width, top + height - columns_top))
 
 
@@ -695,46 +744,68 @@ def headline_paragraph(text, from_ai):
     return paragraph(text, HEADLINE_SIZE, bold=True, color=NAVY if from_ai else MID_GRAY)
 
 
-def column_heading(text):
-    """The bold navy heading at the top of a column of AI text."""
-    return paragraph(text, HEADING_SIZE, bold=True, color=NAVY, space_after=HEADING_SPACE)
+def diagnosis_paragraphs(text):
+    """The diagnosis paragraph: what the numbers show and what is likely driving it."""
+    return [paragraph(text, BODY_SIZE)]
 
 
-def points_paragraphs(heading, items):
-    """A column heading, then each point's title (bold) and detail."""
-    result = [column_heading(heading)]
-    for item in items:
-        result.append(paragraph(item.title, BODY_SIZE, bold=True, space_after=POINT_TITLE_SPACE))
-        result.append(paragraph(item.detail, BODY_SIZE, space_after=ITEM_SPACE))
+def theme_paragraphs(theme, questions, first_number):
+    """One theme: its heading, then its questions, numbered on through the whole set."""
+    result = [paragraph(theme, BODY_SIZE, bold=True, color=NAVY, space_after=THEME_SPACE)]
+    for offset, question in enumerate(questions):
+        result.append(paragraph(f"{first_number + offset}. {question}", BODY_SIZE, space_after=QUESTION_SPACE))
     return result
 
 
-def questions_paragraphs(questions):
-    """A column heading, then the AI's questions, numbered."""
-    result = [column_heading(QUESTIONS_HEADING)]
-    for number, question in enumerate(questions, start=1):
-        result.append(paragraph(f"{number}. {question}", BODY_SIZE, space_after=ITEM_SPACE))
+def question_paragraphs(groups, start=1):
+    """Every theme in `groups`, one after the other, with the questions numbered from `start`."""
+    result, number = [], start
+    for theme, questions in groups:
+        result += theme_paragraphs(theme, questions, number)
+        number += len(questions)
     return result
+
+
+def split_question_columns(groups):
+    """Break the themes into two columns at the point that splits the text most evenly.
+
+    Measured in characters, not in questions: two short questions take less of a column than one
+    long one, and the two columns have to fit the same height. A theme is never split across
+    columns: a heading with its questions under it is the grouping, and half a group under a
+    repeated heading would read as two themes.
+    """
+    if len(groups) < 2:
+        return [groups]
+    sizes = [len(theme) + sum(len(question) for question in questions) for theme, questions in groups]
+    breaks = range(1, len(groups))
+    best = min(breaks, key=lambda index: abs(sum(sizes[:index]) - sum(sizes) / 2))
+    return [groups[:best], groups[best:]]
 
 
 def commentary_columns(summary):
-    """Slide 4's two columns of AI text, as [(box name, paragraphs), ...]. The wins aren't shown."""
-    return [("Risks", points_paragraphs("Risks", summary.risks)),
-            ("Questions", questions_paragraphs(summary.questions))]
+    """Slide 4's question columns, as [(box name, paragraphs), ...]: the themes split in two."""
+    groups = grouped_questions(summary.questions)
+    columns = split_question_columns(groups)
+    numbers = [1 + sum(len(questions) for _, questions in column) for column in columns]
+    return [(f"{QUESTIONS_HEADING} {position + 1}", question_paragraphs(column, start))
+            for position, (column, start) in enumerate(zip(columns, [1] + numbers))]
 
 
 def commentary_slide(slide, deck):
-    """The AI-drafted line, the headline, then risks and questions side by side (or the placeholder)."""
+    """The AI-drafted line, the headline, the diagnosis, then the questions by theme (or the placeholder)."""
     data, summary = deck["data"], deck["summary"]
     set_title(slide, f"AI commentary, {data['latest']}", deck)
-    line_box, headline_box, columns_box = commentary_boxes(deck["area"])
+    line_box, headline_box, diagnosis_box, columns_box = commentary_boxes(deck["area"])
 
     if summary is None:  # nothing here is AI-drafted, so the AI-drafted line is left off
         add_text_box(slide, "Headline", headline_box, [headline_paragraph(PLACEHOLDER_TEXT, from_ai=False)], deck)
-        add_text_box(slide, "AI note", columns_box, [paragraph(PLACEHOLDER_NOTE, NOTE_SIZE, color=MID_GRAY)], deck)
+        note_box = (diagnosis_box[0], diagnosis_box[1], diagnosis_box[2],
+                    columns_box[1] + columns_box[3] - diagnosis_box[1])   # the rest of the slide
+        add_text_box(slide, "AI note", note_box, [paragraph(PLACEHOLDER_NOTE, NOTE_SIZE, color=MID_GRAY)], deck)
         return
     add_text_box(slide, "AI-drafted line", line_box, [paragraph(AI_DRAFTED_LINE, NOTE_SIZE, color=MID_GRAY)], deck)
     add_text_box(slide, "Headline", headline_box, [headline_paragraph(summary.headline, from_ai=True)], deck)
+    add_text_box(slide, "Diagnosis", diagnosis_box, diagnosis_paragraphs(summary.diagnosis), deck)
     _, columns_top, _, columns_height = columns_box
     add_columns(slide, commentary_columns(summary), columns_top, columns_height, deck)
 
@@ -847,7 +918,6 @@ def appendix_slide(slide, deck):
 # ---------------------------------------------------------------------------
 
 SLIDE_BUILDERS = [kpi_slide, charts_slide, risks_slide, commentary_slide]   # the appendix is added with --appendix
-COLUMN_ADVICE = {"Risks": "shorten each risk detail", "Questions": "shorten the questions"}
 
 
 def slide_number(build_slide):
@@ -855,24 +925,49 @@ def slide_number(build_slide):
     return SLIDE_BUILDERS.index(build_slide) + 1
 
 
-def ai_text_problems(summary):
-    """Problems if Claude's text is too long for its boxes on slide 4 (AI commentary), even at the 12 pt floor.
+def payload_gap_lines(payload_text):
+    """The Data gaps lines for this company, read from the payload (which keeps them by display label)."""
+    try:
+        gaps = json.loads(payload_text).get("data_gaps")
+    except (json.JSONDecodeError, AttributeError):
+        gaps = None
+    return labelled_gap_lines(gaps or {})
 
-    Measures the headline, the risks column and the questions column - the same boxes the slide
-    draws (commentary_boxes). The wins aren't on the deck, so their length can't matter.
-    analyze.validate_summary calls this, so an over-long answer is caught with the other validation
-    problems and gets the one retry. If it still doesn't fit, load_analysis rejects it and the deck
-    is built with the placeholder - a company is never left without a deck (decision K).
+
+def ai_boxes(summary, payload_text):
+    """Every box holding Claude's words, as (where, box, paragraphs, advice), in reading order.
+
+    The risks share slide 3's right-hand column with the computed data gaps, so they are measured
+    in the space the gaps leave: the same paragraphs, in the same box, as risks_slide draws. The
+    gaps come from the payload, so the measurement is this company's, not a guess at an average one.
     """
-    _, headline_box, columns_box = commentary_boxes(content_area())
-    slide = f"slide {slide_number(commentary_slide)}"
-    boxes = [(f"{slide} (Headline)", headline_box, [headline_paragraph(summary.headline, from_ai=True)],
-              "shorten the headline")]
-    for position, (name, paragraphs) in enumerate(commentary_columns(summary)):
-        boxes.append((f"{slide} ({name})", column_box(columns_box, position), paragraphs, COLUMN_ADVICE[name]))
+    area = content_area()
+    _, headline_box, diagnosis_box, columns_box = commentary_boxes(area)
+    commentary = f"slide {slide_number(commentary_slide)}"
+    boxes = [(f"slide {slide_number(risks_slide)} (Risks)", column_box(area, 1),
+              gaps_and_risks_paragraphs(payload_gap_lines(payload_text), summary), "shorten each risk detail"),
+             (f"{commentary} (Headline)", headline_box, [headline_paragraph(summary.headline, from_ai=True)],
+              "shorten the headline"),
+             (f"{commentary} (Diagnosis)", diagnosis_box, diagnosis_paragraphs(summary.diagnosis),
+              "shorten the diagnosis")]
+    columns = commentary_columns(summary)
+    for position, (name, paragraphs) in enumerate(columns):
+        boxes.append((f"{commentary} ({name})", column_box(columns_box, position, len(columns)), paragraphs,
+                      "shorten the questions"))
+    return boxes
 
+
+def ai_text_problems(summary, payload_text):
+    """Problems if Claude's text is too long for its boxes on the deck, even at the 12 pt floor.
+
+    Measures the risks (slide 3) and the headline, diagnosis and question columns (slide 4) - the
+    same boxes the slides draw (risks_slide, commentary_boxes). analyze.validate_summary calls
+    this, so an over-long answer is caught with the other validation problems and gets the one
+    retry. If it still doesn't fit, load_analysis rejects it and the deck is built with the
+    placeholder - a company is never left without a deck (decision K).
+    """
     problems = []
-    for where, box, paragraphs, advice in boxes:
+    for where, box, paragraphs, advice in ai_boxes(summary, payload_text):
         _, _, width, height = box
         try:
             fitted(paragraphs, width, height, where)

@@ -2,7 +2,7 @@
 
 For each of the three companies, build the memo (with output/<company>_analysis.json if it exists,
 otherwise with "AI commentary unavailable"), open both saved files, and check:
-1. Both files exist; the PDF is 1 or 2 pages.
+1. Both files exist; the PDF is 1 to 3 pages (the v5 question set takes a page of its own).
 2. Every number in the memo (Word body and PDF body) appears in the saved
    output/<company>_metrics.xlsx, as Excel displays it: Metrics sheet cells and quarter labels,
    Flags sheet names and thresholds, the combo rule's wording, the runway-at-budget line, and the
@@ -12,8 +12,9 @@ otherwise with "AI commentary unavailable"), open both saved files, and check:
    flag's threshold and status equal the Flags sheet; every flag has a row.
 4. The flag count matches the company's story (check_companies.py); every tripped flag is listed;
    every metric with data missing is under Data gaps (or it says None).
-5. AI text: the JSON's headline and 3 questions under "AI-drafted from computed metrics - review
-   before use", and none of its wins or risks; or "AI commentary unavailable" and no AI-drafted line.
+5. AI text: the JSON's headline and its 8 to 10 questions, grouped under their themes, below
+   "AI-drafted from computed metrics - review before use", and neither its risks nor its diagnosis;
+   or "AI commentary unavailable" and no AI-drafted line.
 6. The PDF carries every piece of text the Word file does; neither has an em dash.
 7. Footer (Word footer, and on every PDF page): fictional-data note, source file, today's date,
    the git commit, the analysis's model, and the review status from the manifest: "reviewed by" only
@@ -177,8 +178,24 @@ def check_flags_and_gaps(paragraphs, company, gap_labels):
     return count
 
 
+def expected_question_paragraphs(summary):
+    """The questions as the memo writes them: each theme's name, then that theme's questions, in JSON order."""
+    paragraphs, themes = [], []
+    for item in summary["questions"]:
+        if item["theme"] not in themes:
+            themes.append(item["theme"])
+    for theme in themes:
+        paragraphs.append(theme)
+        paragraphs += [item["question"] for item in summary["questions"] if item["theme"] == theme]
+    return paragraphs
+
+
 def check_ai_text(paragraphs, summary, name):
-    """The JSON's headline and questions under the AI-drafted line; or the unavailable text. Never wins or risks."""
+    """The JSON's headline and themed questions under the AI-drafted line; or the unavailable text.
+
+    Never the risks or the diagnosis: the memo shows only the AI text whose numbers the metrics
+    workbook shows, and those two are on the deck instead.
+    """
     text = "\n".join(paragraphs)
     if summary is None:
         assert text.count(UNAVAILABLE) == 2, f"{name}: 'AI commentary unavailable' should stand for headline and questions"
@@ -189,10 +206,12 @@ def check_ai_text(paragraphs, summary, name):
     assert paragraphs[headline_at - 1] == AI_LINE, f"{name}: the headline isn't under the AI-drafted line"
     questions_at = paragraphs.index("Questions for management")
     assert paragraphs[questions_at + 1] == AI_LINE, f"{name}: the questions aren't under the AI-drafted line"
-    assert paragraphs[questions_at + 2:questions_at + 2 + len(summary["questions"])] == summary["questions"], \
+    expected = expected_question_paragraphs(summary)
+    assert paragraphs[questions_at + 2:questions_at + 2 + len(expected)] == expected, \
         f"{name}: the questions differ from the JSON"
-    for point in summary["wins"] + summary["risks"]:
-        assert point["detail"] not in text, f"{name}: a win or risk is in the memo: {point['title']!r}"
+    assert summary["diagnosis"] not in text, f"{name}: the diagnosis is in the memo"
+    for point in summary["risks"]:
+        assert point["detail"] not in text, f"{name}: a risk is in the memo: {point['title']!r}"
 
 
 def expected_memo_review(workbook, output_dir):
@@ -270,7 +289,7 @@ def check_company(company, config, output_dir):
     docx_path, pdf_path = result["docx"], result["pdf"]
     assert docx_path.exists() and pdf_path.exists(), f"{name}: memo files missing"
     pages = pdf_pages(pdf_path)
-    assert 1 <= len(pages) <= 2, f"{name}: the PDF is {len(pages)} pages, expected 1 or 2"
+    assert 1 <= len(pages) <= 3, f"{name}: the PDF is {len(pages)} pages, expected 1 to 3"
 
     table, flags, allowed = workbook_allowed(save_metrics_workbook(workbook, config))
     model = (saved.get("run_info") or {}).get("model") if summary else None
@@ -312,7 +331,9 @@ def check_bad_analyses_are_unavailable(config, folder):
         saved["summary"]["headline"] = saved["summary"]["headline"].replace("11.0 mo", "11.5 mo")
 
     def quote_ending_cash(saved):   # 14,300 is Northwind's latest ending cash: in Claude's payload, not the workbook
-        saved["summary"]["questions"][0] = "How long will the ending cash of $14,300K last at the current burn?"
+        saved["summary"]["questions"][5] = {
+            "theme": "Liquidity and runway",
+            "question": "How much of the $14,300K ending cash is committed before the 11.0 mo runway ends?"}
 
     company, workbook = COMPANIES[0], Path(COMPANIES[0]["answer_key"].OUTPUT_PATH)
     table, flags, allowed = workbook_allowed(save_metrics_workbook(workbook, config, folder))

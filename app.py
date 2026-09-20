@@ -43,6 +43,7 @@ import pandas as pd
 import streamlit as st
 from matplotlib import pyplot as plt
 
+from analyze import grouped_questions
 from build_deck import AI_DRAFTED_LINE, QUESTIONS_HEADING, flag_count_text, gaps_lines, points_text, runway_lines, \
     threshold_text, value_text
 from charts import arr_chart, cash_chart
@@ -554,8 +555,15 @@ def show_charts(data):
         plt.close(figure)  # free its memory: the page redraws often
 
 
+def question_markdown(summary):
+    """The questions as markdown: a bold theme line, then that theme's questions as bullets."""
+    groups = [f"**{md(theme)}**\n\n" + "\n".join(f"- {md(question)}" for question in questions)
+              for theme, questions in grouped_questions(summary.questions)]
+    return f"**{QUESTIONS_HEADING}**\n\n" + "\n\n".join(groups)
+
+
 def show_commentary(workbook, config, output_dir):
-    """The AI headline, risks and questions (as on slide 4) if a saved analysis matches these numbers."""
+    """The AI headline, diagnosis, risks and questions (as on the deck) if a saved analysis matches these numbers."""
     st.subheader("AI commentary")
     summary = saved_commentary(workbook, config, output_dir)
     if summary is None:
@@ -563,11 +571,11 @@ def show_commentary(workbook, config, output_dir):
         return
     st.caption(AI_DRAFTED_LINE)
     st.markdown(f"**{md(summary.headline)}**")
+    st.markdown(md(summary.diagnosis))
     risks, questions = st.columns(2)
     risks.markdown("**Risks**\n\n" + "\n".join(f"- **{md(point.title)}:** {md(point.detail)}"
                                                for point in summary.risks))
-    questions.markdown(f"**{QUESTIONS_HEADING}**\n\n" + "\n".join(f"- {md(question)}"
-                                                                  for question in summary.questions))
+    questions.markdown(question_markdown(summary))
 
 
 def company_page(stem, data_dir, output_dir):

@@ -1,38 +1,58 @@
 {
   "summary": {
-    "headline": "Runway has fallen to 6.0 mo (threshold 12.0 mo) and burn multiple is now ∞ (threshold 2.00x), signaling an urgent cash crisis.",
-    "wins": [
-      {
-        "title": "Early ARR growth",
-        "detail": "ARR growth YoY peaked at 18.2% in Q3 2025, the strongest quarter shown, before slowing to 4.4% by Q1 2026 (Q2 2026 data missing)."
-      },
-      {
-        "title": "Revenue growth peak",
-        "detail": "Revenue growth YoY reached 21.6% in Q3 2025, its highest point in the data, before decelerating to 7.7% by Q1 2026 (Q2 2026 data missing)."
-      },
-      {
-        "title": "ARR scale built",
-        "detail": "Ending ARR grew from $6,490K in Q3 2024 to a peak of $7,700K in Q4 2025, before contracting to $7,350K in Q2 2026."
-      }
-    ],
+    "headline": "Fernhollow tripped 7 of 9 flags: ARR fell to $7,350K, NRR is 77.9% and runway is 6.0 mo.",
+    "diagnosis": "Net new ARR was -$240K in Q2 2026 and ending ARR fell to $7,350K, with NRR (annualized) at 77.9% and GRR (annualized) at 74.7%. Net burn vs budget is 19.6%, leaving runway at current burn of 6.0 mo on ending cash of $3,300K. Pipeline is $2,500K and CAC payback is 134.4 mo, which is consistent with a company losing its installed base faster than a shrinking pipeline can replace it.",
     "risks": [
       {
-        "title": "Cash runway critical",
-        "detail": "Runway fell to 6.0 mo (threshold 12.0 mo), burn multiple is ∞ (threshold 2.00x), and net burn ran 19.6% over budget (threshold 15.0%), leaving little cash cushion."
+        "title": "Cash runs out inside two quarters",
+        "detail": "Runway at current burn is 6.0 mo on ending cash of $3,300K, and 7.6 mo if burn returns to plan."
       },
       {
-        "title": "Retention and growth engine failing",
-        "detail": "NRR fell to 77.9% (threshold 100.0%) and GRR to 74.7% (threshold 85.0%), while net new ARR vs budget hit -150.0% (threshold -20.0%) as net new ARR itself turned negative at $-240K."
+        "title": "The base is shrinking, not just growing slower",
+        "detail": "NRR (annualized) is 77.9% and GRR (annualized) 74.7%, both under their 100.0% and 85.0% thresholds, with net new ARR at -$240K."
       },
       {
-        "title": "Unit economics deteriorating",
-        "detail": "CAC payback stretched to 134.4 mo (threshold 24.0 mo) while gross margin fell to 57.1% and FCF margin stands at -93.2%, signaling worsening capital efficiency."
+        "title": "New sales cannot replace the churn",
+        "detail": "CAC payback is 134.4 mo against a 24.0 mo threshold and pipeline fell to $2,500K, so net new ARR vs budget is -150.0%."
       }
     ],
     "questions": [
-      "What is driving the decline in GRR from 88.7% in Q3 2024 to 74.7% in Q2 2026, and what retention initiatives are underway?",
-      "What is causing net burn to run 19.6% over budget (threshold 15.0%), and what specific actions will bring spending back in line with plan?",
-      "What is driving the continuous contraction in pipeline from $4,200K in Q3 2024 to $2,500K in Q2 2026, and how will this affect future bookings?"
+      {
+        "theme": "Retention decomposition",
+        "question": "How much of the NRR (annualized) fall to 77.9% is GRR (annualized) at 74.7% rather than lost expansion?"
+      },
+      {
+        "theme": "Retention decomposition",
+        "question": "Which accounts make up the churn behind GRR (annualized) at 74.7% this quarter?"
+      },
+      {
+        "theme": "Burn and budget variance",
+        "question": "Which cost lines carry net burn vs budget at 19.6%, against 14.8% in Q3 2025?"
+      },
+      {
+        "theme": "Burn and budget variance",
+        "question": "How much of net burn vs budget at 19.6% is committed cost next quarter cannot remove?"
+      },
+      {
+        "theme": "Liquidity and runway",
+        "question": "How far must net burn fall for runway at current burn to clear 12.0 mo?"
+      },
+      {
+        "theme": "Liquidity and runway",
+        "question": "Which creditors sit ahead of the 6.0 mo runway at current burn if cash runs out?"
+      },
+      {
+        "theme": "Pipeline and sales efficiency",
+        "question": "Which segments make up the $2,500K pipeline behind CAC payback at 134.4 mo?"
+      },
+      {
+        "theme": "Pipeline and sales efficiency",
+        "question": "How much of net new ARR vs budget at -150.0% is deals lost rather than delayed?"
+      },
+      {
+        "theme": "Definitions and assumptions",
+        "question": "Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured, and who owns them?"
+      }
     ]
   },
   "run_info": {
@@ -52,7 +72,7 @@
       }
     ]
   },
-  "prompt_version": "v4",
+  "prompt_version": "v5",
   "error": null,
   "payload": {
     "company": "Fernhollow",

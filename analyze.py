@@ -3,10 +3,17 @@
 Flow: clean workbook -> metrics/flags/gaps (Python) -> payload (formatted facts)
       -> Claude -> validate -> retry once if needed -> save JSON.
 
+The answer (v5): a headline, a diagnosis paragraph of 60 to 90 words, 3 risks for the
+Risks and flags slide, and 8 to 10 questions for management, each under one of five
+themes. Wins were dropped in v5: nothing showed them, and a board pack that opens with
+three good-news bullets is not what the questions are for.
+
 Guardrails (CLAUDE.md):
 - Python computes every number. Claude only interprets.
 - Every number in Claude's answer must appear in the payload (the number check).
-- The answer must match the BoardSummary shape, with exactly 3 wins/risks/questions.
+- The answer must match the BoardSummary shape, with exactly 3 risks and 8 to 10 questions.
+- Every question names a metric and its value, and asks for a decomposition, a
+  reconciliation or a distance to breach, never for an explanation.
 - One retry with feedback; if that fails too, stop with an error. Nothing
   unvalidated is ever returned.
 
@@ -35,14 +42,26 @@ from text_fit import preview  # the start of a text, for error messages
 DEFAULT_MODEL = "claude-sonnet-5"
 # The wording of SYSTEM_PROMPT below. Bump this whenever that text changes, so a saved answer
 # says which instructions produced it. A test pins each version's checksum, so the bump isn't
-# something anyone has to remember (tests/test_analyze.py). v1-v3 are logged in LEARNINGS.md.
-PROMPT_VERSION = "v4"
+# something anyone has to remember (tests/test_analyze.py). v1-v4 are logged in LEARNINGS.md.
+PROMPT_VERSION = "v5"
 MAX_ATTEMPTS = 2           # first try + one retry
 MAX_TOKENS = 16000         # room for thinking + the answer
 MAX_HEADLINE_WORDS = 30    # prompt asks for 25; small buffer before we fail it
+MIN_DIAGNOSIS_WORDS = 60   # prompt asks for 65 to 85; a small buffer each way before we fail it
+MAX_DIAGNOSIS_WORDS = 90
 MAX_DETAIL_WORDS = 45      # prompt asks for ~40; small buffer before we fail it
 MAX_DETAIL_SENTENCES = 2
+RISK_COUNT = 3             # the 3 risks on the Risks and flags slide
+MIN_QUESTIONS = 8          # 8 to 10 questions for management, grouped under themes
+MAX_QUESTIONS = 10
+MAX_QUESTION_WORDS = 22    # prompt asks for at most 20; the slide has to hold ten of them
 OUTPUT_DIR = Path(__file__).parent / "output"
+
+# The five themes a question may sit under, spelled the one way. The deck groups the questions by
+# theme in this order, so the order here is the order a reader sees.
+RETENTION_THEME = "Retention decomposition"
+THEMES = (RETENTION_THEME, "Burn and budget variance", "Liquidity and runway",
+          "Pipeline and sales efficiency", "Definitions and assumptions")
 
 
 # ---------------------------------------------------------------------------
@@ -54,11 +73,17 @@ class Point(BaseModel):
     detail: str  # 1-2 sentences with the evidence
 
 
+class Question(BaseModel):
+    theme: str     # one of THEMES; checked in validate_summary, not by the type, so the
+                   # message reads like the other validation problems and the retry can fix it
+    question: str  # one question, at most MAX_QUESTION_WORDS words
+
+
 class BoardSummary(BaseModel):
     headline: str
-    wins: list[Point]
+    diagnosis: str
     risks: list[Point]
-    questions: list[str]
+    questions: list[Question]
 
 
 # ---------------------------------------------------------------------------
@@ -148,10 +173,17 @@ Rules for numbers - an automated check enforces these, and any violation fails y
 
 What to write:
 - headline: one sentence, at most 25 words, with the single most important takeaway for the board.
-- wins: exactly 3 genuine strengths supported by the data. Lead with the strongest growth or scale metric (such as ARR growth YoY) before any threshold passes. A metric that is merely "within threshold" counts as a win only if nothing stronger exists. If strengths are thin, don't overstate them.
-- risks: exactly 3, starting with the most serious tripped flags. Explain why each matters to an investor, not just that a threshold was crossed. Where several flags point to one underlying problem, combine them into one risk.
-- questions: exactly 3 specific questions for management that the data raises but cannot answer, such as what is driving a trend. No yes/no questions.
-Each title is a short phrase. Each detail is at most 2 sentences and about 40 words - it goes on a slide, so pick the evidence that matters most rather than listing everything. Answers with longer details are rejected.
+- diagnosis: one paragraph of 65 to 85 words, in two parts: what the numbers show this quarter, then what is most likely driving it. Name the metrics and quote their values. The data shows what moved, not why, so write an inferred cause as an inference ("consistent with", "most likely"), never as a fact.
+- risks: exactly 3, starting with the most serious tripped flags. Explain why each matters to an investor, not just that a threshold was crossed. Where several flags point to one underlying problem, combine them into one risk. Each title is a short phrase. Each detail is at most 2 sentences and about 40 words - it goes on a slide, so pick the evidence that matters most rather than listing everything. Answers with longer details are rejected.
+- questions: 8 to 10 questions for management, each one under exactly one of these themes, spelled as written here: "Retention decomposition", "Burn and budget variance", "Liquidity and runway", "Pipeline and sales efficiency", "Definitions and assumptions". Leave a theme out rather than filling it: a theme this quarter's data does not raise gets no question.
+
+Rules for every question - an automated check enforces these too:
+- Name the metric and quote its value from the data. A question without a figure in it sends management nowhere.
+- Ask for one of three things: a decomposition (which parts of a figure make it up), a reconciliation (how one figure ties to another) or a distance to breach (how far a figure sits from its threshold, or what would move it there). Never ask for an explanation: a question whose whole demand is "why", "what is driving" or "what caused" is rejected.
+- At most 20 words. One question, not two. No yes/no questions.
+- No two questions may ask for the same cut of the same metric.
+- Whenever NRR (annualized) has moved at all, the first question under "Retention decomposition" must be the gross versus net divergence test: ask how much of the move sits in gross retention rather than in expansion, quoting both NRR (annualized) and GRR (annualized). Gross retention falling while net retention holds up means the retention engine is broken and new sales are paying for it, and the board cannot see that unless the two are asked about together.
+- At least one question must interrogate a definition, a restatement or a missing input: which definition a figure is on, what a restatement would change, or when a missing input will exist and who owns it. Put it under "Definitions and assumptions".
 
 Accuracy of framing:
 - When a flag passed, say so explicitly, quoting its value next to its threshold (for example: "passed, but close to its threshold (value vs threshold) - watch"). Never place a passing metric where it reads as a breach.
@@ -159,7 +191,7 @@ Accuracy of framing:
 - Never call a quarter a "significant" (or large, major, sharp) miss or beat against budget unless you quote its value and that value is more than 10% away from budget - above +10.0% or below -10.0%. Smaller variances are described plainly, with their value.
 - "runway_if_burn_returns_to_plan" is runway if burn returns to plan. Describe it only in those words. It is not a projection, forecast or improvement.
 - Only call a trend rising, falling, improving or deteriorating if every step in the window moves that way. Check the quarter-by-quarter values before you write it. If the figure moves up and down, say so ("moved between A and B") and quote the start and end values. Never call a trend persistent, consistent or steady unless every step moves the same way.
-- A flag that passed is a win only if its value is good in itself, not merely inside its threshold. If it passes for a bad reason - for example "NRR falling while pipeline rising" passing because pipeline is falling as well - say so and name the figures behind it, rather than presenting it as good news."""
+- A flag that passed is good news only if its value is good in itself, not merely inside its threshold. If it passes for a bad reason - for example "NRR falling while pipeline rising" passing because pipeline is falling as well - say so and name the figures behind it, rather than presenting it as good news."""
 
 
 # ---------------------------------------------------------------------------
@@ -193,8 +225,8 @@ def count_sentences(text):
 
 def summary_texts(summary):
     """All the text Claude wrote, as one list."""
-    texts = [summary.headline] + summary.questions
-    for point in summary.wins + summary.risks:
+    texts = [summary.headline, summary.diagnosis] + [item.question for item in summary.questions]
+    for point in summary.risks:
         texts += [point.title, point.detail]
     return texts
 
@@ -210,17 +242,30 @@ def find_ungrounded_numbers(summary, payload_text):
 # Does the text fit the slides? (review finding 1)
 # ---------------------------------------------------------------------------
 
-def slide_fit_problems(summary):
-    """Problems if the text is too long for slide 4 (AI commentary), even at the 12 pt floor.
+def grouped_questions(questions):
+    """[(theme, [question text, ...]), ...] in THEMES order; a theme with no questions is left out.
 
-    Only the headline, risks and questions are measured: the wins are still asked for and
-    checked, but the deck doesn't show them.
+    A theme validate_summary would reject still comes out, at the end, so a hand-edited file is
+    shown as it is rather than silently losing a question.
+    """
+    seen = list(THEMES) + [item.theme for item in questions if item.theme not in THEMES]
+    groups = [(theme, [item.question for item in questions if item.theme == theme])
+              for theme in dict.fromkeys(seen)]
+    return [(theme, texts) for theme, texts in groups if texts]
+
+
+def slide_fit_problems(summary, payload_text):
+    """Problems if the text is too long for the boxes it goes in, even at the 12 pt floor.
+
+    Measures the risks (slide 3, Risks and flags) and the headline, diagnosis and question
+    columns (slide 4, AI commentary): every box on the deck that holds Claude's words. The risks
+    share their column with this company's data gaps, which is why the payload is needed here.
 
     build_deck is imported inside the function, not at the top of the file, because build_deck
     imports this module: importing both ways at load time would fail.
     """
     from build_deck import ai_text_problems
-    return ai_text_problems(summary)
+    return ai_text_problems(summary, payload_text)
 
 
 # ---------------------------------------------------------------------------
@@ -404,39 +449,174 @@ def claim_problems(text, trends):
     return problems
 
 
+def payload_trends(payload_text):
+    """The payload's trends_by_quarter, or {} when the text isn't our payload shape."""
+    try:
+        return json.loads(payload_text).get("trends_by_quarter") or {}
+    except (json.JSONDecodeError, AttributeError):
+        return {}
+
+
 def direction_problems(summary, payload_text):
     """Direction problems anywhere in Claude's answer, checked against the payload's own trends."""
-    try:
-        trends = json.loads(payload_text).get("trends_by_quarter") or {}
-    except (json.JSONDecodeError, AttributeError):
-        trends = {}  # not our payload shape: the step-by-step check has nothing to read
+    trends = payload_trends(payload_text)  # {} means the step-by-step check has nothing to read
     return [problem for text in summary_texts(summary) for problem in claim_problems(text, trends)]
+
+
+# ---------------------------------------------------------------------------
+# Do the questions do their job? (v5)
+# ---------------------------------------------------------------------------
+
+# Spellings a question may use for an input column that has no display name of its own, plus the
+# long forms of NRR and GRR. These are recognition spellings, not display names: metrics.py still
+# owns the one label set. eval/score_questions.py builds a wider set of its own on purpose, since a
+# list that decides what an answer is rejected for should not move when a scorer is tuned.
+NET_RETENTION_WORDS = ("nrr", "net retention", "net revenue retention")
+GROSS_RETENTION_WORDS = ("grr", "gross retention", "gross revenue retention")
+EXTRA_SPELLINGS = NET_RETENTION_WORDS + GROSS_RETENTION_WORDS + ("expansion", "contraction", "churn")
+
+# What a question may ask for. Decomposition: which parts make up a figure. Reconciliation: how one
+# figure ties to another, or which definition it is on. Distance to breach: how far from a threshold.
+DECOMPOSITION_CUES = ("which ", "how much of", "how many of", "what share", "what portion",
+                      "what proportion", "what percentage of", "break down", "broken down", "breakdown",
+                      "split", "decompose", "disaggregate", "made up of", "composed of",
+                      "concentrated in", "attributable to", "sits in", "sit in")
+RECONCILIATION_CUES = ("reconcile", "reconciliation", "bridge", "tie out", "ties to", "tie to",
+                       "agree to", "agrees to", "restate", "restated", "restatement", "definition",
+                       "defined", "same basis", "like for like")
+BREACH_CUES = ("how far", "how long before", "how many months", "at what point", "what would it take",
+               "what would have to", "breach", "distance to", "before it trips", "back inside",
+               "back below", "back above")
+DEMAND_CUES = DECOMPOSITION_CUES + RECONCILIATION_CUES + BREACH_CUES
+
+# A question interrogating a definition, a restatement or a missing input.
+DEFINITION_CUES = ("definition", "defined", "restate", "restated", "restatement", "same basis",
+                   "like for like", "assumption", "data missing", "missing input", "missing",
+                   "blank", "not meaningful")
+
+# The smallest NRR move the payload's trend can show: values are formatted to one decimal place as a
+# percentage, so 0.1 of a point (0.001 as a decimal) is the smallest visible change.
+SMALLEST_VISIBLE_MOVE = 0.001
+
+
+def metric_spellings():
+    """Every spelling of a metric this check recognises, worked out from metrics.py's labels.
+
+    "NRR (annualized)" gives "nrr"; "Runway at current burn" also gives "runway"; "Net burn vs
+    budget" also gives "net burn". The parenthetical part of a label is dropped: nobody writes
+    "($K)" inside a question.
+    """
+    spellings = set(EXTRA_SPELLINGS)
+    for label in list(METRIC_LABELS.values()) + list(INPUT_LABELS.values()):
+        plain = re.sub(r"\s*\([^)]*\)", "", label).strip().lower()
+        spellings.add(plain)
+        for separator in (" at ", " vs "):
+            if separator in plain:
+                spellings.add(plain.split(separator)[0])
+    return spellings
+
+
+# Longest spelling first, so "net burn vs budget" is found before the "net burn" inside it. The
+# word boundaries keep a spelling from matching inside a longer word ("new arr" is not "new arrival").
+METRIC_PATTERN = re.compile(
+    r"\b(?:" + "|".join(re.escape(name) for name in sorted(metric_spellings(), key=len, reverse=True)) + r")s?\b")
+
+
+def names_a_metric(text):
+    """True when the question names a metric the data holds."""
+    return bool(METRIC_PATTERN.search(text.lower()))
+
+
+def names_a_value(text):
+    """True when the question quotes a figure with a unit ("97.1%", "$3,900K", "11.0 mo")."""
+    return bool(unit_numbers(text))
+
+
+def has_any(text, cues):
+    """True when the text holds one of these cue phrases (lower-cased, plain substring)."""
+    lower = text.lower()
+    return any(cue in lower for cue in cues)
+
+
+def nrr_has_moved(payload_text):
+    """True when the payload's NRR trend shows two different values (so the divergence test applies).
+
+    Known limit: a workbook where every NRR value is missing has nothing to compare, and the rule
+    doesn't apply. That is the right answer, not a miss: there is no move to decompose.
+    """
+    trend = payload_trends(payload_text).get(METRIC_LABELS["nrr"]) or {}
+    values = [value for value in (series_value(text) for text in trend.values()) if value is not None]
+    return len(values) > 1 and max(values) - min(values) >= SMALLEST_VISIBLE_MOVE
+
+
+def divergence_problems(summary, payload_text):
+    """The gross versus net divergence test: required first under Retention decomposition when NRR moved.
+
+    Falling gross retention with net retention that holds up means the retention engine is broken
+    while new sales pay for it, so the board has to see the two figures apart.
+    """
+    if not nrr_has_moved(payload_text):
+        return []
+    retention = [item.question for item in summary.questions if item.theme == RETENTION_THEME]
+    if not retention:
+        return [f"NRR (annualized) moved, so the questions need a '{RETENTION_THEME}' theme, starting with "
+                f"the gross versus net divergence test (how much of the move sits in GRR (annualized))"]
+    first = retention[0]
+    if has_any(first, NET_RETENTION_WORDS) and has_any(first, GROSS_RETENTION_WORDS):
+        return []
+    return [f"NRR (annualized) moved, so the first '{RETENTION_THEME}' question must be the gross versus net "
+            f"divergence test, naming both NRR (annualized) and GRR (annualized): '{preview(first)}'"]
+
+
+def question_problems(summary, payload_text):
+    """Every problem with the questions: the count, the themes, and what each one asks for."""
+    questions = summary.questions
+    problems = []
+    if not MIN_QUESTIONS <= len(questions) <= MAX_QUESTIONS:
+        problems.append(f"questions must have {MIN_QUESTIONS} to {MAX_QUESTIONS} items, got {len(questions)}")
+    for number, item in enumerate(questions, start=1):
+        where = f"question #{number} ('{preview(item.question)}')"
+        if item.theme not in THEMES:
+            problems.append(f"{where} has the theme {item.theme!r}; the themes are: " + ", ".join(THEMES))
+        words = len(item.question.split())
+        if words > MAX_QUESTION_WORDS:
+            problems.append(f"{where} has {words} words, max is {MAX_QUESTION_WORDS}")
+        if not names_a_metric(item.question) or not names_a_value(item.question):
+            problems.append(f"{where} must name a metric and quote its value")
+        if not has_any(item.question, DEMAND_CUES):
+            problems.append(f"{where} asks for an explanation; ask for a decomposition, a reconciliation "
+                            f"or a distance to breach")
+    if not any(has_any(item.question, DEFINITION_CUES) for item in questions):
+        problems.append("no question interrogates a definition, a restatement or a missing input")
+    return problems + divergence_problems(summary, payload_text)
 
 
 def validate_summary(summary, payload_text):
     """Return a list of problems with Claude's answer. Empty list = pass."""
     problems = []
-    for field in ("wins", "risks", "questions"):
-        count = len(getattr(summary, field))
-        if count != 3:
-            problems.append(f"{field} must have exactly 3 items, got {count}")
+    if len(summary.risks) != RISK_COUNT:
+        problems.append(f"risks must have exactly {RISK_COUNT} items, got {len(summary.risks)}")
     if any(not text.strip() for text in summary_texts(summary)):
         problems.append("some text fields are empty")
     headline_words = len(summary.headline.split())
     if headline_words > MAX_HEADLINE_WORDS:
         problems.append(f"headline has {headline_words} words, max is {MAX_HEADLINE_WORDS}")
-    for section in ("wins", "risks"):
-        for number, point in enumerate(getattr(summary, section), start=1):
-            words, sentences = len(point.detail.split()), count_sentences(point.detail)
-            if words > MAX_DETAIL_WORDS or sentences > MAX_DETAIL_SENTENCES:
-                problems.append(f"{section} #{number} detail has {words} words and {sentences} sentences; "
-                                f"max is {MAX_DETAIL_WORDS} words and {MAX_DETAIL_SENTENCES} sentences")
+    diagnosis_words = len(summary.diagnosis.split())
+    if not MIN_DIAGNOSIS_WORDS <= diagnosis_words <= MAX_DIAGNOSIS_WORDS:
+        problems.append(f"diagnosis has {diagnosis_words} words; it must be {MIN_DIAGNOSIS_WORDS} to "
+                        f"{MAX_DIAGNOSIS_WORDS}")
+    for number, point in enumerate(summary.risks, start=1):
+        words, sentences = len(point.detail.split()), count_sentences(point.detail)
+        if words > MAX_DETAIL_WORDS or sentences > MAX_DETAIL_SENTENCES:
+            problems.append(f"risks #{number} detail has {words} words and {sentences} sentences; "
+                            f"max is {MAX_DETAIL_WORDS} words and {MAX_DETAIL_SENTENCES} sentences")
+    problems += question_problems(summary, payload_text)
     ungrounded = find_ungrounded_numbers(summary, payload_text)
     if ungrounded:
         problems.append("these numbers are not in the data (rounded or calculated?): "
                         + ", ".join(f"{n:g}" for n in ungrounded))
     problems += direction_problems(summary, payload_text)
-    problems += slide_fit_problems(summary)
+    problems += slide_fit_problems(summary, payload_text)
     return problems
 
 
@@ -586,13 +766,15 @@ def save_analysis(path, payload, summary=None, run_info=None, error=None):
 def print_commentary(summary):
     """Show the commentary only (no model or stats - used for blind scoring too)."""
     print(f"\nHEADLINE: {summary.headline}")
-    for section in ("wins", "risks"):
-        print(f"\n{section.upper()}")
-        for point in getattr(summary, section):
-            print(f"- {point.title}: {point.detail}")
+    print(f"\nDIAGNOSIS: {summary.diagnosis}")
+    print("\nRISKS")
+    for point in summary.risks:
+        print(f"- {point.title}: {point.detail}")
     print("\nQUESTIONS FOR MANAGEMENT")
-    for question in summary.questions:
-        print(f"- {question}")
+    for theme, questions in grouped_questions(summary.questions):
+        print(f"\n{theme}")
+        for question in questions:
+            print(f"- {question}")
 
 
 def print_summary(summary, run_info):
