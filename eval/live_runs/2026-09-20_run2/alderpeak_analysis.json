@@ -1,0 +1,352 @@
+{
+  "summary": {
+    "headline": "All nine flags passed with strong efficiency gains, but ARR growth QoQ has slowed every quarter from 12.1% to 9.7%.",
+    "diagnosis": "ARR growth QoQ fell from 12.1% (Q4 2024) to 9.7%, and ARR growth YoY fell from 53.9% (Q3 2025) to 47.5%, even as net burn fell from $700K to $200K and Runway at current burn rose to 108.0 mo. This is consistent with a maturing base and disciplined spend, most likely trading top-line growth for efficiency as expansion, NRR (annualized) 109.8%, outpaces retention, GRR (annualized) 96.0%.",
+    "risks": [
+      {
+        "title": "Growth deceleration",
+        "detail": "ARR growth QoQ fell from 12.1% (Q4 2024) to 9.7%, and ARR growth YoY fell from 53.9% (Q3 2025) to 47.5%; Rule of 40 passed at 42.7% against its 40.0% threshold, leaving little buffer if Burn multiple 0.12x gains stop improving."
+      },
+      {
+        "title": "Retention reliant on expansion",
+        "detail": "GRR (annualized) passed at 96.0% against its 85.0% threshold but ticked down from 96.1% (Q1 2026), while NRR (annualized) held at 109.8%; growth is increasingly carried by upsell rather than base retention."
+      },
+      {
+        "title": "Burn tracking below budget",
+        "detail": "Net burn vs budget passed at -9.1% against its 15.0% threshold and has remained negative every quarter since Q3 2024 (-5.4%); continued underspend alongside decelerating ARR growth QoQ (9.7%) may indicate under-investment in growth rather than pure discipline."
+      }
+    ],
+    "questions": [
+      {
+        "theme": "Retention decomposition",
+        "question": "How much of the NRR (annualized) move from 109.7% to 109.8% sits in gross retention (GRR (annualized) 96.0%) versus expansion?"
+      },
+      {
+        "theme": "Retention decomposition",
+        "question": "Which customer segments account for the GRR (annualized) dip from 96.1% to 96.0%?"
+      },
+      {
+        "theme": "Burn and budget variance",
+        "question": "How does Net burn vs budget of -9.1% reconcile with Net new ARR vs budget of 5.8% this quarter?"
+      },
+      {
+        "theme": "Burn and budget variance",
+        "question": "Which cost categories make up the $200K net burn behind the -9.1% variance to budget?"
+      },
+      {
+        "theme": "Liquidity and runway",
+        "question": "How does Runway at current burn of 108.0 mo reconcile with runway if burn returns to plan at 144.0 mo?"
+      },
+      {
+        "theme": "Pipeline and sales efficiency",
+        "question": "Which channels or segments make up the $1,630K net new ARR behind the 9.7% ARR growth QoQ?"
+      },
+      {
+        "theme": "Pipeline and sales efficiency",
+        "question": "How far is CAC payback of 17.7 mo from its 24.0 mo threshold?"
+      },
+      {
+        "theme": "Definitions and assumptions",
+        "question": "Which definition of annualization underlies NRR (annualized) of 109.8% this quarter?"
+      }
+    ]
+  },
+  "run_info": {
+    "model": "claude-sonnet-5",
+    "passed": true,
+    "attempts": 1,
+    "input_tokens": 6635,
+    "output_tokens": 17245,
+    "seconds": 141.38,
+    "attempt_log": [
+      {
+        "seconds": 141.38,
+        "input_tokens": 6635,
+        "output_tokens": 17245,
+        "stop_reason": "end_turn",
+        "problems": []
+      }
+    ]
+  },
+  "prompt_version": "v6",
+  "error": null,
+  "payload": {
+    "company": "Alderpeak",
+    "latest_quarter": "Q2 2026",
+    "units": "Money figures are $K (thousands of US dollars). NRR and GRR are annualized from one quarter.",
+    "flags_tripped": 0,
+    "flags_passed": 9,
+    "flags_cannot_evaluate": 0,
+    "flags_total": 9,
+    "flags_latest_quarter": [
+      {
+        "flag": "NRR (annualized)",
+        "status": "passed",
+        "value": "109.8%",
+        "threshold": "100.0%"
+      },
+      {
+        "flag": "GRR (annualized)",
+        "status": "passed",
+        "value": "96.0%",
+        "threshold": "85.0%"
+      },
+      {
+        "flag": "Burn multiple",
+        "status": "passed",
+        "value": "0.12x",
+        "threshold": "2.00x"
+      },
+      {
+        "flag": "Net burn vs budget",
+        "status": "passed",
+        "value": "-9.1%",
+        "threshold": "15.0%"
+      },
+      {
+        "flag": "Runway at current burn",
+        "status": "passed",
+        "value": "108.0 mo",
+        "threshold": "12.0 mo"
+      },
+      {
+        "flag": "CAC payback",
+        "status": "passed",
+        "value": "17.7 mo",
+        "threshold": "24.0 mo"
+      },
+      {
+        "flag": "Net new ARR vs budget",
+        "status": "passed",
+        "value": "5.8%",
+        "threshold": "-20.0%"
+      },
+      {
+        "flag": "Rule of 40",
+        "status": "passed",
+        "value": "42.7%",
+        "threshold": "40.0%"
+      },
+      {
+        "flag": "NRR falling while pipeline rising",
+        "status": "passed",
+        "value": "see NRR and Pipeline trends",
+        "rule": "NRR down and pipeline up at every step over the last 3 quarters"
+      }
+    ],
+    "runway_if_burn_returns_to_plan": "144.0 mo",
+    "trends_by_quarter": {
+      "Net burn ($K)": {
+        "Q3 2024": "700",
+        "Q4 2024": "620",
+        "Q1 2025": "540",
+        "Q2 2025": "460",
+        "Q3 2025": "380",
+        "Q4 2025": "310",
+        "Q1 2026": "250",
+        "Q2 2026": "200"
+      },
+      "Ending cash ($K)": {
+        "Q3 2024": "9,960",
+        "Q4 2024": "9,340",
+        "Q1 2025": "8,800",
+        "Q2 2025": "8,340",
+        "Q3 2025": "7,960",
+        "Q4 2025": "7,650",
+        "Q1 2026": "7,400",
+        "Q2 2026": "7,200"
+      },
+      "Ending ARR ($K)": {
+        "Q3 2024": "9,000",
+        "Q4 2024": "10,090",
+        "Q1 2025": "11,250",
+        "Q2 2025": "12,510",
+        "Q3 2025": "13,850",
+        "Q4 2025": "15,290",
+        "Q1 2026": "16,820",
+        "Q2 2026": "18,450"
+      },
+      "Net new ARR ($K)": {
+        "Q3 2024": "1,000",
+        "Q4 2024": "1,090",
+        "Q1 2025": "1,160",
+        "Q2 2025": "1,260",
+        "Q3 2025": "1,340",
+        "Q4 2025": "1,440",
+        "Q1 2026": "1,530",
+        "Q2 2026": "1,630"
+      },
+      "NRR (annualized)": {
+        "Q3 2024": "110.0%",
+        "Q4 2024": "110.2%",
+        "Q1 2025": "109.5%",
+        "Q2 2025": "110.0%",
+        "Q3 2025": "109.6%",
+        "Q4 2025": "109.8%",
+        "Q1 2026": "109.7%",
+        "Q2 2026": "109.8%"
+      },
+      "GRR (annualized)": {
+        "Q3 2024": "95.0%",
+        "Q4 2024": "95.1%",
+        "Q1 2025": "95.2%",
+        "Q2 2025": "95.4%",
+        "Q3 2025": "95.5%",
+        "Q4 2025": "95.7%",
+        "Q1 2026": "96.1%",
+        "Q2 2026": "96.0%"
+      },
+      "Gross margin": {
+        "Q3 2024": "78.2%",
+        "Q4 2024": "77.9%",
+        "Q1 2025": "77.9%",
+        "Q2 2025": "78.0%",
+        "Q3 2025": "78.0%",
+        "Q4 2025": "78.1%",
+        "Q1 2026": "77.9%",
+        "Q2 2026": "78.0%"
+      },
+      "ARR growth QoQ": {
+        "Q3 2024": "n/a (no prior period)",
+        "Q4 2024": "12.1%",
+        "Q1 2025": "11.5%",
+        "Q2 2025": "11.2%",
+        "Q3 2025": "10.7%",
+        "Q4 2025": "10.4%",
+        "Q1 2026": "10.0%",
+        "Q2 2026": "9.7%"
+      },
+      "ARR growth YoY": {
+        "Q3 2024": "n/a (no prior period)",
+        "Q4 2024": "n/a (no prior period)",
+        "Q1 2025": "n/a (no prior period)",
+        "Q2 2025": "n/a (no prior period)",
+        "Q3 2025": "53.9%",
+        "Q4 2025": "51.5%",
+        "Q1 2026": "49.5%",
+        "Q2 2026": "47.5%"
+      },
+      "Revenue growth QoQ": {
+        "Q3 2024": "n/a (no prior period)",
+        "Q4 2024": "12.1%",
+        "Q1 2025": "11.7%",
+        "Q2 2025": "11.2%",
+        "Q3 2025": "10.8%",
+        "Q4 2025": "10.4%",
+        "Q1 2026": "9.7%",
+        "Q2 2026": "9.9%"
+      },
+      "Revenue growth YoY": {
+        "Q3 2024": "n/a (no prior period)",
+        "Q4 2024": "n/a (no prior period)",
+        "Q1 2025": "n/a (no prior period)",
+        "Q2 2025": "n/a (no prior period)",
+        "Q3 2025": "54.4%",
+        "Q4 2025": "51.9%",
+        "Q1 2026": "49.2%",
+        "Q2 2026": "47.4%"
+      },
+      "Pipeline ($K)": {
+        "Q3 2024": "3,400",
+        "Q4 2024": "3,600",
+        "Q1 2025": "3,850",
+        "Q2 2025": "4,100",
+        "Q3 2025": "4,400",
+        "Q4 2025": "4,700",
+        "Q1 2026": "5,000",
+        "Q2 2026": "5,350"
+      },
+      "Pipeline growth QoQ": {
+        "Q3 2024": "n/a (no prior period)",
+        "Q4 2024": "5.9%",
+        "Q1 2025": "6.9%",
+        "Q2 2025": "6.5%",
+        "Q3 2025": "7.3%",
+        "Q4 2025": "6.8%",
+        "Q1 2026": "6.4%",
+        "Q2 2026": "7.0%"
+      },
+      "FCF margin": {
+        "Q3 2024": "-34.0%",
+        "Q4 2024": "-26.8%",
+        "Q1 2025": "-20.9%",
+        "Q2 2025": "-16.0%",
+        "Q3 2025": "-11.9%",
+        "Q4 2025": "-8.8%",
+        "Q1 2026": "-6.5%",
+        "Q2 2026": "-4.7%"
+      },
+      "Rule of 40": {
+        "Q3 2024": "n/a (no prior period)",
+        "Q4 2024": "n/a (no prior period)",
+        "Q1 2025": "n/a (no prior period)",
+        "Q2 2025": "n/a (no prior period)",
+        "Q3 2025": "42.4%",
+        "Q4 2025": "43.1%",
+        "Q1 2026": "42.7%",
+        "Q2 2026": "42.7%"
+      },
+      "Burn multiple": {
+        "Q3 2024": "0.70x",
+        "Q4 2024": "0.57x",
+        "Q1 2025": "0.47x",
+        "Q2 2025": "0.37x",
+        "Q3 2025": "0.28x",
+        "Q4 2025": "0.22x",
+        "Q1 2026": "0.16x",
+        "Q2 2026": "0.12x"
+      },
+      "Net burn vs budget": {
+        "Q3 2024": "-5.4%",
+        "Q4 2024": "-6.1%",
+        "Q1 2025": "-6.9%",
+        "Q2 2025": "-8.0%",
+        "Q3 2025": "-9.5%",
+        "Q4 2025": "-8.8%",
+        "Q1 2026": "-7.4%",
+        "Q2 2026": "-9.1%"
+      },
+      "Net new ARR vs budget": {
+        "Q3 2024": "n/a (no prior period)",
+        "Q4 2024": "5.8%",
+        "Q1 2025": "3.6%",
+        "Q2 2025": "3.3%",
+        "Q3 2025": "3.1%",
+        "Q4 2025": "5.1%",
+        "Q1 2026": "4.8%",
+        "Q2 2026": "5.8%"
+      },
+      "Ending ARR vs budget": {
+        "Q3 2024": "0.6%",
+        "Q4 2024": "1.1%",
+        "Q1 2025": "1.4%",
+        "Q2 2025": "1.5%",
+        "Q3 2025": "1.7%",
+        "Q4 2025": "2.0%",
+        "Q1 2026": "2.2%",
+        "Q2 2026": "2.6%"
+      },
+      "CAC payback": {
+        "Q3 2024": "17.3 mo",
+        "Q4 2024": "17.5 mo",
+        "Q1 2025": "17.6 mo",
+        "Q2 2025": "17.6 mo",
+        "Q3 2025": "17.6 mo",
+        "Q4 2025": "17.6 mo",
+        "Q1 2026": "17.7 mo",
+        "Q2 2026": "17.7 mo"
+      },
+      "Runway at current burn": {
+        "Q3 2024": "42.7 mo",
+        "Q4 2024": "45.2 mo",
+        "Q1 2025": "48.9 mo",
+        "Q2 2025": "54.4 mo",
+        "Q3 2025": "62.8 mo",
+        "Q4 2025": "74.0 mo",
+        "Q1 2026": "88.8 mo",
+        "Q2 2026": "108.0 mo"
+      }
+    },
+    "data_gaps": {}
+  }
+}

@@ -3045,3 +3045,267 @@ xfail is the strict theme-coverage test from Task 1). `check_northwind.py`, `che
 - **The memo drops the diagnosis and the risks** by an earlier design rule (AI text with numbers not
   in the metrics workbook stays off it). Say if you want the diagnosis in the memo; it would need
   the same number check.
+
+
+## Night two, Task 3: live validation (main.py --all, twice)
+
+**API spend: $1.15.** Run 1 (prompt v5) cost $0.62 and run 2 (prompt v6) cost $0.54: $1.1524 from the
+recorded token counts at compare_models.py's price table ($2.00 in, $10.00 out per million tokens, as of
+2026-06-24, not checked against a current price page; main.py printed $0.62 and $0.54). **Running total
+for the night: $1.15 of the $2.00 ceiling.** Both of the task's two runs are used. There is no third.
+
+**One thing to decide about the brief.** It says "at most 2 full batch runs, about 0.60 US dollars". Run 1
+alone cost $0.62, because v5 writes about twice as much as v4 (thinking tokens: 12,000 to 17,000 output
+tokens per attempt against v4's 7,300). I read the run count and the night's $2.00 as the caps and the
+$0.60 as an estimate made from v4's $0.27 batch, and I ran the second run, because you said to use it if a
+prompt fix was clearly needed and one plainly was. If you meant $0.60 as a hard cap for the task, I went
+over it by $0.55. The two runs are still under the night's ceiling.
+
+### Did all three companies pass validation?
+
+**Run 1 (v5): no. None did.** Every company failed twice, so every deck showed "AI summary unavailable":
+
+| Company | Attempt 1 rejected for | Attempt 2 rejected for |
+|---|---|---|
+| Alderpeak | no definitions question; diagnosis does not fit slide 4 | diagnosis does not fit slide 4 |
+| Fernhollow | four questions "asking for an explanation" (one of them the missing-input question), two with no value; risks and diagnosis do not fit | one question with no value; risks do not fit |
+| Northwind | a missing-input question with no value; risks and diagnosis do not fit | risks and diagnosis do not fit |
+
+All six attempts failed on slide fit. The slides hold about 68 words of diagnosis and, for a company
+with a blank quarter, about 20 words per risk detail (its 19 or 20 data gap lines share the column); the
+prompt asked for 65 to 85 and about 40, Claude was never told the room, and the retry said only "shorten
+the diagnosis". The retry could not fix what it could not measure. Two question rules also contradicted the
+prompt (below). The decks were still built, with the placeholder, exactly as decision K says.
+
+**Run 2 (v6): yes, all three.** Alderpeak passed on attempt 1. Fernhollow and Northwind passed on the retry.
+Every deck has Claude's text on slides 3 and 4. `check_deck.py` re-measured every box from the saved decks
+and passes (nothing overflows, 12 pt floor kept). I have not seen the slides: no LibreOffice or poppler.
+
+| Company | Attempts | Tokens in / out | Seconds | Cost | Retry was for |
+|---|---|---|---|---|---|
+| Alderpeak | 1 | 6,635 / 17,245 | 141 | $0.1857 | |
+| Fernhollow | 2 | 15,631 / 16,241 | 133 | $0.1937 | a distance-to-breach question the check missed; "the burn multiple's infinity" (no figure) |
+| Northwind | 2 | 15,515 / 12,458 | 101 | $0.1556 | a distance-to-breach question the check missed |
+
+Both retries were caused by the check rejecting a fair question, not by Claude getting something wrong (see
+"What failed"). Alderpeak's single attempt wrote 17,245 output tokens, more than v5's 16,000 ceiling, so it
+would have been cut off. At $0.18 per company that is about $49 a quarter for 275 companies (v4: $25), and
+about 9.5 hours of API time one company at a time.
+
+### What I built
+
+- **The room on the slides is measured and told to Claude.** `build_deck.slide_word_limits(payload_text)`
+  measures, for this company, how many words the diagnosis, one risk detail and one question can have at the
+  12 pt floor, using a sample sentence and taking 2 words off. The results today: diagnosis 68 words for
+  every company; a risk detail 54 words for Alderpeak but **20** for Northwind and Fernhollow; a question
+  **20 words if you write 8 or 9, but 9 if you write 10**. `analyze.slide_space_text` sends this after the
+  system prompt on every attempt (not in the data message, which stays the payload alone, and not inside
+  `SYSTEM_PROMPT`, whose checksum is pinned).
+- **The retry message names the number.** "shorten the diagnosis to 66 words or fewer (it has 74)", "shorten
+  each risk detail to 18 words or fewer (yours have 34, 30 and 38)", "with 10 questions the slide holds about
+  9 words each". The number comes from Claude's own words (how many of them the box takes, less the margin),
+  and a test cuts an answer to the number in the message and checks it fits.
+- **Two question rules that contradicted the prompt, fixed.** A question about a missing input ("Who owns
+  delivery of the missing Q1 2025 NRR, and when will it exist?") is exempt from the value and decomposition
+  rules: it names a metric and a quarter, says missing or blank, and asks who or when. And a figure right
+  after a `($K)` label counts as having its unit ("Pipeline ($K) at 2,500"). The value message now gives
+  examples.
+- **Three cue lists widened, each from a rejected answer the runs kept:** "make up" (run 1), "would move" and
+  "would bring", and the infinity sign as a value (run 2).
+- **A rejected answer is kept.** `run_info.attempt_log[n].answer` holds the text of every rejected attempt
+  (an accepted one is saved once, as the summary). Run 1 threw them all away, which is why two of Fernhollow's
+  five rejected questions cannot be assessed: I know their first words and no more.
+- **`eval/score_questions.py --rejected`** scores the last rejected answer of a failed run. Before, a failed
+  analysis crashed the scorer with `AttributeError`. It now stops in plain words and names the flag.
+- **Prompt v6** (checksum pinned), `MAX_TOKENS` 16,000 to 20,000 (the SDK refuses a non-streaming call whose
+  `max_tokens` would take over 10 minutes, about 21,300; checked in its source), and the prompt now names the plain phrasings the check recognises (see "unresolved": that
+  last one over-steered).
+- **The live outputs are saved** in `eval/live_runs/2026-09-20_run2/` (payload, answer, rejected answers and
+  token counts for each company), so every claim below can be checked against them.
+- **Tests:** `tests/test_live_run_fixes.py` (28 cases) and additions to `tests/test_score_questions.py` and
+  `tests/test_analyze.py` (the v6 checksum). The full suite is in Results.
+
+### The scores (eval/score_questions.py, run 2)
+
+| Company | Questions | Decomposition | Names metric and value | Duplicate pairs | Themes covered | Overall |
+|---|---|---|---|---|---|---|
+| Northwind | 9 | 4 of 9 (44%) | 8 of 9 (89%) | 1 | 5 of 5 | 82% |
+| Alderpeak | 8 | 4 of 8 (50%) | 8 of 8 (100%) | 0 | 4 of 5 (no pipeline question) | 86% |
+| Fernhollow | 9 | 3 of 9 (33%) | 7 of 9 (78%) | 2 | 5 of 5 | 73% |
+
+The target itself scores 50% on decomposition and 60% on metric and value. Three cautions on these numbers.
+The scorer counts only a "cut of the data" as a decomposition, so a reconciliation or a distance to breach
+is "neither" (the target's own 50% has the same shape). It undercounted before I fixed a real bug in it: the
+plural of "category" never matched, so three plain cuts ("Which cost categories make up net burn...") were
+"neither"; the scores above are after the fix (they were 80%, 84% and 71%). And the "metric and value" check
+does not know that a missing-input question has no value or that infinity is one, so it marks Northwind 9,
+Fernhollow 8 and Fernhollow 9 as failing when they are the questions the prompt asks for.
+
+My scores on the 1 to 5 rubric, one reader, yours to overrule: **Northwind 3, Alderpeak 2, Fernhollow 3.**
+Northwind: three of nine (2, 3, 7) send management to a cut the pack does not hold, question 1 is the
+research's own retention test, and three (5, 6, 8) ask what the slide already answers, two of them repeating
+runway. Alderpeak: two questions are about 0.1-point
+moves, two more ask what the slide answers, and the one theme the quarter raises (pipeline rose every
+quarter) has no question. Fernhollow: all five themes, two decompositions that are real cuts, and two
+duplicate pairs (net burn, runway).
+
+### Every claim read against its payload
+
+I read all three headlines, three diagnoses, nine risks and 26 questions against the payloads in
+`eval/live_runs/2026-09-20_run2/`. **No invented number and no outside standard** (the number check and the
+outside-standard check held: not one "industry", "benchmark" or "peers"). Every quoted figure is in the
+payload. The problems are of meaning, not of figures, which is the kind the checks cannot see.
+
+**Wrong**
+- **Alderpeak risk 2: "growth is increasingly carried by upsell rather than base retention."** False. The
+  gap between NRR and GRR (what expansion adds) was 15.0 points in Q3 2024 and is 13.8 now; GRR rose from
+  95.0% to 96.0%. The "ticked down from 96.1% to 96.0%" it is built on is a 0.1-point wobble. No check
+  catches it: the words have no figures beside them.
+
+**Misleading**
+- **Alderpeak diagnosis: "most likely trading top-line growth for efficiency."** The payload contradicts
+  it: net new ARR rose every quarter ($1,000K to $1,630K) and beat budget in all seven quarters that have a
+  budget comparison. Growth in percent fell because the base grew. The clause "as expansion, NRR 109.8%,
+  outpaces retention, GRR 96.0%" explains nothing: NRR exceeds GRR whenever expansion is positive.
+- **Alderpeak risk 3: "may indicate under-investment in growth."** Ending ARR was ahead of budget in every
+  quarter (+0.6% to +2.6%). The claim is hedged ("may") and contradicted.
+- **Alderpeak's three risks in general.** The schema demands exactly 3 risks, and a company with 0 flags
+  tripped has none, so Claude manufactures three. That is a schema decision, not a model failure.
+- **Northwind diagnosis: "weakening unit economics as CAC payback lengthened to 20.7 mo."** CAC payback
+  passed its 24.0 threshold, and the sentence never says so; the prompt says to name a passing flag. The
+  retention story is supported (GRR fell from 94.0% to 88.1% and expansion narrowed); this cause is not.
+- **Northwind question 7** ties pipeline growth "to $12,500K" to NRR falling "over the same period". The
+  periods differ (pipeline rose across all eight quarters; NRR rose to 108.9% before it fell), and it puts
+  two metrics in one question. The earlier logged gap, "no code check covers a period claim", again.
+- **Fernhollow diagnosis: retention and pipeline "most likely driving ... accelerating cash burn."** The
+  data does not link them. Gross margin fell from 64.2% to 57.1% and revenue growth turned negative, and
+  neither is mentioned.
+- **Fernhollow question 8: "Rule of 40 for Q2 2026 is missing; when will this figure be available and who
+  owns producing it?"** The missing input is Q2 2025 (the blank quarter, four quarters back), not Q2 2026.
+  It asks the owner of the wrong quarter.
+
+**Generic, and repeated**
+- **Templated.** 24 of the 26 questions open with one of the four forms my v6 prompt listed ("Which ... make
+  up", "How does ... reconcile", "How much of ... sits in", "How far is ... from its threshold"): 10, 7, 3
+  and 4. The other two are the missing-input questions. The hint made the check pass and made the set
+  read as one question asked of every company. That is my change, not Claude's.
+- **"How far is X from its threshold" is asked where the slide answers it:** runway at 11.0 mo against
+  12.0 (Northwind), 6.0 against 12.0 (Fernhollow), both already tripped; CAC payback 17.7 against 24.0 and
+  runway 108.0 mo (Alderpeak), comfortably passing. Alderpeak's runway question is padding: the prompt says
+  to leave a theme out when the quarter does not raise it.
+- **Repeats.** Runway is asked twice at Northwind (5, 6) and Fernhollow (4, 5); net burn twice at
+  Fernhollow (2, 3). The prompt rule against this is one of the two no check enforces.
+- **Noise as a question.** Alderpeak questions 1 and 2 decompose a 0.1-point NRR move (109.7% to 109.8%)
+  and a 0.1-point GRR dip. The v5 rule "whenever NRR has moved at all" is the cause (Task 2's decision,
+  meant to catch any real move); the combo rule treats under a point as noise.
+- **The definitions theme asks management about the tool's own formulas.** Alderpeak 8 ("which definition
+  of annualization underlies NRR") and Fernhollow 9 ("which definition does the burn multiple's infinity
+  use") ask about definitions this tool sets, from one quarter's data. The definition that varies between
+  companies is an input's (what counts as ARR), and nothing asks about it.
+- **Small:** "$-240K" (sign after the dollar sign, from the payload's "-240"), "NRR (annualized)'s move".
+
+**What is good.** Every set opens with the gross versus net divergence test, quoting both figures, which is
+the research's sharpest retention test ("falling gross with flat net is the pattern to escalate on"). The
+Fernhollow risk "Retention collapse masked by passed flag ... the passed pipeline flag reflects pipeline also
+falling" is the "passes for a bad reason" rule working. Every passing flag that is mentioned is called passed
+(GRR 88.1% "passed but ... near its 85.0% threshold"). The missing-input questions are right in kind. The
+Northwind diagnosis and risks 1 and 2 hold up line by line.
+
+### Against the target fixture (tests/fixtures/target_questions_northwind.md)
+
+Northwind's nine questions land on **three of the target's ten**, one of them closely. Generated 1 is target
+2 (gross retention against net; the target's own escalation pattern). Generated 2 is target 3 (where the
+churn sits, by segment). Generated 3 and 4 are half of target 4 and 5 (a cut of the burn overrun; the burn
+multiple against net new ARR, without the "which of the four drivers moved"). **Not reached:** the
+waterfall rebuild that reconciles to ending ARR (1), downside sensitivity on runway (6), the worst outcome
+and its likelihood (7), stage conversion and segmentation of the pipeline decline (8), close dates and
+buyer next steps (9), and consistency of the 97% with the 108% (10). The two runway questions and the CAC
+question take slots the target spends on credit-side and pipeline-quality questions, the ones the research
+sources most firmly. Rates: decomposition 44% (target 50%), metric and value 89% (target 60%); the generated
+set is more numeric than the target and less demanding. Provenance: none of the generated questions is a
+target verbatim; all are constructed.
+
+**The slide cannot hold the target.** The target's ten questions average 30.7 words (307 in all). Slide 4
+holds about 20 words a question for 8 or 9 questions and 9 words for 10. The target set does not fit slide 4
+at any count. Claude's questions average 16.7 words (11 to 20). Closing the gap is a layout decision (two
+slides, or fewer and longer questions), and it is yours.
+
+### Decisions you didn't specify
+
+1. **Ran the second run** although run 1 had already cost more than the brief's $0.60 (above).
+2. **v6, not v5 edited in place.** Task 2 edited v5 in place because it had never met the API. Run 1 sent it,
+   so its text is a fact now, and the change is a new version.
+3. **Slide space goes in the system prompt, after `SYSTEM_PROMPT`,** not in the data message (the batch
+   tests' fake client parses that message as JSON, and it should stay the payload) and not inside the pinned
+   prompt text (it differs by company).
+4. **Limits are measured with a sample sentence and 2 words off,** and the retry message measures Claude's own
+   words. The sample uses letters where figures go ("XXX.X%"), because a test forbids digits typed into
+   build_deck.py; a capital X is a little wider than a digit, so the limits are a word more cautious.
+5. **The validator's own ceilings stay** (diagnosis 90 words, risk detail 45, question 22). The slide fit is
+   the binding check now and is far tighter, and the message says so.
+6. **The diagnosis minimum stays 60** with a measured maximum of 68. A window of 8 words is tight and Claude
+   met it (65, 66, 67); widening the box would cost the question columns lines they do not have.
+7. **The missing-input exemption is narrow:** a metric, a quarter, "missing" or "blank", and "who" or "when".
+   "Is NRR for Q1 2025 missing?" still fails.
+8. **No prompt change after run 2,** although I know one I would make (below): there is no run left to test
+   it, and an untested prompt change is what run 1 was.
+9. **config.yaml is untouched.**
+
+### What failed, and how I fixed it
+
+- **Run 1 failed every company** (above). Fixed by measuring the room, telling Claude, and naming the number.
+- **The check rejected fair questions** (five cases across both runs: "make up", a unit inside a `($K)`
+  label, "what would move ... to its threshold", the infinity sign, the missing-input question). In run 2 it
+  turned a good question ("What reduction in net burn would move runway ... to its 12.0 mo threshold?", a
+  distance to breach with a lever in it) into "How far is runway ... from its 12.0 mo threshold?", which the
+  slide answers. **A check that rejects fair questions makes the set worse, not just dearer.** Fixed from the
+  kept answers; not yet seen live.
+- **A failed run could not be read or scored:** the answers were discarded and the scorer crashed on the null
+  summary. Both fixed.
+- **`eval/score_questions.py` missed "categories"**, so three real cuts were "neither". Fixed.
+- **My first measuring sentence tripped the no-digits-in-build_deck guard;** replaced with letters.
+- **My test file got a literal em dash** from a Unicode escape (Task 1's trap); built with `chr()` instead.
+- **My plan to prove the new tests by breaking code** found one gap first time: no test had a metric, a
+  quarter and "missing" with no who or when, so a mutation that dropped that requirement passed. Added the
+  case. **20 planted bugs in temp copies: all 20 caught, and the control (a comment edit) passes** (the
+  script is `output/task3_mutations.py`, git-ignored). It covers the measured limits, the retry messages, what
+  Claude is sent, the kept answers and every question-rule change; it does not cover `MAX_TOKENS` (a constant
+  with no test) or the scorer's `--rejected` (covered by its own tests, not mutated).
+- **`--max-cost 0.40` did not hold the batch to $0.40** (it finished at $0.62): the ceiling is checked before
+  each company starts. Not changed; it is documented behaviour.
+
+### Unresolved
+
+1. **The prompt's phrasing hint templates the questions** (24 of 26). A v7 should drop the four example forms
+   and rely on the check's wider cue lists, or ask for variety. Needs a paid run to test.
+2. **The divergence rule fires on a 0.1-point NRR move** (Alderpeak questions 1 and 2). It should require a
+   move of at least a point over the window, as the combo rule does. It is a prompt change (the prompt says
+   "moved at all") plus `nrr_has_moved`.
+3. **The definitions theme should ask about inputs,** not the tool's formulas (what counts as ARR: contracted
+   or billed, when a customer is counted as churned). Prompt change.
+4. **An all-green company is forced to write three risks.** Allow fewer, or retitle them "watch items".
+5. **The memo drops the AI text for two of three companies.** Its rule (every number in the AI text must be in
+   the metrics workbook) rejected Alderpeak (the question quoting "$200K" net burn) and Fernhollow
+   ("$1,560K" and "$1,650K"): the workbook shows metrics, not the net burn input. Northwind's memo shows its
+   questions. Either the workbook shows those inputs, or the memo's check accepts the payload's inputs. Not
+   done; it touches the memo's design rule.
+6. **Slide 4 cannot hold the target's questions** (30.7 words on average against 20), and a tenth question
+   halves everyone's room. Layout decision.
+7. **The validator's cue lists and the scorer's are two separate copies** (`analyze.DEMAND_CUES`,
+   `score_questions.DECOMPOSITION_PHRASES`) and they disagree ("make up", "reconcile"). One list would stop
+   that.
+8. **The tool flags Rule of 40 at 40.0%.** The research says not to use 40 as a pass/fail bar for a company
+   under $50M (median 20 to 25). Alderpeak's "little buffer" risk leans on it. config.yaml is not mine to
+   edit tonight; the setting is.
+9. **The slides have not been looked at,** only measured. Nothing here can render them.
+10. **One sample per company.** Run 2 is one draw: how often each company needs its retry, and whether the
+    Alderpeak errors above recur, is unknown. The cue changes made after it were not run live.
+11. **Two of Fernhollow's five run-1 rejections cannot be assessed** (their text was discarded).
+12. **`output/` holds the run 2 decks and analyses (real model, v6),** all marked "DRAFT - NOT REVIEWED"; the
+    manifests record model, tokens and cost. Nobody has approved anything.
+
+### Results
+
+Full suite after the last code change: **1531 passed, 1 xfailed** (1495 passed before this task; the xfail is
+the strict theme-coverage test from Task 1). `check_deck.py` passes on the live decks. No em dash in any
+file I touched (checked by search, after the Unicode-escape slip above).

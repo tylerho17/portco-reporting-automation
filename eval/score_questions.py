@@ -203,8 +203,8 @@ DECOMPOSITION_PHRASES = ("break down", "breakdown", "broken down", "split", "dec
 
 # The cuts a board asks for. Plurals are allowed by the "s?" in the pattern below.
 DIMENSIONS = ("segment", "cohort", "account", "customer", "logo", "product", "region", "geography",
-              "channel", "vertical", "tier", "deal", "cost line", "line item", "category", "bucket",
-              "business unit")
+              "channel", "vertical", "tier", "deal", "cost line", "line item", "category", "categorie", "bucket",
+              "business unit")   # "categorie" so that "categories" matches: the pattern adds only an "s"
 
 # The words that turn a dimension into a cut. Without one, "our largest customers" is just a noun.
 SPLIT_LEADS = ("by", "which", "across", "per", "within", "among", "between", "concentrated in",

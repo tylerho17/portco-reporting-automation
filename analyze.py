@@ -492,7 +492,8 @@ RECONCILIATION_CUES = ("reconcile", "reconciliation", "bridge", "tie out", "ties
                        "defined", "same basis", "like for like")
 BREACH_CUES = ("how far", "how long before", "how many months", "at what point", "what would it take",
                "what would have to", "breach", "distance to", "before it trips", "back inside",
-               "back below", "back above")
+               "back below", "back above",
+               "would move", "would bring")   # "what would move runway to its threshold" (live run 2)
 DEMAND_CUES = DECOMPOSITION_CUES + RECONCILIATION_CUES + BREACH_CUES
 
 # A question interrogating a definition, a restatement or a missing input. A question about an
@@ -534,9 +535,16 @@ def names_a_metric(text):
 LABELLED_VALUE_PATTERN = re.compile(r"\(\$K\)\s*(?:at|of|is|was|to|from|=|:)?\s*\$?[-−–]?\d[\d,]*")
 
 
+INFINITY = "∞"   # how the payload shows a burn multiple or CAC payback that is infinite ("ARR shrank")
+
+
 def names_a_value(text):
-    """True when the question quotes a figure with a unit ("97.1%", "$3,900K", "11.0 mo", "Pipeline ($K) at 2,500")."""
-    return bool(unit_numbers(text)) or bool(LABELLED_VALUE_PATTERN.search(text))
+    """True when the question quotes a figure with a unit ("97.1%", "$3,900K", "11.0 mo", "Pipeline ($K) at 2,500").
+
+    The infinity sign counts: it is the value the payload shows for a burn multiple when ARR shrank, and
+    "which definition does the burn multiple's infinity use" quotes it. Live run 2 rejected exactly that.
+    """
+    return bool(unit_numbers(text)) or bool(LABELLED_VALUE_PATTERN.search(text)) or INFINITY in text
 
 
 def asks_about_a_missing_input(text):

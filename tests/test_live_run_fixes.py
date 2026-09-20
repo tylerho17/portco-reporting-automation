@@ -195,6 +195,20 @@ def test_what_the_first_live_run_rejected_that_was_a_fair_question(text, caught)
     assert bool(question_problems_for(text, "Burn and budget variance")) == caught
 
 
+@pytest.mark.parametrize("text, caught", [
+    # Rejected in live run 2, attempt 1 (the exact text, from the kept answers). The retry replaced the first
+    # with "How far is runway from its threshold?", which the slide already answers: the check made it worse.
+    ("What reduction in net burn would move runway at current burn from 11.0 mo above its 12.0 mo threshold?", False),
+    ("What would move runway at current burn from 6.0 mo to its 12.0 mo threshold?", False),
+    ("What would bring net burn vs budget at 19.6% back to plan?", False),
+    ("Which definition does Burn multiple's ∞ value use given net new ARR is negative?", False),   # ∞ is a value
+    ("Which definition does Burn multiple use for an infinite value?", True),     # no figure at all
+    ("What would surprise you about runway at current burn of 6.0 mo?", True),   # "would" alone is no demand
+])
+def test_what_the_second_live_run_rejected_that_was_a_fair_question(text, caught):
+    assert bool(question_problems_for(text, "Liquidity and runway")) == caught
+
+
 def test_the_value_message_says_what_a_value_looks_like():
     item = Question(theme="Burn and budget variance", question="Which cost lines carry the net burn variance?")
     problems = validate_summary(summary_with(questions=questions(first=item)), FLAT_NRR)

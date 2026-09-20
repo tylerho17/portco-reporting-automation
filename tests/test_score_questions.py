@@ -272,6 +272,9 @@ DECOMPOSITIONS = [
     "Can you break down net new ARR by segment?",
     "What share of churned ARR is concentrated in the ten largest accounts?",
     "Which cost lines carry the increase in net burn?",
+    # Live run 2: the plural of "category" is not "categorys", and three plain cuts were labelled "neither".
+    "Which cost categories make up the net burn vs budget variance of 20.0%?",
+    "Which pipeline segments make up the growth to $12,500K?",
 ]
 
 EXPLANATIONS = [
