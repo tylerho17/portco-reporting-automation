@@ -5,6 +5,45 @@ what failed and how it was fixed, and anything unresolved.
 
 ---
 
+## Where this stands
+
+Written when night two was merged into `main` (2026-09-20). No API call was made to write it.
+
+**What the tool does today**
+
+1. It reads a portfolio company's messy quarterly KPI spreadsheet and cleans it. If it cannot read a cell
+   with certainty it stops and names the sheet, row and cell; a blank quarter stays blank and is reported
+   as "data missing", never filled in.
+2. Python works out every number (retention, burn multiple, runway, Rule of 40 and the rest) and tests them
+   against nine warning flags. The AI never does any math.
+3. For each company it produces a 4-slide board deck, a 1 to 3 page memo (Word and PDF), and an Excel
+   workbook of the numbers. It can do one company or all three, from the command line or the web page.
+4. Claude drafts the words: a headline, a short diagnosis, three risks and 8 to 10 questions for
+   management. Every number it quotes is checked against the computed ones, and every page is labelled
+   "AI-drafted" and "not reviewed" until a person approves it.
+5. It is tested: 1539 automated tests pass, and 12 edge-case companies match their hand-typed answer keys.
+
+**Still open from night two** (three of the twelve items listed under "Night two Task 3, Unresolved")
+
+- **The prompt's example phrasings make the questions sound alike.** 24 of the 26 questions across the three
+  companies open with one of the four question forms the prompt lists as examples. The fix (drop the
+  examples, or ask for variety) is a prompt change and needs a paid run to prove it works.
+- **The "NRR has moved" rule fires on a 0.1 point move.** Alderpeak's questions 1 and 2 were forced to ask
+  about gross versus net retention over a move that is noise. It should need a move of at least one point over
+  the window, as the combo rule already does. It is a prompt change plus `nrr_has_moved`; not done.
+- **An all-green company is forced to write three risks.** Alderpeak trips no flags but the format demands
+  three, so it invents watch items. Either allow fewer or retitle them "watch items". Not done.
+
+**Look at this first:** open the three decks in PowerPoint and read slides 3 and 4 by eye. Every check on
+them is a measurement (text fits at the 12 pt floor); nothing here can render a slide, so nobody has seen
+them. Slide 4 is the densest.
+
+Not on that list but worth knowing: the last Night two fix means the web page's Generate (AI box unticked)
+and `demo_reset.py` will build Northwind and Fernhollow with "AI summary unavailable" until a live run
+refreshes their analyses (see "Night two fix, Task 1, Unresolved" below). Nobody has approved any deck.
+
+---
+
 ## Task 1: the board memo (memo.py, check_memo.py, main.py)
 
 ### What I built
