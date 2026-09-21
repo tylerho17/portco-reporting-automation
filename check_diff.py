@@ -71,13 +71,15 @@ NORTHWIND = {
         "Net new ARR vs budget: -1.5% to -19.0% (down 17.6 pts)",   # 2020/2050-1 -> 1660/2050-1: 0.1756
         "Runway at current burn: 15.0 mo to 11.0 mo (down 26.5%)",  # 11.0/14.96 - 1
     ],
-    # Not listed (under the setting): ending ARR +6.4%, NRR -4.9 pts, GRR -2.0 pts, CAC payback +4.8%, ...
+    # Not listed (under the setting): ending ARR +6.4%, net burn +6.8% (3650 -> 3900), NRR -4.9 pts, GRR -2.0 pts,
+    # CAC payback +4.8%, ...
     "Resolved data gaps": ["Q1 2026: Flag: Rule of 40"],   # Q1 2026's Rule of 40 flag lacked Q1 2025 revenue
 }
 
 ALDERPEAK = {
     # No flag flips (healthy both quarters); no gap opens or closes (no blank quarter).
     MOVED_TITLE: [
+        "Net burn ($K): 250 to 200 (down 20.0%)",               # 200/250 - 1; net burn is a metric row since the memo fix
         "Burn multiple: 0.16x to 0.12x (down 24.9%)",           # 250/1530 = 0.163 -> 200/1630 = 0.123
         "Runway at current burn: 88.8 mo to 108.0 mo (up 21.6%)",   # 7400/(250/3) -> 7200/(200/3)
     ],
@@ -98,7 +100,8 @@ FERNHOLLOW = {
         "CAC payback: 96.2 mo to 134.4 mo (up 39.7%)",          # 1120/(240*1060/1820)*12 -> 1150/(180*1010/1770)*12
         "Runway at current burn: 9.5 mo to 6.0 mo (down 37.0%)",   # 4950/(1560/3) -> 3300/(1650/3)
     ],
-    # Not listed: NRR -3.9 pts, GRR -3.5 pts, burn multiple ∞ both runs ("ARR shrank"), ending ARR -3.2%, ...
+    # Not listed: NRR -3.9 pts, GRR -3.5 pts, net burn +5.8% (1560 -> 1650), burn multiple ∞ both runs
+    # ("ARR shrank"), ending ARR -3.2%, ...
     "New data gaps": ["Q2 2026: ARR growth YoY, Revenue growth YoY, Rule of 40, Flag: Rule of 40"],
 }
 

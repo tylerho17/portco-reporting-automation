@@ -79,8 +79,8 @@ For each company it prints a ✓ line per step, then a summary table:
 Company     Flags tripped              Data gaps                          Result  Notes
 ----------  -------------------------  ---------------------------------  ------  -----
 Alderpeak   0 of 9                     none                               OK
-Fernhollow  7 of 9, 1 cannot evaluate  20 metrics/flags (blank: Q2 2025)  OK
-Northwind   6 of 9                     19 metrics/flags (blank: Q1 2025)  OK
+Fernhollow  7 of 9, 1 cannot evaluate  21 metrics/flags (blank: Q2 2025)  OK
+Northwind   6 of 9                     20 metrics/flags (blank: Q1 2025)  OK
 ```
 
 **What you get in `output/`** (one set per company):
@@ -202,7 +202,7 @@ The workbook holds the same three things as real numbers in the metrics workbook
 
 **Exports for other tools, and a summary for email.** `python export.py data/northwind.xlsx` (or `--all`) writes four files next to the metrics workbook, from the same numbers:
 
-- **`northwind_metrics.csv`:** one row per quarter and metric (152 for 8 quarters): company, quarter, metric (`nrr`), label ("NRR (annualized)"), unit (`$K`, `ratio`, `months`, `multiple`), value, text, status, flag_tripped. Ratios are decimals (0.9705540488182874, text "97.1%"), money is in $K. A value with no number is an empty cell, never 0, and its status says why: `missing input`, `no prior period`, `not meaningful` or `infinite` (the text says which: "∞ (ARR shrank)"). flag_tripped is true where the workbook's cell is red.
+- **`northwind_metrics.csv`:** one row per quarter and metric (160 for 8 quarters): company, quarter, metric (`nrr`), label ("NRR (annualized)"), unit (`$K`, `ratio`, `months`, `multiple`), value, text, status, flag_tripped. Ratios are decimals (0.9705540488182874, text "97.1%"), money is in $K. A value with no number is an empty cell, never 0, and its status says why: `missing input`, `no prior period`, `not meaningful` or `infinite` (the text says which: "∞ (ARR shrank)"). flag_tripped is true where the workbook's cell is red.
 - **`northwind_flags.csv`:** the 9 flags for the latest quarter: value, text, threshold, trips when, status (`trip`, `pass`, `cannot evaluate`), reason and the workbook's status words.
 - **`northwind_export.json`:** both of the above, plus the flag count, runway at next quarter's budgeted burn, the data gaps, and the SHA-256 hashes of the workbook, `config.yaml` and column mapping it came from. No value is ever `NaN` or `Infinity` (strict JSON readers reject both); it is `null` with a status.
 - **`northwind_email.html`:** slide 1's key metrics table with its status colors, the flag count, runway at budget and the data gaps. Open it in a browser, select all, copy, and paste into a new Outlook email. It is laid out the way Outlook needs, because Outlook draws email with Word's engine: inline styles only, a font on every cell (else Outlook shows Times New Roman), tables with their width and spacing as attributes, every fill also as `bgcolor`, 640 px wide, no images or style sheet.

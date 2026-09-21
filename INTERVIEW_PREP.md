@@ -402,7 +402,7 @@ pasted twice and a row missing. `python eval/run_eval.py` runs clean, metrics, f
 all 12 and prints a scorecard that names any mismatch, like "Tidewell, Flags: Rule of 40: expected
 pass, got trip". To prove it works I planted 24 bugs, one at a time, in throwaway copies, and each
 failed the company built for it. It also found a hole in itself: at first only the flag metrics
-were value-checked, so a wrong revenue YoY slipped through. The healthy company now checks all 19.
+were value-checked, so a wrong revenue YoY slipped through. The healthy company now checks all 20.
 *Point to:* `eval/make_eval_data.py`, `eval/run_eval.py`; `tests/test_eval.py::test_every_company_matches_its_answer_key`.
 
 **Q34d. A 275-company batch runs overnight. What stops it going wrong?** (new, Task 7)
@@ -468,7 +468,7 @@ the test comparing them failed first, because openpyxl stores 16 significant dig
 17, so I export what the workbook stores. And the email is built for Outlook, which draws email with
 Word's engine: inline styles only, a font on every cell or it falls back to Times New Roman, fills
 repeated as bgcolor. `check_export.py` reads every file back from disk and compares each of the
-152 metric values per company with the workbook, and checks the email against each of those rules.
+160 metric values per company with the workbook, and checks the email against each of those rules.
 *Point to:* `export.as_stored`, `export.email_html`, `check_export.outlook_problems`; `tests/test_export.py::test_a_value_has_the_16_significant_digits_the_workbook_stores`.
 
 **Q34i. How do you make sure a demo doesn't go wrong in front of someone?** (new, Task 12)
@@ -573,7 +573,7 @@ copy of the project and all 14 were caught.
 *Point to:* `charts.finish_layout`, `charts.money_axis`; `tests/test_chart_layout.py::test_no_text_overlaps_anything_on_either_chart`.
 
 **Q34q. A director wants every number in the deck, not just the latest quarter. What did you do?** (new, Task 20)
-An opt-in appendix: `--appendix` adds one slide after the four with all 19 metrics for all 8 quarters.
+An opt-in appendix: `--appendix` adds one slide after the four with all 20 metrics for all 8 quarters.
 Off by default, because the four slides are the update and the table is reference. It keeps the deck's
 rules: `format_value` writes every number, and the same fit check applies, never below 12 pt. It didn't
 fit at first: 20 rows at slide 1's padding need 403 pt and the slide has 392, and "n/a (no prior
@@ -733,7 +733,7 @@ company built for it.
 Yes, and that was the most useful thing it did. In the first round of planted bugs, revenue growth
 YoY computed three quarters back instead of four passed 11 of 12 companies. Only the eight flag
 metrics were being checked for values, and revenue growth isn't one of them. So the healthy company
-now checks all 19 metrics by hand formula, a test pins it, and the same bug then failed 4 companies.
+now checks all 20 metrics by hand formula, a test pins it, and the same bug then failed 4 companies.
 The lesson: an eval only covers what it compares, and you find out what that is by attacking it. What
 it still doesn't cover: a partly blank quarter, a workbook with no budget row, unknown headers. Those
 have unit tests instead, and each could become one more eval company.
@@ -1123,4 +1123,4 @@ deck undermines the rest.
 | Diff defaults | more than 5 points for percentages, more than 10% for everything else | `diff_runs.py` constants |
 | Northwind, Q1 to Q2 | 5 flags flipped, 8 metrics moved, 1 gap closed | `check_diff.py` |
 | Rollup | 7 companies per ranking slide; Fernhollow first, worst flag runway 6.0 months | `rollup.py`, `check_rollup.py` |
-| Exports | 152 metric values per company (19 × 8 quarters), 16 significant digits | `check_export.py` |
+| Exports | 160 metric values per company (20 × 8 quarters), 16 significant digits | `check_export.py` |

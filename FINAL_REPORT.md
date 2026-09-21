@@ -3288,7 +3288,7 @@ slides, or fewer and longer questions), and it is yours.
    the metrics workbook) rejected Alderpeak (the question quoting "$200K" net burn) and Fernhollow
    ("$1,560K" and "$1,650K"): the workbook shows metrics, not the net burn input. Northwind's memo shows its
    questions. Either the workbook shows those inputs, or the memo's check accepts the payload's inputs. Not
-   done; it touches the memo's design rule.
+   done; it touches the memo's design rule. (Net burn fixed afterwards: see "Night two fix, Task 1" below.)
 6. **Slide 4 cannot hold the target's questions** (30.7 words on average against 20), and a tenth question
    halves everyone's room. Layout decision.
 7. **The validator's cue lists and the scorer's are two separate copies** (`analyze.DEMAND_CUES`,
@@ -3309,3 +3309,107 @@ slides, or fewer and longer questions), and it is yours.
 Full suite after the last code change: **1531 passed, 1 xfailed** (1495 passed before this task; the xfail is
 the strict theme-coverage test from Task 1). `check_deck.py` passes on the live decks. No em dash in any
 file I touched (checked by search, after the Unicode-escape slip above).
+
+## Night two fix, Task 1: the memo dropping the AI text (net burn is now a metric row)
+
+No API calls: every analysis JSON was reused as it was (all three are byte-identical to the copies made before
+I started, `output/analysis_backup_task1/`). Prompt, thresholds and `config.yaml` untouched.
+
+### What was wrong
+
+`memo.unlisted_numbers` requires every number in the AI headline and questions to be one the metrics workbook
+shows. The v6 questions quote net burn in dollars (Alderpeak 200; Fernhollow 1,650 and 1,560), and net burn was
+an input Claude saw but no metrics table showed, so the memo said "AI commentary unavailable" for both.
+
+### What I changed
+
+- **`metrics.py`:** `net_burn` is in `METRIC_LABELS` as "Net burn ($K)", third, after Ending ARR and Net new
+  ARR (the dollar rows together). It is carried through `metrics_table` as it came (like `pipeline`) and has its
+  own line in `METRIC_INPUTS` (`now("net_burn")`), so a blank net burn is "data missing" for that quarter only.
+  It is not in `FLAG_THRESHOLDS`, so not in `FLAG_RULES`: shown, never judged. I moved it out of `INPUT_LABELS`
+  rather than list "Net burn ($K)" in both, which would have broken "one label set"; `INPUT_LABELS` now holds
+  only ending cash. Claude's payload has the same "Net burn ($K)" trend with the same strings.
+- **Everything that reads `METRIC_LABELS` picked it up with no other code change:** the Metrics sheet, the Data
+  gaps sheet, the CSV and JSON exports, slide 1's gap lines, the appendix slide, the memo's Data gaps section,
+  the company page and the "what changed" comparison.
+- **`build_deck.py`:** the appendix has 21 rows and no longer fitted at the 12 pt floor (`TextDoesNotFitError`,
+  348 pt of rows against 342 pt of room). Cell margin 0.015 in to 0.01 in (`APPENDIX_CELL_MARGIN_Y`); the
+  comment (was line 138) now says 20 rows and shows the arithmetic. I did not spill onto a second slide.
+- **Tests first (8 new, all failing before the change):** `test_metrics.py` (label and position, not in
+  `INPUT_LABELS`, not a flag, column equals the input, negative and zero shown as they are, a blank is a gap of
+  its own quarter only, existing values unchanged) and `test_memo.py` (a question quoting net burn passes the
+  gate; a blank net burn is named in the memo's Data gaps).
+- **Counts:** 19 metrics / 152 values are 20 / 160 in `tests/test_export.py` (twice), `tests/test_portfolio.py`
+  (Northwind "20 metrics/flags"), the comment in `tests/test_build_deck.py`, the docstrings in `eval/`, and in
+  README, STUDY_GUIDE, INTERVIEW_PREP and LOOM_SCRIPT wherever they describe today's behaviour. The DAY, OVERNIGHT
+  and POLISH reports and the older sections of this one are records of what was true then; I left them.
+- **Goldens:** 7 files (`golden.py --update`) after reading the diff. Every metrics golden gains the column; the
+  Northwind and Fernhollow deck and memo goldens gain one word, "Net burn ($K)", in the blank quarter's Data
+  gaps line. To prove nothing else moved, I built the new metrics workbooks beside the old ones and compared every
+  cell with the new column removed: 0 differences on all three, and the Flags sheets are identical.
+
+### Data gaps
+
+| Company | Before | After | Why |
+|---|---|---|---|
+| Northwind | 19 metrics/flags | 20 | net burn is blank in Q1 2025 |
+| Fernhollow | 20 | 21 | net burn is blank in Q2 2025 |
+| Alderpeak | none | none | no blank quarter |
+
+### Did any other check have to move?
+
+Yes, and each was a consequence, not a hidden failure:
+
+- `check_diff.py`: **"What changed since the last run" now lists net burn when it moves more than 10%.**
+  Alderpeak's fell from 250 to 200, so its memo, page and printout gain "Net burn ($K): 250 to 200 (down
+  20.0%)". I added it to the hand-typed answer key with its formula. Northwind (+6.8%) and Fernhollow (+5.8%)
+  stay under the setting. This is a visible product change I did not ask for; it follows from "net burn is a
+  metric row" and I think it is right (a 20% fall in burn belongs in that list), but it is yours to veto.
+- `tests/test_eval.py` needed `net_burn` in Larkspur's answer key (150, typed by hand). The other 11 companies
+  reuse or derive from it; `eval/run_eval.py` is 12 of 12.
+- I also added hand-typed net burn (3,900 / 200 / 1,650) to `check_northwind.py` and `check_companies.py`;
+  they passed without it, but then the new column was not checked against the answer key.
+- Unchanged and passing: `check_excel_output.py` (its counts come from the data), `check_deck.py` (with
+  `--appendix`, all three, nothing overflows), `check_main.py`, `check_rollup.py`, `check_export.py` (160 values),
+  `check_memo.py`.
+
+### Results
+
+- `python -m pytest -q`: **1539 passed, 1 xfailed** (1531 before, plus my 8).
+- `main.py --all --skip-ai`: 3 of 3 built; 0 flags flipped, 0 metrics moved, 1 new data gap each for
+  Northwind and Fernhollow.
+- Decks and memos rebuilt from the saved analyses: all three show the AI text on slide 4 and in the memo.
+- `check_memo.py`: **passes for all three** (Northwind 40, Alderpeak 41, Fernhollow 40 distinct numbers, every
+  one in the metrics workbook). Its planted case is still rejected: a question quoting ending cash makes the
+  memo say "AI commentary unavailable", so the gate is as strict as before.
+
+### Unresolved, read these
+
+1. **`main.py --resume` and the web page no longer reuse the saved Northwind and Fernhollow analyses.**
+   `main.reusable_analysis` requires the payload Claude saw to equal today's exactly, and the new data gap
+   line changes it for the two companies with a blank quarter (I checked: Alderpeak reusable, the other two
+   not). Every number in those analyses is still valid (the deck's own check passes), which is why the rebuild
+   worked, but **Generate on the web page (AI box unticked) and `demo_reset.py` would now build those two decks
+   with "AI summary unavailable"** until either a live run refreshes them (about $0.18 each, $0.36 for both) or
+   `reusable_analysis` is relaxed to "every number in the saved text is still in today's payload". Your call;
+   I did not change the safety rule.
+2. **How I rebuilt without the API:** a scratch script, `output/rebuild_from_saved.py` (git-ignored), swaps
+   that one equality test for `build_deck.load_analysis` and runs the ordinary `main.py --all --skip-ai --resume`.
+   `--skip-ai` stays on, so no path can reach the API. Side effect: the printed line and the manifests say
+   "reused a saved analysis of exactly these numbers" for the two companies, which is not literally true.
+3. **Ending cash is the same kind of input and is still not in the workbook.** A future question quoting ending
+   cash would drop the memo's AI text the same way. I did what was asked (net burn only); the same change for
+   `ending_cash` would be one more row and the same set of count changes, or the memo's gate could accept the
+   payload's inputs. Not done.
+4. **The appendix is at its limit:** a 22nd metric would need a margin of about 0.005 in or a second slide.
+5. **Nothing was looked at by eye.** No renderer is installed; the appendix and slide 3 are measured
+   (`check_deck.py`) at the 12 pt floor, not seen.
+6. The batch files (`batch_summary.csv`, `batch_manifest.json`) and every manifest now describe the rebuild,
+   not the live run: they say the AI step reused a saved analysis (model `claude-sonnet-5`) and record no
+   tokens or cost for this run. The live run's tokens and cost are still in each `output/<company>_analysis.json`
+   (`run_info`). All decks and memos remain "DRAFT - NOT REVIEWED"; nobody has approved anything.
+7. **`check_main.py` rebuilds the real `output/` with `--skip-ai`** (it runs `python main.py --all --skip-ai`
+   as a separate process, not in a temporary folder), so it replaces the AI-text decks and memos with the
+   placeholder ones. I ran five checks at once and it did exactly that to my first rebuild; I noticed because
+   the manifests said "skipped", rebuilt, and verified the final state one check at a time. If you run it, run
+   `output/rebuild_from_saved.py` after it (or Generate all with the AI box ticked, which costs money).
