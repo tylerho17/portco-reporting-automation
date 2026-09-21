@@ -25,6 +25,7 @@ from memo import (AI_DRAFTED_LINE, MEMO_UNAVAILABLE, block_texts, memo_analysis,
                   memo_footer, memo_paths, save_memo, unlisted_numbers, workbook_numbers, write_docx, write_pdf)
 from metrics import CONFIG_PATH
 from provenance import file_sha256, manifest_path, read_manifest, save_manifest
+from valid_answer import summary_dict as valid_answer
 
 NAN = math.nan
 RUN_DATE = datetime.date(2026, 9, 17)
@@ -52,11 +53,13 @@ def memo_data(blank=None):
     return collect_deck_data("Testco", "testco.xlsx", three_quarters(blank), None, TEST_CONFIG)
 
 
-def summary_dict(headline="Retention is the main question for the board.", question="What drives churn?"):
-    """A valid summary. With the defaults it has no numbers, so no number check has anything to reject."""
-    return {"headline": headline, "wins": [{"title": "Win title", "detail": "A win detail."}] * 3,
-            "risks": [{"title": "Risk title", "detail": "A risk detail."}] * 3,
-            "questions": [question, "Where is pipeline coming from?", "How is hiring going?"]}
+def summary_dict(headline="Retention is the main question for the board.", question=None):
+    """A valid v5 answer (tests/valid_answer.py), optionally with its first question swapped."""
+    answer = valid_answer(headline)
+    answer["risks"] = [{"title": "Risk title", "detail": "A risk detail."}] * 3
+    if question is not None:
+        answer["questions"] = [{"theme": "Liquidity and runway", "question": question}] + answer["questions"][1:]
+    return answer
 
 
 def summary_from(summary):
@@ -147,19 +150,22 @@ def test_no_em_dash_anywhere_in_the_memo():
         assert "—" not in all_text(blocks)
 
 
-def test_with_a_valid_analysis_the_memo_shows_the_headline_and_questions_but_not_wins_or_risks():
+def test_with_a_valid_analysis_the_memo_shows_the_headline_and_questions_but_not_the_risks():
     text = all_text(memo_blocks(memo_data(), summary_from(summary_dict())))
+    answer = summary_dict()
     assert AI_DRAFTED_LINE in text
     assert "Retention is the main question for the board." in text
-    assert "What drives churn?" in text and "How is hiring going?" in text
-    assert "A win detail." not in text and "A risk detail." not in text
+    assert all(item["question"] in text for item in answer["questions"])
+    assert "Retention decomposition" in text, "the questions sit under their themes"
+    assert "A risk detail." not in text and answer["diagnosis"] not in text
 
 
 def test_questions_are_bullets_not_numbers():
     # A numbered list would put "1.", "2.", "3." in the memo: numbers that aren't in the metrics workbook.
     blocks = memo_blocks(memo_data(), summary_from(summary_dict()))
-    questions = next(block for block in blocks if block["kind"] == "bullets" and block.get("ai"))
-    assert questions["items"] == ["What drives churn?", "Where is pipeline coming from?", "How is hiring going?"]
+    bullets = [block for block in blocks if block["kind"] == "bullets" and block.get("ai")]
+    shown = [item for block in bullets for item in block["items"]]
+    assert shown == [item["question"] for item in summary_dict()["questions"]]
 
 
 # ---------------------------------------------------------------------------
@@ -213,18 +219,38 @@ def test_thresholds_count_as_the_workbook_displays_them():
 
 def test_an_ai_number_that_is_in_the_payload_but_not_the_metrics_workbook_is_listed():
     # Ending cash (1,200) is in Claude's payload, so analyze.py accepts it; the memo can't prove it from the workbook.
-    summary = summary_from(summary_dict(question="How long will the 1,200 of cash last?"))
+    summary = summary_from(summary_dict(question="Which months of the $1,200K ending cash cover the 12.0 mo runway threshold?"))
     assert unlisted_numbers(summary, memo_data()) == [1200.0]
 
 
+def test_a_question_quoting_net_burn_in_dollars_passes_the_gate(tmp_path):
+    # Bug found in the night-two queue (check_memo.py on Alderpeak): a v6 question quotes net burn ("200"),
+    # which the metrics workbook didn't show, so the memo dropped the whole AI text. Now the workbook shows it.
+    actuals = three_quarters()
+    actuals["net_burn"] = [1560.0, 1650.0, 1737.0]
+    data = collect_deck_data("Testco", "testco.xlsx", actuals, None, TEST_CONFIG)
+    question = "Which cost lines make up net burn at $1,737K?"
+    assert {1560.0, 1650.0, 1737.0} <= workbook_numbers(data)
+    assert unlisted_numbers(summary_from(summary_dict(question=question)), data) == []
+    payload = build_payload("Testco", actuals, None, TEST_CONFIG)
+    summary, why = memo_analysis(write_analysis(tmp_path, summary_dict(question=question)), payload, data)
+    assert why is None and summary is not None
+
+
+def test_a_blank_net_burn_quarter_shows_data_missing_in_the_memo_data_gaps():
+    # The Data gaps section lists the metrics workbook's gaps, so a blank net burn is named there, not hidden.
+    text = all_text(memo_blocks(memo_data(blank="Q1 2026"), None))
+    assert "Net burn ($K)" in text.split("Data gaps")[1].split("Questions for management")[0]
+
+
 def test_the_gate_rejects_an_ai_number_the_metrics_workbook_does_not_show(tmp_path, payload):
-    path = write_analysis(tmp_path, summary_dict(question="How long will the 1,200 of cash last?"))
+    path = write_analysis(tmp_path, summary_dict(question="Which months of the $1,200K ending cash cover the 12.0 mo runway threshold?"))
     summary, why = memo_analysis(path, payload, memo_data())
     assert summary is None and "1,200" in why and "metrics workbook" in why
 
 
 def test_only_the_headline_and_questions_are_gated():
-    # The wins and risks aren't in the memo, so a number there that the workbook lacks doesn't matter.
+    # The risks and the diagnosis aren't in the memo, so a number there that the workbook lacks doesn't matter.
     summary = summary_dict()
     summary["risks"] = [{"title": "Cash", "detail": "Cash is 1,200."}] * 3
     assert unlisted_numbers(summary_from(summary), memo_data()) == []

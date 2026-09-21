@@ -4,7 +4,7 @@
   "Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI workbook; the headline and questions are drafted by AI."  9.5 pt, 64748B
   'Headline'  12 pt, bold, 0B2545, keep with next
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
-  'Runway has fallen to 6.0 mo (threshold 12.0 mo) and burn multiple is now ∞ (threshold 2.00x), signaling an urgent cash crisis.'  11 pt, bold, 0B2545
+  'Fernhollow tripped 7 of 9 flags: ARR fell to $7,350K, NRR is 77.9% and runway is 6.0 mo.'  11 pt, bold, 0B2545
   'Key metrics'  12 pt, bold, 0B2545, keep with next
   table, aligned center
   row 1: 'Metric' fill 0B2545 | 'Q2 2026' fill 0B2545 | 'Q1 2026' fill 0B2545 | 'Budget or threshold' fill 0B2545 | 'Status' fill 0B2545
@@ -33,26 +33,36 @@
   'Rule of 40: Cannot evaluate: missing input'  List Bullet, 9.5 pt, 334155, keep with next
   'NRR falling while pipeline rising: Passed (trips when NRR falls at least 1 pt and pipeline rises at every step, over the last 3 quarters)'  List Bullet, 9.5 pt, 334155
   'Data gaps (data missing)'  12 pt, bold, 0B2545, keep with next
-  'Q2 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  List Bullet, 9.5 pt, 334155, keep with next
+  'Q2 2025: Ending ARR ($K), Net new ARR ($K), Net burn ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  List Bullet, 9.5 pt, 334155, keep with next
   'Q2 2025 + Q3 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  List Bullet, 9.5 pt, 334155, keep with next
   'Q2 2025 + Q2 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  List Bullet, 9.5 pt, 334155, keep with next
   'Q2 2026: Flag: Rule of 40'  List Bullet, 9.5 pt, 334155
   'Questions for management'  12 pt, bold, 0B2545, keep with next
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
-  'What is driving the decline in GRR from 88.7% in Q3 2024 to 74.7% in Q2 2026, and what retention initiatives are underway?'  List Bullet, 9.5 pt, 334155, keep with next
-  'What is causing net burn to run 19.6% over budget (threshold 15.0%), and what specific actions will bring spending back in line with plan?'  List Bullet, 9.5 pt, 334155, keep with next
-  'What is driving the continuous contraction in pipeline from $4,200K in Q3 2024 to $2,500K in Q2 2026, and how will this affect future bookings?'  List Bullet, 9.5 pt, 334155
+  'Retention decomposition'  9.5 pt, bold, 0B2545
+  'How much of the NRR (annualized) fall to 77.9% is GRR (annualized) at 74.7% rather than lost expansion?'  List Bullet, 9.5 pt, 334155, keep with next
+  'Which accounts make up the churn behind GRR (annualized) at 74.7% this quarter?'  List Bullet, 9.5 pt, 334155
+  'Burn and budget variance'  9.5 pt, bold, 0B2545
+  'Which cost lines carry net burn vs budget at 19.6%, against 14.8% in Q3 2025?'  List Bullet, 9.5 pt, 334155, keep with next
+  'How much of net burn vs budget at 19.6% is committed cost next quarter cannot remove?'  List Bullet, 9.5 pt, 334155
+  'Liquidity and runway'  9.5 pt, bold, 0B2545
+  'How far must net burn fall for runway at current burn to clear 12.0 mo?'  List Bullet, 9.5 pt, 334155, keep with next
+  'Which creditors sit ahead of the 6.0 mo runway at current burn if cash runs out?'  List Bullet, 9.5 pt, 334155
+  'Pipeline and sales efficiency'  9.5 pt, bold, 0B2545
+  'Which segments make up the $2,500K pipeline behind CAC payback at 134.4 mo?'  List Bullet, 9.5 pt, 334155, keep with next
+  'How much of net new ARR vs budget at -150.0% is deals lost rather than delayed?'  List Bullet, 9.5 pt, 334155
+  'Definitions and assumptions'  9.5 pt, bold, 0B2545
+  'Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured?'  List Bullet, 9.5 pt, 334155
 -- Footer --
-  'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
+  'Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
 == PDF page 1 ==
-  Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Fernhollow board update: Q2 2026
   Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI
   workbook; the headline and questions are drafted by AI.
   Headline
   AI-drafted from computed metrics - review before use
-  Runway has fallen to 6.0 mo (threshold 12.0 mo) and burn multiple is now ∞ (threshold 2.00x),
-  signaling an urgent cash crisis.
+  Fernhollow tripped 7 of 9 flags: ARR fell to $7,350K, NRR is 77.9% and runway is 6.0 mo.
   Key metrics
   Metric
   Q2 2026
@@ -148,27 +158,41 @@
   •
   NRR falling while pipeline rising: Passed (trips when NRR falls at least 1 pt and pipeline rises at every step, over
   the last 3 quarters)
-== PDF page 2 ==
-  Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
   Data gaps (data missing)
   •
-  Q2 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline
-  ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current
-  burn
+  Q2 2025: Ending ARR ($K), Net new ARR ($K), Net burn ($K), NRR (annualized), GRR (annualized), Gross
+  margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback,
+  Runway at current burn
   •
   Q2 2025 + Q3 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget
   •
   Q2 2025 + Q2 2026: ARR growth YoY, Revenue growth YoY, Rule of 40
   •
   Q2 2026: Flag: Rule of 40
+== PDF page 2 ==
+  Fictional data | fernhollow.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Questions for management
   AI-drafted from computed metrics - review before use
+  Retention decomposition
   •
-  What is driving the decline in GRR from 88.7% in Q3 2024 to 74.7% in Q2 2026, and what retention initiatives are
-  underway?
+  How much of the NRR (annualized) fall to 77.9% is GRR (annualized) at 74.7% rather than lost expansion?
   •
-  What is causing net burn to run 19.6% over budget (threshold 15.0%), and what specific actions will bring spending
-  back in line with plan?
+  Which accounts make up the churn behind GRR (annualized) at 74.7% this quarter?
+  Burn and budget variance
   •
-  What is driving the continuous contraction in pipeline from $4,200K in Q3 2024 to $2,500K in Q2 2026, and how
-  will this affect future bookings?
+  Which cost lines carry net burn vs budget at 19.6%, against 14.8% in Q3 2025?
+  •
+  How much of net burn vs budget at 19.6% is committed cost next quarter cannot remove?
+  Liquidity and runway
+  •
+  How far must net burn fall for runway at current burn to clear 12.0 mo?
+  •
+  Which creditors sit ahead of the 6.0 mo runway at current burn if cash runs out?
+  Pipeline and sales efficiency
+  •
+  Which segments make up the $2,500K pipeline behind CAC payback at 134.4 mo?
+  •
+  How much of net new ARR vs budget at -150.0% is deals lost rather than delayed?
+  Definitions and assumptions
+  •
+  Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured?

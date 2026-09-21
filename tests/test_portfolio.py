@@ -28,6 +28,7 @@ from main import AI_REUSED
 from metrics import load_config
 from provenance import NOT_REVIEWED, manifest_path, read_manifest
 from test_mapping import RENAMES, renamed_copy
+from valid_answer import summary_dict
 
 PROJECT_DIR = Path(__file__).parent.parent
 COMPANIES = ["alderpeak", "fernhollow", "northwind"]
@@ -50,11 +51,8 @@ class FakeClient:
 
 
 def summary(headline):
-    """A valid answer with no numbers in it, so the number check has nothing to reject."""
-    point = {"title": "Steady base", "detail": "Customers stayed."}
-    return BoardSummary.model_validate({
-        "headline": headline, "wins": [point] * 3, "risks": [point] * 3,
-        "questions": ["What drives churn?", "Where is pipeline coming from?", "How is hiring going?"]})
+    """A valid answer whose only numbers are thresholds every company's payload holds (valid_answer.py)."""
+    return BoardSummary.model_validate(summary_dict(headline))
 
 
 @pytest.fixture(autouse=True)
@@ -158,7 +156,7 @@ def test_one_row_per_workbook_with_each_companys_story(folders):
     assert list(rows) == ["Alderpeak", "Fernhollow", "Northwind"]
     assert rows["Northwind"]["latest"] == "Q2 2026"
     assert rows["Northwind"]["flags"] == "6 of 9 flags tripped"
-    assert rows["Northwind"]["gaps"] == "19 metrics/flags (blank: Q1 2025)"
+    assert rows["Northwind"]["gaps"] == "20 metrics/flags (blank: Q1 2025)"
     assert rows["Fernhollow"]["flags"] == "7 of 9 flags tripped, 1 cannot evaluate"
     assert rows["Alderpeak"]["flags"] == "0 of 9 flags tripped" and rows["Alderpeak"]["gaps"] == "none"
 

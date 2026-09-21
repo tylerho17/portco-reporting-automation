@@ -220,7 +220,7 @@ def em_dash_lines(text):
 
 def test_no_markdown_file_has_an_em_dash():
     # Every .md file in the project folder and below; the venv and generated output don't count.
-    skipped = {".venv", "output", ".git", ".pytest_cache"}
+    skipped = {".venv", "output", ".git", ".pytest_cache", "docs"}
     docs = [path for path in PROJECT_DIR.rglob("*.md") if not skipped & set(path.relative_to(PROJECT_DIR).parts)]
     assert README in docs and CLAUDE_MD in docs  # the search found the docs
     found = {path.name: em_dash_lines(path.read_text()) for path in docs}

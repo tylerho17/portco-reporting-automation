@@ -35,7 +35,7 @@ The script quotes only numbers Python computes, plus the model scores and the co
 
 ## 0:11 to 0:29 The portfolio page (44 words)
 
-**Show:** the table. Run the cursor along the column headers (Latest quarter, Flags tripped, Data gaps), then down **Flags tripped** row by row, then Northwind's **Data gaps** cell ("19 metrics/flags (blank: Q1 2025)").
+**Show:** the table. Run the cursor along the column headers (Latest quarter, Flags tripped, Data gaps), then down **Flags tripped** row by row, then Northwind's **Data gaps** cell ("20 metrics/flags (blank: Q1 2025)").
 
 **Say:**
 > "This is the portfolio page. Three fictional companies, one row each: latest quarter, flags tripped, data gaps. Same code, three stories: Alderpeak trips 0 of 9 flags, Fernhollow 7, Northwind 6. Northwind left a quarter blank, and the tool says so instead of guessing."

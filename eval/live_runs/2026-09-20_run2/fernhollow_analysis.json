@@ -1,70 +1,144 @@
 {
   "summary": {
-    "headline": "Fernhollow tripped 7 of 9 flags: ARR fell to $7,350K, NRR is 77.9% and runway is 6.0 mo.",
-    "diagnosis": "Net new ARR was -$240K in Q2 2026 and ending ARR fell to $7,350K, with NRR (annualized) at 77.9% and GRR (annualized) at 74.7%. Net burn vs budget is 19.6%, leaving runway at current burn of 6.0 mo on ending cash of $3,300K. Pipeline is $2,500K and CAC payback is 134.4 mo, which is consistent with a company losing its installed base faster than a shrinking pipeline can replace it.",
+    "headline": "Runway has fallen to 6.0 mo against its 12.0 mo threshold while NRR sits at 77.9%, signaling a combined liquidity and retention crisis.",
+    "diagnosis": "Runway fell from 35.8 mo to 6.0 mo, below its 12.0 mo threshold, while net burn vs budget rose to 19.6% and net new ARR vs budget fell to -150.0%. NRR fell to 77.9% and GRR to 74.7%, with pipeline down to $2,500K. This pattern is consistent with deteriorating retention and a shrinking pipeline most likely driving the ARR shortfall and accelerating cash burn faster than budget.",
     "risks": [
       {
-        "title": "Cash runs out inside two quarters",
-        "detail": "Runway at current burn is 6.0 mo on ending cash of $3,300K, and 7.6 mo if burn returns to plan."
+        "title": "Cash burn and liquidity crisis",
+        "detail": "Burn multiple is ∞ against 2.00x, runway is 6.0 mo against 12.0 mo, and net burn vs budget is 19.6%."
       },
       {
-        "title": "The base is shrinking, not just growing slower",
-        "detail": "NRR (annualized) is 77.9% and GRR (annualized) 74.7%, both under their 100.0% and 85.0% thresholds, with net new ARR at -$240K."
+        "title": "Retention collapse masked by passed flag",
+        "detail": "NRR fell to 77.9% and GRR to 74.7%, both below threshold; the passed pipeline flag reflects pipeline also falling."
       },
       {
-        "title": "New sales cannot replace the churn",
-        "detail": "CAC payback is 134.4 mo against a 24.0 mo threshold and pipeline fell to $2,500K, so net new ARR vs budget is -150.0%."
+        "title": "Sales efficiency and growth deterioration",
+        "detail": "CAC payback rose to 134.4 mo against 24.0 mo, and net new ARR vs budget fell to -150.0%."
       }
     ],
     "questions": [
       {
         "theme": "Retention decomposition",
-        "question": "How much of the NRR (annualized) fall to 77.9% is GRR (annualized) at 74.7% rather than lost expansion?"
-      },
-      {
-        "theme": "Retention decomposition",
-        "question": "Which accounts make up the churn behind GRR (annualized) at 74.7% this quarter?"
+        "question": "How much of NRR (annualized) at 77.9% reflects gross retention versus expansion, given GRR (annualized) at 74.7%?"
       },
       {
         "theme": "Burn and budget variance",
-        "question": "Which cost lines carry net burn vs budget at 19.6%, against 14.8% in Q3 2025?"
+        "question": "How does net burn vs budget at 19.6% reconcile to the $1,650K net burn reported for Q2 2026?"
       },
       {
         "theme": "Burn and budget variance",
-        "question": "How much of net burn vs budget at 19.6% is committed cost next quarter cannot remove?"
+        "question": "Which cost categories drove net burn's rise from $1,560K to $1,650K in Q2 2026?"
       },
       {
         "theme": "Liquidity and runway",
-        "question": "How far must net burn fall for runway at current burn to clear 12.0 mo?"
+        "question": "How far is runway at current burn's 6.0 mo from its 12.0 mo threshold?"
       },
       {
         "theme": "Liquidity and runway",
-        "question": "Which creditors sit ahead of the 6.0 mo runway at current burn if cash runs out?"
+        "question": "How does runway if burn returns to plan at 7.6 mo reconcile to runway at current burn of 6.0 mo?"
       },
       {
         "theme": "Pipeline and sales efficiency",
-        "question": "Which segments make up the $2,500K pipeline behind CAC payback at 134.4 mo?"
+        "question": "Which segments of pipeline's fall to $2,500K account for the largest share of the decline?"
       },
       {
         "theme": "Pipeline and sales efficiency",
-        "question": "How much of net new ARR vs budget at -150.0% is deals lost rather than delayed?"
+        "question": "How does CAC payback at 134.4 mo reconcile to the net new ARR vs budget variance of -150.0%?"
       },
       {
         "theme": "Definitions and assumptions",
-        "question": "Which missing Q2 2025 inputs leave Rule of 40 against its 40.0% threshold unmeasured?"
+        "question": "Rule of 40 for Q2 2026 is missing; when will this figure be available and who owns producing it?"
+      },
+      {
+        "theme": "Definitions and assumptions",
+        "question": "Which definition does Burn multiple's ∞ value use given net new ARR of $-240K in Q2 2026?"
       }
     ]
   },
   "run_info": {
-    "model": "hand-written stand-in",
+    "model": "claude-sonnet-5",
     "passed": true,
-    "attempts": 0,
-    "input_tokens": 0,
-    "output_tokens": 0,
-    "seconds": 0,
-    "attempt_log": []
+    "attempts": 2,
+    "input_tokens": 15631,
+    "output_tokens": 16241,
+    "seconds": 132.71,
+    "attempt_log": [
+      {
+        "seconds": 120.41,
+        "input_tokens": 7256,
+        "output_tokens": 14786,
+        "stop_reason": "end_turn",
+        "problems": [
+          "question #4 ('What would move runway at current burn from 6.0 mo to its...') asks for an explanation; ask for a decomposition, a reconciliation or a distance to breach",
+          "question #9 ('Which definition does Burn multiple's ∞ value use given n...') must name a metric and quote its value with its unit (97.1%, $2,500K, 11.0 mo)"
+        ],
+        "answer": {
+          "headline": "Runway has fallen to 6.0 mo against its 12.0 mo threshold while NRR sits at 77.9%, signaling a combined liquidity and retention crisis.",
+          "diagnosis": "Runway fell from 35.8 mo to 6.0 mo, below its 12.0 mo threshold, while net burn vs budget rose to 19.6% and net new ARR vs budget fell to -150.0%. NRR fell to 77.9% and GRR to 74.7%, with pipeline down to $2,500K. This pattern is consistent with deteriorating retention and a shrinking pipeline most likely driving the ARR shortfall and accelerating cash burn faster than budget.",
+          "risks": [
+            {
+              "title": "Cash burn and liquidity crisis",
+              "detail": "Burn multiple is ∞ against 2.00x, runway is 6.0 mo against 12.0 mo, and net burn vs budget is 19.6%."
+            },
+            {
+              "title": "Retention collapse masked by passed flag",
+              "detail": "NRR fell to 77.9% and GRR to 74.7%, both below threshold; the passed pipeline flag reflects pipeline also falling."
+            },
+            {
+              "title": "Sales efficiency and growth deterioration",
+              "detail": "CAC payback rose to 134.4 mo against 24.0 mo, and net new ARR vs budget fell to -150.0%."
+            }
+          ],
+          "questions": [
+            {
+              "theme": "Retention decomposition",
+              "question": "How much of NRR (annualized) at 77.9% reflects gross retention versus expansion, given GRR (annualized) at 74.7%?"
+            },
+            {
+              "theme": "Burn and budget variance",
+              "question": "How does net burn vs budget at 19.6% reconcile to the $1,650K net burn reported for Q2 2026?"
+            },
+            {
+              "theme": "Burn and budget variance",
+              "question": "Which cost categories drove net burn's rise from $1,560K to $1,650K in Q2 2026?"
+            },
+            {
+              "theme": "Liquidity and runway",
+              "question": "What would move runway at current burn from 6.0 mo to its 12.0 mo threshold?"
+            },
+            {
+              "theme": "Liquidity and runway",
+              "question": "How does runway if burn returns to plan at 7.6 mo reconcile to runway at current burn of 6.0 mo?"
+            },
+            {
+              "theme": "Pipeline and sales efficiency",
+              "question": "Which segments of pipeline's fall to $2,500K account for the largest share of the decline?"
+            },
+            {
+              "theme": "Pipeline and sales efficiency",
+              "question": "How does CAC payback at 134.4 mo reconcile to the net new ARR vs budget variance of -150.0%?"
+            },
+            {
+              "theme": "Definitions and assumptions",
+              "question": "Rule of 40 for Q2 2026 is missing; when will this figure be available and who owns producing it?"
+            },
+            {
+              "theme": "Definitions and assumptions",
+              "question": "Which definition does Burn multiple's ∞ value use given net new ARR is negative?"
+            }
+          ]
+        }
+      },
+      {
+        "seconds": 12.3,
+        "input_tokens": 8375,
+        "output_tokens": 1455,
+        "stop_reason": "end_turn",
+        "problems": []
+      }
+    ]
   },
-  "prompt_version": "hand-written stand-in",
+  "prompt_version": "v6",
   "error": null,
   "payload": {
     "company": "Fernhollow",
@@ -119,7 +193,7 @@
       },
       {
         "flag": "Rule of 40",
-        "status": "cannot evaluate — missing input",
+        "status": "cannot evaluate: missing input",
         "value": "data missing",
         "threshold": "40.0%"
       },

@@ -12,11 +12,11 @@ import pandas as pd
 import pytest
 
 from clean import STANDARD_COLUMNS
-from metrics import (CANNOT_EVALUATE, COMBO_FLAG_NAME, FLAG_RULES, METRIC_INPUTS, METRIC_LABELS,
+from metrics import (CANNOT_EVALUATE, COMBO_FLAG_NAME, FLAG_RULES, INPUT_LABELS, METRIC_INPUTS, METRIC_LABELS,
                      METRIC_LOOKBACK, MISSING_INPUT, NO_PRIOR_PERIOD, NOT_MEANINGFUL, PASS, TRIP,
                      arr_vs_budget, budget_net_new_arr, burn_multiple, burn_vs_budget,
                      cac_payback_months, check_combo, check_threshold, compute_metrics, data_gaps,
-                     ending_arr, evaluate_flags, fcf_margin, gross_margin, growth, grr, load_config,
+                     display_value, ending_arr, evaluate_flags, fcf_margin, gross_margin, growth, grr, load_config,
                      metric_reasons, net_new_arr, net_new_arr_vs_budget, not_meaningful_text, nrr,
                      print_report, rule_of_40, runway_at_next_budget, runway_months, validate_config)
 
@@ -538,6 +538,62 @@ def test_flag_names_are_the_metric_labels():
     assert set(METRIC_LABELS) == set(compute_metrics(full_actuals()).columns)
 
 
+def test_net_burn_is_shown_next_to_the_other_dollar_rows_under_one_label():
+    # The memo's AI questions quote net burn in dollars, and every number in the memo must be one the metrics
+    # workbook shows, so the workbook shows it. One label set: the label lives in METRIC_LABELS only.
+    labels = list(METRIC_LABELS)
+    assert METRIC_LABELS["net_burn"] == "Net burn ($K)"
+    assert labels[:3] == ["ending_arr", "net_new_arr", "net_burn"]   # with ending ARR and net new ARR
+    assert "net_burn" not in INPUT_LABELS
+    assert set(INPUT_LABELS.values()).isdisjoint(METRIC_LABELS.values())
+
+
+def test_net_burn_is_an_input_not_a_flag():
+    # Shown, never judged: no flag reads it, and its inputs are just itself (no other quarter).
+    assert "net_burn" not in {rule[1] for rule in FLAG_RULES}
+    assert "Net burn ($K)" not in [rule[0] for rule in FLAG_RULES]
+    assert METRIC_INPUTS["net_burn"] == [("net_burn", 0)]
+    assert METRIC_LOOKBACK["net_burn"] == 0
+
+
+def test_net_burn_column_is_the_input_as_it_came():
+    # full_actuals: net burn 900 in every quarter. Nothing is calculated, so nothing can differ from the workbook.
+    actuals = full_actuals()
+    metrics = compute_metrics(actuals)
+    assert list(metrics["net_burn"]) == [900.0] * 8
+    assert display_value(actuals, metrics, metric_reasons(actuals, metrics), "net_burn", "Q2 2026") == "900"
+
+
+def test_a_negative_or_zero_net_burn_is_shown_as_it_is():
+    # Not burning is a real number (cash generative), not a gap and not "not meaningful".
+    actuals = full_actuals()
+    actuals.loc["Q1 2026", "net_burn"] = -250.0
+    actuals.loc["Q2 2026", "net_burn"] = 0.0
+    metrics = compute_metrics(actuals)
+    reasons = metric_reasons(actuals, metrics)
+    assert [display_value(actuals, metrics, reasons, "net_burn", q) for q in ("Q1 2026", "Q2 2026")] == ["-250", "0"]
+    assert reasons.loc[["Q1 2026", "Q2 2026"], "net_burn"].isna().all()   # no reason: there is a number
+
+
+def test_a_blank_net_burn_is_a_data_gap_of_its_own_quarter_only():
+    # A blank input stays blank and is a gap, but net burn has no other quarter in it, so the gap doesn't spread.
+    actuals = full_actuals(blank_cells=[("Q4 2025", "net_burn")])
+    metrics = compute_metrics(actuals)
+    assert math.isnan(metrics.loc["Q4 2025", "net_burn"])
+    assert metric_reasons(actuals, metrics).loc["Q4 2025", "net_burn"] == MISSING_INPUT
+    assert gaps_for(actuals)["net_burn"] == ["Q4 2025"]
+    assert metric_reasons(actuals, metrics).loc["Q1 2026", "net_burn"] is None
+
+
+def test_adding_net_burn_leaves_every_other_metric_where_it_was():
+    # The first values of the two metrics that read net burn, worked out by hand from full_actuals:
+    # burn multiple 900 / net new ARR 1000 = 0.9; FCF margin -900 / revenue 2500 = -0.36.
+    metrics = compute_metrics(full_actuals())
+    assert metrics.loc["Q3 2024", "burn_multiple"] == pytest.approx(0.9)
+    assert metrics.loc["Q3 2024", "fcf_margin"] == pytest.approx(-0.36)
+    assert len(metrics.columns) == 20
+
+
 def test_cac_payback_blank_sm_spend_cannot_evaluate_never_trips():
     # Decision B: blank S&M with no new ARR was infinite payback -> a red flag built on missing data.
     actuals = full_actuals(blank_cells=[("Q2 2026", "sm_spend")])
@@ -577,7 +633,7 @@ def test_not_meaningful_text_for_other_metrics():
 # data_gaps
 # ---------------------------------------------------------------------------
 
-SAME_QUARTER_METRICS = ["ending_arr", "net_new_arr", "nrr", "grr", "gross_margin", "pipeline",
+SAME_QUARTER_METRICS = ["ending_arr", "net_new_arr", "net_burn", "nrr", "grr", "gross_margin", "pipeline",
                         "fcf_margin", "burn_multiple", "burn_vs_budget", "arr_vs_budget",
                         "cac_payback_months", "runway_months"]
 QOQ_METRICS = ["arr_qoq", "revenue_qoq", "pipeline_qoq", "net_new_arr_vs_budget"]

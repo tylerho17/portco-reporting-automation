@@ -1,6 +1,6 @@
 """Build the board memo: output/<company>_board_memo.docx and .pdf, beside the deck (final Task 1).
 
-A 1 to 2 page written update for board members who read rather than present:
+A 1 to 3 page written update for board members who read rather than present:
 1. Title and quarter:          "<Company> board update: Q2 2026", compared with the prior quarter
 2. Headline:                   the AI headline under "AI-drafted from computed metrics - review before use"
    What changed since the last run (Task 10, only when an earlier run is on record): flags that
@@ -10,7 +10,7 @@ A 1 to 2 page written update for board members who read rather than present:
 4. Flags:                      "6 of 9 flags tripped", each tripped flag with its value and threshold,
                                flags that can't be evaluated, and the combo rule
 5. Data gaps:                  every metric and flag with data missing
-6. Questions for management:   the AI's 3 questions
+6. Questions for management:   the AI's 8 to 10 questions, grouped under their themes
 Footer on every page: fictional-data note, source file, run date, commit, model, review status.
 
 The content is built once as a list of "blocks" (heading, text, bullets, table), then written twice:
@@ -50,7 +50,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (KeepTogether, ListFlowable, ListItem, Paragraph, SimpleDocTemplate, Spacer, Table,
                                 TableStyle)
 
-from analyze import build_payload, numbers_in
+from analyze import build_payload, grouped_questions, numbers_in
 from build_deck import (AI_DRAFTED, FICTIONAL_NOTE, NO_AI_MODEL, OUTPUT_DIR, QUESTIONS_HEADING, analysis_details,
                         analysis_path, collect_deck_data, commit_text, flag_count_text, gaps_lines, kpi_header,
                         load_analysis, review_text, threshold_text, value_text)
@@ -103,6 +103,7 @@ TEXT_STYLES = {
     "note": (BODY_SIZE, False, MID_GRAY),
     "headline": (HEADLINE_SIZE, True, NAVY),
     "unavailable": (HEADLINE_SIZE, True, MID_GRAY),
+    "theme": (BODY_SIZE, True, NAVY),   # the theme a group of questions sits under
 }
 
 
@@ -137,7 +138,7 @@ def workbook_numbers(data):
 
 def unlisted_numbers(summary, data):
     """Numbers in the AI headline and questions (the parts the memo shows) that the metrics workbook doesn't show."""
-    used = numbers_in(" ".join([summary.headline] + summary.questions))
+    used = numbers_in(" ".join([summary.headline] + [item.question for item in summary.questions]))
     return sorted(used - workbook_numbers(data))
 
 
@@ -246,12 +247,20 @@ def bullets(items, ai=False):
     return {"kind": "bullets", "items": items, "ai": ai}
 
 
+def question_blocks(summary):
+    """The questions grouped under their themes: a bold theme line, then that theme's questions as bullets."""
+    blocks = []
+    for theme, questions in grouped_questions(summary.questions):
+        blocks += [text(theme, "theme", ai=True), bullets([no_em_dash(q) for q in questions], ai=True)]
+    return blocks
+
+
 def ai_blocks(summary, part):
     """The AI headline or questions under the AI-drafted line, or the 'unavailable' text in their place."""
     if summary is None:
         return [text(MEMO_UNAVAILABLE, "unavailable", ai=True), text(MEMO_UNAVAILABLE_NOTE, "note", ai=True)]
-    body = text(summary.headline, "headline", ai=True) if part == "headline" else bullets(summary.questions, ai=True)
-    return [text(AI_DRAFTED_LINE, "note", ai=True), body]
+    body = ([text(summary.headline, "headline", ai=True)] if part == "headline" else question_blocks(summary))
+    return [text(AI_DRAFTED_LINE, "note", ai=True), *body]
 
 
 def change_blocks(changes, config):

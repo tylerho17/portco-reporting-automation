@@ -6,16 +6,26 @@ Run from the project folder:  pytest
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
-from analyze import (MAX_DETAIL_WORDS, PROMPT_VERSION, SYSTEM_PROMPT, BoardSummary, Point, build_payload,
-                     claim_problems, find_ungrounded_numbers, numbers_in, save_analysis, slide_fit_problems,
+from analyze import (MAX_DETAIL_WORDS, MAX_QUESTIONS, MIN_QUESTIONS, PROMPT_VERSION, SYSTEM_PROMPT, THEMES,
+                     BoardSummary, Point, Question, build_payload, claim_problems, find_ungrounded_numbers,
+                     grouped_questions, nrr_has_moved, numbers_in, save_analysis, slide_fit_problems,
                      validate_summary)
 from build_deck import load_analysis
 from clean import clean_workbook
 from make_data import OUTPUT_PATH as NORTHWIND
 from metrics import load_config
+
+# The approved Northwind answer the golden deck, memo and workbook are rebuilt from. Used here as a
+# valid v5 answer for this company's numbers, rather than typing a ninth copy of one.
+GOLDEN_ANALYSIS = Path(__file__).parent / "golden" / "analysis" / "northwind_analysis.json"
+
+
+def golden_summary():
+    return BoardSummary.model_validate(json.loads(GOLDEN_ANALYSIS.read_text())["summary"])
 
 
 # ---------------------------------------------------------------------------
@@ -40,9 +50,15 @@ def test_numbers_in_reads_signs(text, expected):
 
 
 def summary_saying(text):
-    """A BoardSummary whose only numbers are in `text` (the headline)."""
+    """A BoardSummary whose only numbers are in `text` (the headline) and in the question below.
+
+    The question quotes -12.2%, which PAYLOAD_TEXT holds, so it adds nothing to the ungrounded list.
+    """
     point = Point(title="Title", detail="Detail.")
-    return BoardSummary(headline=text, wins=[point] * 3, risks=[point] * 3, questions=["Why?"] * 3)
+    question = Question(theme="Definitions and assumptions",
+                        question="Which definition gives Rule of 40 at -12.2%?")
+    return BoardSummary(headline=text, diagnosis="Retention is the question.", risks=[point] * 3,
+                        questions=[question] * MIN_QUESTIONS)
 
 
 PAYLOAD_TEXT = '{"Net new ARR vs budget": "-19.0%", "Rule of 40": "-12.2%"}'
@@ -104,9 +120,7 @@ def test_save_analysis_passed_answer_loads_on_the_deck(northwind, tmp_path):
     # analyze.py and main.py save through save_analysis, so build_deck.py can read what either wrote.
     actuals, next_budget = northwind
     payload = build_payload("Northwind", actuals, next_budget, load_config())
-    point = {"title": "Steady base", "detail": "Customers stayed."}
-    answer = BoardSummary.model_validate({"headline": "Retention is the question.", "wins": [point] * 3,
-                                          "risks": [point] * 3, "questions": ["Why?", "Where?", "How?"]})
+    answer = golden_summary()
     path = save_analysis(tmp_path / "sub" / "northwind_analysis.json", payload, answer, {"passed": True})
     saved = json.loads(path.read_text())
     assert saved == {"summary": answer.model_dump(), "run_info": {"passed": True},
@@ -124,7 +138,9 @@ def test_the_analysis_records_which_prompt_wrote_it(northwind, tmp_path):
 
 # The checksum of each prompt wording. A change to SYSTEM_PROMPT without a new PROMPT_VERSION fails
 # here: a version number nobody remembers to bump is worse than no version number at all.
-PROMPT_CHECKSUMS = {"v4": "1500e06a2299c7717b87f248a60a47404b32ebcefcb70eac4e1c83f22a3fa6d2"}
+PROMPT_CHECKSUMS = {"v4": "1500e06a2299c7717b87f248a60a47404b32ebcefcb70eac4e1c83f22a3fa6d2",
+                    "v5": "296456665a4290d042fd07bf35fb25d9730dafc21bb9a9a2f4aebea42858239a",
+                    "v6": "627d7ec91c30778a8c6d65d9344435c36bb460c8456a13360dd9a0c340bf7c23"}
 
 
 def test_the_prompt_version_is_bumped_whenever_the_prompt_changes():
@@ -150,55 +166,294 @@ def test_save_analysis_failure_keeps_the_reason_and_gives_the_placeholder(northw
 # Text that doesn't fit the slides is a validation problem (review finding 1b)
 # ---------------------------------------------------------------------------
 
+SHORT_QUESTION = Question(theme="Definitions and assumptions",
+                          question="Which definition gives Rule of 40 at -12.2%?")
+
+
+# 69 words, no numbers in it, so it passes the word check and adds nothing to the number check.
+PLAIN_DIAGNOSIS = ("Retention is the question this quarter. " + "The installed base shrank while new sales held "
+                   "up, and spend stayed where the plan put it. ") * 3
+
+
 def summary_with(headline="Retention is the main question for the board.", detail="Customers stayed.",
-                 questions=None):
-    """A valid answer with no numbers in it, so only the length and fit checks can fail it."""
+                 questions=None, diagnosis=PLAIN_DIAGNOSIS):
+    """An answer with no numbers of its own, so only the length and fit checks can fail it."""
     point = Point(title="Steady base", detail=detail)
-    return BoardSummary(headline=headline, wins=[point] * 3, risks=[point] * 3,
-                        questions=questions or ["What drives churn?", "Where is pipeline from?", "How is hiring?"])
+    return BoardSummary(headline=headline, diagnosis=diagnosis, risks=[point] * 3,
+                        questions=questions or [SHORT_QUESTION] * MIN_QUESTIONS)
 
 
 LONGEST_ALLOWED_DETAIL = "customers " * MAX_DETAIL_WORDS  # the longest detail the word check lets through
+# No data gaps, so the risks have slide 3's right-hand column to themselves, and no NRR trend, so
+# the divergence test doesn't apply. It grounds the numbers the fixture's question quotes.
+NO_GAPS_PAYLOAD = json.dumps({"Rule of 40": "-12.2%"})
 
 
 def test_a_short_answer_fits_the_slides():
-    assert slide_fit_problems(summary_with()) == []
+    assert slide_fit_problems(summary_with(), NO_GAPS_PAYLOAD) == []
 
 
-def test_details_at_the_word_limit_do_not_fit_slide_4():
+def test_details_at_the_word_limit_do_not_fit_slide_3():
     # The word limit was set in step 3, before the slides existed: 45 words per detail is more than
-    # the Risks column on slide 4 (AI commentary) holds at the 12 pt floor.
-    problems = slide_fit_problems(summary_with(detail=LONGEST_ALLOWED_DETAIL.strip()))
-    assert [p for p in problems if "slide 4 (Risks)" in p]
+    # the risks hold beside the data gaps on slide 3 (Risks and flags) at the 12 pt floor.
+    problems = slide_fit_problems(summary_with(detail=LONGEST_ALLOWED_DETAIL.strip()), NO_GAPS_PAYLOAD)
+    assert [p for p in problems if "slide 3 (Risks)" in p]
 
 
-def test_wins_are_not_measured_because_they_are_not_on_the_deck():
-    # Task 2 dropped wins from the deck; long wins alone must not fail the answer for "not fitting".
-    long_wins = summary_with().model_copy(update={"wins": [Point(title="Steady base",
-                                                                  detail=LONGEST_ALLOWED_DETAIL.strip())] * 3})
-    assert slide_fit_problems(long_wins) == []
+def test_a_companys_data_gaps_count_against_the_risks_on_slide_3():
+    # The risks sit under the data gaps in one column, so what the gaps take is not the risks' to use.
+    # With every metric missing a quarter, the same answer that fits an empty column no longer does.
+    gaps = {"data_gaps": {f"Metric number {number} ($K)": ["Q1 2025"] for number in range(30)}}
+    detail = "Net burn ran over budget while retention slipped and the pipeline kept growing. " * 2
+    assert slide_fit_problems(summary_with(detail=detail), NO_GAPS_PAYLOAD) == []
+    problems = slide_fit_problems(summary_with(detail=detail), json.dumps(gaps))
+    assert any("slide 3 (Risks)" in problem for problem in problems)
 
 
 def test_a_very_long_headline_does_not_fit_slide_4():
-    # A real headline is 25 words at most, so the headline box is roomy: it takes about 60 words to
-    # overflow it. The check is here so a runaway headline can't reach a slide either.
-    problems = slide_fit_problems(summary_with(headline="retention " * 60))
+    # A real headline is 25 words at most, so the headline box holds two lines with room to shrink:
+    # it takes about 60 words to overflow it. The check is here so a runaway headline can't reach a
+    # slide either.
+    problems = slide_fit_problems(summary_with(headline="retention " * 60), NO_GAPS_PAYLOAD)
     assert any("slide 4 (Headline)" in problem for problem in problems)
 
 
+def test_a_very_long_diagnosis_does_not_fit_slide_4():
+    # The word check allows 90 words; this is 200, which the diagnosis box cannot hold at 12 pt.
+    problems = slide_fit_problems(summary_with(diagnosis="retention " * 200), NO_GAPS_PAYLOAD)
+    assert any("slide 4 (Diagnosis)" in problem for problem in problems)
+
+
 def test_long_questions_do_not_fit_slide_4():
-    # The questions share slide 4 with the risks, in the right-hand column. A real question is one
-    # sentence; this one is about 200 words, far past anything Claude writes.
-    question = "What is driving retention across the customer base, and who owns the response? " * 15
-    problems = slide_fit_problems(summary_with(questions=[question] * 3))
-    assert any("slide 4 (Questions)" in problem for problem in problems)
+    # The questions have slide 4's two columns under the diagnosis. A real question is one sentence;
+    # this one is about 200 words, far past anything Claude writes.
+    long_question = Question(theme="Liquidity and runway",
+                             question="Which cost lines carry the runway at 11.0 mo, and who owns each? " * 15)
+    problems = slide_fit_problems(summary_with(questions=[long_question] * MIN_QUESTIONS), NO_GAPS_PAYLOAD)
+    assert any("slide 4 (Questions for management" in problem for problem in problems)
 
 
 def test_text_too_long_for_a_slide_is_a_validation_problem_so_the_retry_handles_it():
     # Before this, an answer this long passed validation and then stopped the deck build, so the
     # company failed with no deck at all (review finding 1).
-    problems = validate_summary(summary_with(detail=LONGEST_ALLOWED_DETAIL.strip()), "{}")
+    problems = validate_summary(summary_with(detail=LONGEST_ALLOWED_DETAIL.strip()), NO_GAPS_PAYLOAD)
     assert problems and all("does not fit" in problem for problem in problems)
+
+
+# ---------------------------------------------------------------------------
+# The v5 shape: a diagnosis, 3 risks, and 8 to 10 questions that do a job
+# ---------------------------------------------------------------------------
+
+# A payload holding one metric trend, so the questions below can quote grounded values. NRR moves
+# from 108.0% to 97.1%, which is what makes the gross versus net divergence test compulsory.
+MOVING_NRR = json.dumps({"trends_by_quarter": {"NRR (annualized)": {"Q1 2026": "108.0%", "Q2 2026": "97.1%"},
+                                               "GRR (annualized)": {"Q1 2026": "92.0%", "Q2 2026": "88.1%"}}})
+FLAT_NRR = json.dumps({"trends_by_quarter": {"NRR (annualized)": {"Q1 2026": "97.1%", "Q2 2026": "97.1%"},
+                                             "GRR (annualized)": {"Q1 2026": "88.1%", "Q2 2026": "88.1%"}}})
+
+DIVERGENCE = Question(theme="Retention decomposition",
+                      question="How much of the NRR (annualized) fall to 97.1% sits in GRR (annualized) at 88.1%?")
+DEFINITION = Question(theme="Definitions and assumptions",
+                      question="Which definition gives GRR (annualized) at 88.1%?")
+
+
+def questions(count=MIN_QUESTIONS, first=DIVERGENCE):
+    """A set that passes every question rule: the divergence test, then padding, then a definition."""
+    padding = Question(theme="Liquidity and runway",
+                       question="Which cost lines hold NRR (annualized) at 97.1% this quarter?")
+    return [first] + [padding] * (count - 2) + [DEFINITION]
+
+
+@pytest.mark.parametrize("words, caught", [(59, True), (60, False), (90, False), (91, True)])
+def test_the_diagnosis_must_be_60_to_90_words(words, caught):
+    summary = summary_with(diagnosis="retention " * words)
+    problems = validate_summary(summary, MOVING_NRR)
+    assert any("diagnosis has" in problem for problem in problems) == caught
+
+
+@pytest.mark.parametrize("count, caught", [(7, True), (8, False), (10, False), (11, True)])
+def test_there_must_be_8_to_10_questions(count, caught):
+    # Literal counts from the brief, not the constants: a test built from MAX_QUESTIONS would move
+    # with a mistake in it.
+    assert (MIN_QUESTIONS, MAX_QUESTIONS) == (8, 10)
+    summary = summary_with(questions=questions(count))
+    problems = validate_summary(summary, MOVING_NRR)
+    assert any("questions must have" in problem for problem in problems) == caught
+
+
+@pytest.mark.parametrize("field", ["headline", "diagnosis", "detail"])
+def test_a_blank_text_field_is_caught(field):
+    problems = validate_summary(summary_with(**{field: "   "}), MOVING_NRR)
+    assert any("empty" in problem for problem in problems)
+
+
+@pytest.mark.parametrize("words, caught", [(30, False), (31, True)])
+def test_the_headline_is_at_most_30_words(words, caught):
+    problems = validate_summary(summary_with(headline="retention " * words), MOVING_NRR)
+    assert any("headline has" in problem for problem in problems) == caught
+
+
+@pytest.mark.parametrize("words, caught", [(22, False), (23, True)])
+def test_a_question_is_at_most_22_words(words, caught):
+    # "How much of NRR (annualized) at 97.1% sits in GRR (annualized)?" is 11 words; pad to size.
+    text = "How much of NRR (annualized) at 97.1% sits in GRR (annualized) " + "again " * (words - 11)
+    long_first = Question(theme="Retention decomposition", question=text.strip() + "?")
+    problems = validate_summary(summary_with(questions=questions(first=long_first)), MOVING_NRR)
+    assert any("words, max is 22" in problem for problem in problems) == caught
+
+
+@pytest.mark.parametrize("detail, caught", [
+    ("customers " * 45, False), ("customers " * 46, True),                # the 45 word cap
+    ("Customers stayed. Spend held.", False), ("Customers stayed. Spend held. Cash fell.", True),  # 2 sentences
+])
+def test_a_risk_detail_is_at_most_45_words_and_2_sentences(detail, caught):
+    problems = validate_summary(summary_with(detail=detail), MOVING_NRR)
+    assert any("risks #1 detail" in problem for problem in problems) == caught
+
+
+def test_a_number_the_data_does_not_hold_fails_validation():
+    # 96.4% is in neither payload trend: the number check must be part of validate_summary itself,
+    # not only a function the tests call directly.
+    problems = validate_summary(summary_with(headline="NRR (annualized) was 96.4% this quarter."), MOVING_NRR)
+    assert any("not in the data" in problem and "96.4" in problem for problem in problems)
+
+
+def test_a_theme_that_is_not_one_of_the_five_is_caught():
+    off_theme = Question(theme="Retention", question="Which accounts hold GRR (annualized) at 88.1%?")
+    problems = validate_summary(summary_with(questions=questions(first=off_theme)), FLAT_NRR)
+    assert any("has the theme 'Retention'" in problem for problem in problems)
+    assert all(theme in SYSTEM_PROMPT for theme in THEMES), "the prompt must spell out the same five themes"
+
+
+@pytest.mark.parametrize("text, caught", [
+    ("Which cost lines carry net burn vs budget at 20.0%?", False),      # a metric and a value
+    ("Which cost lines carry the net burn variance?", True),             # a metric, no value
+    ("Which parts of the plan carry the 20.0% increase?", True),         # a value, no metric
+    ("Which accounts churned in Q2 2026?", True),                        # a quarter is not a value
+])
+def test_every_question_names_a_metric_and_its_value(text, caught):
+    question = Question(theme="Burn and budget variance", question=text)
+    problems = validate_summary(summary_with(questions=questions(first=question)), FLAT_NRR)
+    assert any("name a metric and quote its value" in problem for problem in problems) == caught
+
+
+@pytest.mark.parametrize("text, caught", [
+    ("Which cost lines carry net burn vs budget at 20.0%?", False),                   # decomposition
+    ("How much of net burn vs budget at 20.0% is headcount?", False),                 # decomposition
+    ("How does net burn vs budget at 20.0% reconcile to the 2.35x burn multiple?", False),  # reconciliation
+    ("How far must net burn vs budget fall from 20.0% before the flag clears?", False),     # distance
+    ("What is driving net burn vs budget to 20.0%?", True),                           # an explanation
+    ("Why is net burn vs budget at 20.0%?", True),
+])
+def test_a_question_must_ask_for_a_decomposition_a_reconciliation_or_a_distance(text, caught):
+    question = Question(theme="Burn and budget variance", question=text)
+    problems = validate_summary(summary_with(questions=questions(first=question)), FLAT_NRR)
+    assert any("asks for an explanation" in problem for problem in problems) == caught
+
+
+def test_a_question_asking_for_both_a_cause_and_a_cut_is_allowed():
+    # "Why did it fall, and which cohorts drove it?" still sends management to the data, so it
+    # counts, the same way eval/score_questions.py scores it.
+    both = Question(theme="Burn and budget variance",
+                    question="Why is net burn vs budget at 20.0%, and which cost lines carry it?")
+    problems = validate_summary(summary_with(questions=questions(first=both)), FLAT_NRR)
+    assert not any("asks for an explanation" in problem for problem in problems)
+
+
+def test_one_question_must_interrogate_a_definition_a_restatement_or_a_missing_input():
+    without = questions()[:-1] + [Question(theme="Pipeline and sales efficiency",
+                                           question="Which segments hold NRR (annualized) at 97.1%?")]
+    problems = validate_summary(summary_with(questions=without), FLAT_NRR)
+    assert any("interrogates a definition" in problem for problem in problems)
+    assert not any("interrogates a definition" in problem
+                   for problem in validate_summary(summary_with(questions=questions()), FLAT_NRR))
+
+
+@pytest.mark.parametrize("text", [
+    "NRR (annualized) of 97.1% is below the industry standard of 100.0%.",
+    "Runway of 11.0 mo is short against peers.",
+    "CAC payback of 20.7 mo is above the benchmark.",
+    "Best practice is a burn multiple under 2.00x.",
+    "A burn multiple of 2.35x is typical for this stage.",
+    "NRR (annualized) at 97.1% is under the norm.",
+])
+def test_an_outside_benchmark_or_industry_standard_is_caught_wherever_it_appears(text):
+    # The data holds thresholds from config.yaml and nothing else: the research finds no citable
+    # source for NRR under 100%, runway under 12 months or CAC payback over 24 months as practice, so
+    # the commentary may quote a threshold as a threshold and never as a standard.
+    for summary in (summary_with(headline=text), summary_with(diagnosis=text + " retention " * 60),
+                    summary_with(detail=text)):
+        problems = validate_summary(summary, MOVING_NRR)
+        assert any("outside standard" in problem for problem in problems), text
+
+
+def test_a_threshold_quoted_as_a_threshold_is_not_a_standard():
+    plain = "NRR (annualized) is 97.1% against its 100.0% threshold and GRR (annualized) is 88.1%."
+    assert not any("outside standard" in problem
+                   for problem in validate_summary(summary_with(headline=plain), MOVING_NRR))
+
+
+def test_the_prompt_says_thresholds_are_settings_not_standards():
+    assert "not industry standards" in SYSTEM_PROMPT
+
+
+def test_a_question_about_an_assumption_alone_is_not_a_definition_question():
+    # The brief says a definition, a restatement or a missing input. An assumption is a different
+    # thing to ask about, so it does not stand in for one of those three.
+    assumption = Question(theme="Definitions and assumptions",
+                          question="Which assumption sits behind runway at current burn of 11.0 mo?")
+    problems = validate_summary(summary_with(questions=questions()[:-1] + [assumption]), FLAT_NRR)
+    assert any("interrogates a definition" in problem for problem in problems)
+
+
+@pytest.mark.parametrize("question", [
+    "Which restatement would change GRR (annualized) at 88.1%?",       # a restatement
+    "Which quarters of GRR (annualized) at 88.1% are missing input?",  # a missing input
+    "Which definition gives GRR (annualized) at 88.1%?",               # a definition
+])
+def test_each_of_the_three_things_counts_as_the_definitions_question(question):
+    item = Question(theme="Definitions and assumptions", question=question)
+    problems = validate_summary(summary_with(questions=questions()[:-1] + [item]), FLAT_NRR)
+    assert not any("interrogates a definition" in problem for problem in problems)
+
+
+@pytest.mark.parametrize("first, second, moved", [
+    ("108.0%", "97.1%", True), ("97.1%", "97.0%", True),   # a tenth of a point is a move
+    ("97.1%", "97.1%", False),
+])
+def test_nrr_counts_as_moved_by_any_change_the_payload_can_show(first, second, moved):
+    payload = json.dumps({"trends_by_quarter": {"NRR (annualized)": {"Q1 2026": first, "Q2 2026": second}}})
+    assert nrr_has_moved(payload) == moved
+
+
+def test_when_nrr_has_moved_the_first_retention_question_is_the_gross_versus_net_test():
+    net_only = Question(theme="Retention decomposition",
+                        question="Which accounts make up the NRR (annualized) fall to 97.1%?")
+    problems = validate_summary(summary_with(questions=questions(first=net_only)), MOVING_NRR)
+    assert any("divergence test" in problem for problem in problems)
+    assert validate_summary(summary_with(questions=questions()), MOVING_NRR) == []
+
+
+def test_a_flat_nrr_does_not_demand_the_divergence_test():
+    # Nothing moved, so there is no move to decompose: the set may leave retention out entirely.
+    net_only = Question(theme="Retention decomposition",
+                        question="Which accounts make up the NRR (annualized) at 97.1%?")
+    assert validate_summary(summary_with(questions=questions(first=net_only)), FLAT_NRR) == []
+
+
+def test_a_moved_nrr_with_no_retention_question_at_all_is_caught():
+    no_retention = [Question(theme="Liquidity and runway",
+                             question="Which cost lines hold NRR (annualized) at 97.1%?")] * 7 + [DEFINITION]
+    problems = validate_summary(summary_with(questions=no_retention), MOVING_NRR)
+    assert any("Retention decomposition" in problem for problem in problems)
+
+
+def test_questions_are_grouped_in_theme_order_for_every_output():
+    summary = golden_summary()
+    groups = grouped_questions(summary.questions)
+    assert [theme for theme, _ in groups] == [theme for theme in THEMES if any(
+        item.theme == theme for item in summary.questions)]
+    assert sum(len(items) for _, items in groups) == len(summary.questions)
 
 
 # ---------------------------------------------------------------------------

@@ -80,8 +80,8 @@ person signs it off. We'll do that in a minute."
   'data missing' rather than a made-up number."
 - **Metrics** and **ARR and cash**: "Every quarter, every metric, and the two charts that go on the
   deck. The blank quarter is a visible gap in the chart."
-- **AI commentary:** "This is Claude's part: a headline, three risks and three questions for
-  management. It's written only from the computed numbers, and every number in it is checked against
+- **AI commentary:** "This is Claude's part: a headline, a short diagnosis, three risks and
+  eight to ten questions for management, grouped by theme. It's written only from the computed numbers, and every number in it is checked against
   them before it's allowed on a slide. It's labelled 'review before use' because it's a draft for a
   person to check."
 

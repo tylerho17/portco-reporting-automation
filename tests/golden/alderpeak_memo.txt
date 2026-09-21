@@ -4,7 +4,7 @@
   "Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI workbook; the headline and questions are drafted by AI."  9.5 pt, 64748B
   'Headline'  12 pt, bold, 0B2545, keep with next
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
-  'All 9 flags passed this quarter, but ARR growth YoY declined every quarter from 53.9% to 47.5%, signaling decelerating momentum despite strong scale.'  11 pt, bold, 0B2545
+  'Alderpeak passed all 9 flags: ARR grew to $18,450K, Rule of 40 is 42.7% and runway is 108.0 mo.'  11 pt, bold, 0B2545
   'Key metrics'  12 pt, bold, 0B2545, keep with next
   table, aligned center
   row 1: 'Metric' fill 0B2545 | 'Q2 2026' fill 0B2545 | 'Q1 2026' fill 0B2545 | 'Budget or threshold' fill 0B2545 | 'Status' fill 0B2545
@@ -29,20 +29,31 @@
   'None: every metric and flag has the data it needs'  List Bullet, 9.5 pt, 334155
   'Questions for management'  12 pt, bold, 0B2545, keep with next
   'AI-drafted from computed metrics - review before use'  9.5 pt, 64748B, keep with next
-  'What specific factors are driving the steady deceleration in ARR growth YoY from 53.9% to 47.5% over the past year?'  List Bullet, 9.5 pt, 334155, keep with next
-  'What is causing CAC payback to lengthen gradually from 17.3 mo to 17.7 mo despite continued net new ARR growth?'  List Bullet, 9.5 pt, 334155, keep with next
-  'What levers does management plan to pull to keep Rule of 40 above the 40.0% threshold if growth continues decelerating?'  List Bullet, 9.5 pt, 334155
+  'Retention decomposition'  9.5 pt, bold, 0B2545
+  'How much of NRR (annualized) at 109.8% is expansion rather than GRR (annualized) at 96.0%?'  List Bullet, 9.5 pt, 334155, keep with next
+  'Which cohorts sit behind GRR (annualized) at 96.0% this quarter?'  List Bullet, 9.5 pt, 334155
+  'Burn and budget variance'  9.5 pt, bold, 0B2545
+  'Which cost lines hold net burn vs budget at -9.1% while headcount grows?'  List Bullet, 9.5 pt, 334155, keep with next
+  'How much of the 0.12x burn multiple depends on net burn vs budget staying at -9.1%?'  List Bullet, 9.5 pt, 334155
+  'Liquidity and runway'  9.5 pt, bold, 0B2545
+  'How far must net burn vs budget rise before runway at current burn falls under 12.0 mo?'  List Bullet, 9.5 pt, 334155, keep with next
+  'Which quarters of the 108.0 mo runway assume the planned burn that gives 144.0 mo?'  List Bullet, 9.5 pt, 334155
+  'Pipeline and sales efficiency'  9.5 pt, bold, 0B2545
+  'Which segments make up the $5,350K pipeline behind CAC payback at 17.7 mo?'  List Bullet, 9.5 pt, 334155, keep with next
+  'How much of net new ARR vs budget at 5.8% came from deals pulled forward?'  List Bullet, 9.5 pt, 334155
+  'Definitions and assumptions'  9.5 pt, bold, 0B2545
+  'Which definition gives GRR (annualized) at 96.0%: a per-customer cap or NRR minus expansion?'  List Bullet, 9.5 pt, 334155
 -- Footer --
-  'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
+  'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  Footer, 7 pt, 64748B
 == PDF page 1 ==
-  Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed
+  Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Alderpeak board update: Q2 2026
   Quarterly KPI update for Q2 2026, compared with Q1 2026. Numbers are computed in Python from the company's KPI
   workbook; the headline and questions are drafted by AI.
   Headline
   AI-drafted from computed metrics - review before use
-  All 9 flags passed this quarter, but ARR growth YoY declined every quarter from 53.9% to
-  47.5%, signaling decelerating momentum despite strong scale.
+  Alderpeak passed all 9 flags: ARR grew to $18,450K, Rule of 40 is 42.7% and runway is 108.0
+  mo.
   Key metrics
   Metric
   Q2 2026
@@ -124,14 +135,30 @@
   Data gaps (data missing)
   •
   None: every metric and flag has the data it needs
+== PDF page 2 ==
+  Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed
   Questions for management
   AI-drafted from computed metrics - review before use
+  Retention decomposition
   •
-  What specific factors are driving the steady deceleration in ARR growth YoY from 53.9% to 47.5% over the past
-  year?
+  How much of NRR (annualized) at 109.8% is expansion rather than GRR (annualized) at 96.0%?
   •
-  What is causing CAC payback to lengthen gradually from 17.3 mo to 17.7 mo despite continued net new ARR
-  growth?
+  Which cohorts sit behind GRR (annualized) at 96.0% this quarter?
+  Burn and budget variance
   •
-  What levers does management plan to pull to keep Rule of 40 above the 40.0% threshold if growth continues
-  decelerating?
+  Which cost lines hold net burn vs budget at -9.1% while headcount grows?
+  •
+  How much of the 0.12x burn multiple depends on net burn vs budget staying at -9.1%?
+  Liquidity and runway
+  •
+  How far must net burn vs budget rise before runway at current burn falls under 12.0 mo?
+  •
+  Which quarters of the 108.0 mo runway assume the planned burn that gives 144.0 mo?
+  Pipeline and sales efficiency
+  •
+  Which segments make up the $5,350K pipeline behind CAC payback at 17.7 mo?
+  •
+  How much of net new ARR vs budget at 5.8% came from deals pulled forward?
+  Definitions and assumptions
+  •
+  Which definition gives GRR (annualized) at 96.0%: a per-customer cap or NRR minus expansion?

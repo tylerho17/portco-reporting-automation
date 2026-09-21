@@ -16,14 +16,14 @@
     row 12: 'Rule of 40' 14 pt 334155 fill FFFFFF | '42.7%' 14 pt 334155 fill FFFFFF | '42.7%' 14 pt 334155 fill FFFFFF | 'trips below 40.0%' 14 pt 334155 fill FFFFFF | 'Passed' 14 pt 1A7742 fill EAF6EF
     row 13: 'NRR falling while pipeline rising' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | '-' 14 pt 334155 fill F8FAFC | 'rule on Risks and flags slide' 14 pt 334155 fill F8FAFC | 'Passed' 14 pt 1A7742 fill EAF6EF
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 2 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'ARR and cash, Q3 2024 to Q2 2026'  28 pt bold 0B2545
   [ARR chart] picture at 0.50, 1.30 in, size 5.99 x 5.45 in
   [Cash chart] picture at 6.84, 1.30 in, size 5.99 x 5.45 in
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 3 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'Risks and flags, Q2 2026'  28 pt bold 0B2545
@@ -32,30 +32,42 @@
     '• None'  15 pt 334155
     'Combo rule'  20 pt bold 0B2545
     '• NRR falling while pipeline rising: Passed (trips when NRR falls by at least 1.0 pts and pipeline rises at every step over the last 3 quarters)'  15 pt 334155
-  [Data gaps] text at 6.84, 1.30 in, size 5.99 x 5.45 in
+  [Data gaps and risks] text at 6.84, 1.30 in, size 5.99 x 5.45 in
     'Data gaps (data missing)'  20 pt bold 0B2545
     '• None: every metric and flag has the data it needs'  15 pt 334155
+    'Risks (AI-drafted from computed metrics, review before use)'  15 pt bold 0B2545
+    'Growth slowing as the base grows'  15 pt bold 334155
+    'ARR growth QoQ eased from 12.1% to 9.7% and ARR growth YoY from 53.9% to 47.5%, while Rule of 40 sits at 42.7%.'  15 pt 334155
+    'Rule of 40 closest to its threshold'  15 pt bold 334155
+    'Rule of 40 is 42.7% against a 40.0% threshold, the narrowest margin of any flag that passed this quarter.'  15 pt 334155
+    'Cash cover rests on burn staying low'  15 pt bold 334155
+    'Net burn is $200K and runway at current burn is 108.0 mo; if burn returns to plan it is 144.0 mo.'  15 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B
 == Slide 4 of 4 (layout: Title and Content) ==
   [Title 1] text at 0.50, 0.30 in, size 12.33 x 0.85 in
     'AI commentary, Q2 2026'  28 pt bold 0B2545
-  [AI-drafted line] text at 0.50, 1.30 in, size 12.33 x 0.40 in
+  [AI-drafted line] text at 0.50, 1.30 in, size 12.33 x 0.33 in
     'AI-drafted from computed metrics - review before use'  13 pt 64748B
-  [Headline] text at 0.50, 1.85 in, size 12.33 x 1.05 in
-    'All 9 flags passed this quarter, but ARR growth YoY declined every quarter from 53.9% to 47.5%, signaling decelerating momentum despite strong scale.'  19 pt bold 0B2545
-  [Risks] text at 0.50, 3.05 in, size 5.99 x 3.70 in
-    'Risks'  18 pt bold 0B2545
-    'Decelerating ARR growth'  13 pt bold 334155
-    'ARR growth YoY fell every quarter from 53.9% in Q3 2025 to 47.5% in Q2 2026, and ARR growth QoQ fell every quarter from 12.1% to 9.7%, signaling slowing momentum.'  13 pt 334155
-    'Rule of 40 margin thinning'  13 pt bold 334155
-    'Rule of 40 passed at 42.7% versus a 40.0% threshold, but slipped from a peak of 43.1% in Q4 2025, leaving little cushion if growth keeps decelerating.'  13 pt 334155
-    'CAC payback creeping up'  13 pt bold 334155
-    'CAC payback passed at 17.7 mo (threshold 24.0 mo) but has moved from 17.3 mo in Q3 2024 to 17.7 mo in Q2 2026 without any quarter improving.'  13 pt 334155
-  [Questions] text at 6.84, 3.05 in, size 5.99 x 3.70 in
-    'Questions for management'  18 pt bold 0B2545
-    '1. What specific factors are driving the steady deceleration in ARR growth YoY from 53.9% to 47.5% over the past year?'  13 pt 334155
-    '2. What is causing CAC payback to lengthen gradually from 17.3 mo to 17.7 mo despite continued net new ARR growth?'  13 pt 334155
-    '3. What levers does management plan to pull to keep Rule of 40 above the 40.0% threshold if growth continues decelerating?'  13 pt 334155
+  [Headline] text at 0.50, 1.73 in, size 12.33 x 0.70 in
+    'Alderpeak passed all 9 flags: ARR grew to $18,450K, Rule of 40 is 42.7% and runway is 108.0 mo.'  18 pt bold 0B2545
+  [Diagnosis] text at 0.50, 2.53 in, size 12.33 x 0.83 in
+    'Every one of the 9 flags passed. Ending ARR reached $18,450K with ARR growth YoY at 47.5%, Rule of 40 at 42.7% and a burn multiple of 0.12x. Net burn vs budget is -9.1%, so runway at current burn is 108.0 mo. ARR growth QoQ has eased at every step from 12.1% to 9.7%, which is consistent with a larger base rather than weaker demand, since NRR (annualized) is 109.8% and GRR (annualized) 96.0%.'  12 pt 334155
+  [Questions for management 1] text at 0.50, 3.46 in, size 5.99 x 3.29 in
+    'Retention decomposition'  12 pt bold 0B2545
+    '1. How much of NRR (annualized) at 109.8% is expansion rather than GRR (annualized) at 96.0%?'  12 pt 334155
+    '2. Which cohorts sit behind GRR (annualized) at 96.0% this quarter?'  12 pt 334155
+    'Burn and budget variance'  12 pt bold 0B2545
+    '3. Which cost lines hold net burn vs budget at -9.1% while headcount grows?'  12 pt 334155
+    '4. How much of the 0.12x burn multiple depends on net burn vs budget staying at -9.1%?'  12 pt 334155
+  [Questions for management 2] text at 6.84, 3.46 in, size 5.99 x 3.29 in
+    'Liquidity and runway'  12 pt bold 0B2545
+    '5. How far must net burn vs budget rise before runway at current burn falls under 12.0 mo?'  12 pt 334155
+    '6. Which quarters of the 108.0 mo runway assume the planned burn that gives 144.0 mo?'  12 pt 334155
+    'Pipeline and sales efficiency'  12 pt bold 0B2545
+    '7. Which segments make up the $5,350K pipeline behind CAC payback at 17.7 mo?'  12 pt 334155
+    '8. How much of net new ARR vs budget at 5.8% came from deals pulled forward?'  12 pt 334155
+    'Definitions and assumptions'  12 pt bold 0B2545
+    '9. Which definition gives GRR (annualized) at 96.0%: a per-customer cap or NRR minus expansion?'  12 pt 334155
   [Footer] text at 0.50, 6.95 in, size 10.68 x 0.40 in
-    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | claude-sonnet-5 | AI-drafted | not reviewed'  12 pt 64748B
+    'Fictional data | alderpeak.xlsx | 2026-07-15 | 0000000 | hand-written stand-in | AI-drafted | not reviewed'  12 pt 64748B

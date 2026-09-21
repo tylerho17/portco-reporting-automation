@@ -27,6 +27,7 @@ import main
 import resilience
 from analyze import BoardSummary
 from provenance import file_sha256, manifest_path, read_manifest, save_manifest
+from valid_answer import summary_dict
 
 PROJECT_DIR = Path(__file__).parent.parent
 DATA_DIR = PROJECT_DIR / "data"
@@ -54,11 +55,8 @@ def short_waits(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def summary():
-    """A valid answer with no numbers in it, so the number check has nothing to reject."""
-    point = {"title": "Steady base", "detail": "Customers stayed."}
-    return BoardSummary.model_validate({
-        "headline": "Retention is the main question for the board.", "wins": [point] * 3, "risks": [point] * 3,
-        "questions": ["What drives churn?", "Where is pipeline coming from?", "How is hiring going?"]})
+    """A valid answer whose only numbers are thresholds every company's payload holds (valid_answer.py)."""
+    return BoardSummary.model_validate(summary_dict())
 
 
 def answer(input_tokens=100, output_tokens=50):
