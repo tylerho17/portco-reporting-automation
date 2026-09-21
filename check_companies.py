@@ -33,6 +33,7 @@ ALL_FLAG_NAMES = [rule[0] for rule in FLAG_RULES] + [COMBO_FLAG_NAME]
 # ---------------------------------------------------------------------------
 
 ALDERPEAK_LATEST = {
+    "net_burn": 200,   # an input shown as it came; the memo's questions quote it
     "nrr": 1 + 4 * (580 - 70 - 100) / 16820,
     "grr": 1 - 4 * (70 + 100) / 16820,
     "burn_multiple": 200 / (1220 + 580 - 70 - 100),
@@ -54,6 +55,7 @@ ALDERPEAK_FLAGS = {name: PASS for name in ALL_FLAG_NAMES}
 # ---------------------------------------------------------------------------
 
 FERNHOLLOW_LATEST = {
+    "net_burn": 1650,
     "nrr": 1 + 4 * (60 - 150 - 330) / 7590,
     "grr": 1 - 4 * (150 + 330) / 7590,
     "burn_multiple": math.inf,             # net new ARR = 180 + 60 - 150 - 330 = -240 while burning

@@ -1,186 +1,195 @@
 == Sheet Metrics ==
-  column widths: A 10, B 17, C 18, D 18, E 18, F 14, G 16, H 16, I 20, J 20, K 15, L 21, M 14, N 14, O 15, P 20, Q 23, R 22, S 14, T 24
+  column widths: A 10, B 17, C 18, D 15, E 18, F 18, G 14, H 16, I 16, J 20, K 20, L 15, M 21, N 14, O 14, P 15, Q 20, R 23, S 22, T 14, U 24
   frozen at: B2
   A1  'Quarter'  bold
   B1  'Ending ARR ($K)'  bold
   C1  'Net new ARR ($K)'  bold
-  D1  'NRR (annualized)'  bold
-  E1  'GRR (annualized)'  bold
-  F1  'Gross margin'  bold
-  G1  'ARR growth QoQ'  bold
-  H1  'ARR growth YoY'  bold
-  I1  'Revenue growth QoQ'  bold
-  J1  'Revenue growth YoY'  bold
-  K1  'Pipeline ($K)'  bold
-  L1  'Pipeline growth QoQ'  bold
-  M1  'FCF margin'  bold
-  N1  'Rule of 40'  bold
-  O1  'Burn multiple'  bold
-  P1  'Net burn vs budget'  bold
-  Q1  'Net new ARR vs budget'  bold
-  R1  'Ending ARR vs budget'  bold
-  S1  'CAC payback'  bold
-  T1  'Runway at current burn'  bold
+  D1  'Net burn ($K)'  bold
+  E1  'NRR (annualized)'  bold
+  F1  'GRR (annualized)'  bold
+  G1  'Gross margin'  bold
+  H1  'ARR growth QoQ'  bold
+  I1  'ARR growth YoY'  bold
+  J1  'Revenue growth QoQ'  bold
+  K1  'Revenue growth YoY'  bold
+  L1  'Pipeline ($K)'  bold
+  M1  'Pipeline growth QoQ'  bold
+  N1  'FCF margin'  bold
+  O1  'Rule of 40'  bold
+  P1  'Burn multiple'  bold
+  Q1  'Net burn vs budget'  bold
+  R1  'Net new ARR vs budget'  bold
+  S1  'Ending ARR vs budget'  bold
+  T1  'CAC payback'  bold
+  U1  'Runway at current burn'  bold
   A2  'Q3 2024'
   B2  6490  [#,##0]  right
   C2  490  [#,##0]  right
-  D2  0.98  [0.0%]  fill FFC7CE  text 9C0006  right
-  E2  0.886666666667  [0.0%]  right
-  F2  0.641891891892  [0.0%]  right
-  G2  'n/a (no prior period)'  [0.0%]  right
+  D2  1100  [#,##0]  right
+  E2  0.98  [0.0%]  fill FFC7CE  text 9C0006  right
+  F2  0.886666666667  [0.0%]  right
+  G2  0.641891891892  [0.0%]  right
   H2  'n/a (no prior period)'  [0.0%]  right
   I2  'n/a (no prior period)'  [0.0%]  right
   J2  'n/a (no prior period)'  [0.0%]  right
-  K2  4200  [#,##0]  right
-  L2  'n/a (no prior period)'  [0.0%]  right
-  M2  -0.743243243243  [0.0%]  right
-  N2  'n/a (no prior period)'  [0.0%]  right
-  O2  2.24489795918  [0.00"x"]  fill FFC7CE  text 9C0006  right
-  P2  0  [0.0%]  right
-  Q2  'n/a (no prior period)'  [0.0%]  right
-  R2  0.00154320987654  [0.0%]  right
-  S2  35.951417004  [0.0" mo"]  fill FFC7CE  text 9C0006  right
-  T2  35.8363636364  [0.0" mo"]  right
+  K2  'n/a (no prior period)'  [0.0%]  right
+  L2  4200  [#,##0]  right
+  M2  'n/a (no prior period)'  [0.0%]  right
+  N2  -0.743243243243  [0.0%]  right
+  O2  'n/a (no prior period)'  [0.0%]  right
+  P2  2.24489795918  [0.00"x"]  fill FFC7CE  text 9C0006  right
+  Q2  0  [0.0%]  right
+  R2  'n/a (no prior period)'  [0.0%]  right
+  S2  0.00154320987654  [0.0%]  right
+  T2  35.951417004  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  U2  35.8363636364  [0.0" mo"]  right
   A3  'Q4 2024'
   B3  6920  [#,##0]  right
   C3  430  [#,##0]  right
-  D3  0.956856702619  [0.0%]  fill FFC7CE  text 9C0006  right
-  E3  0.876733436055  [0.0%]  right
-  F3  0.62893081761  [0.0%]  right
-  G3  0.0662557781202  [0.0%]  right
-  H3  'n/a (no prior period)'  [0.0%]  right
-  I3  0.0743243243243  [0.0%]  right
-  J3  'n/a (no prior period)'  [0.0%]  right
-  K3  4100  [#,##0]  right
-  L3  -0.0238095238095  [0.0%]  right
-  M3  -0.74213836478  [0.0%]  right
-  N3  'n/a (no prior period)'  [0.0%]  right
-  O3  2.74418604651  [0.00"x"]  fill FFC7CE  text 9C0006  right
-  P3  0.0535714285714  [0.0%]  right
-  Q3  -0.0851063829787  [0.0%]  right
-  R3  -0.00431654676259  [0.0%]  right
-  S3  38.9232  [0.0" mo"]  fill FFC7CE  text 9C0006  right
-  T3  30.406779661  [0.0" mo"]  right
+  D3  1180  [#,##0]  right
+  E3  0.956856702619  [0.0%]  fill FFC7CE  text 9C0006  right
+  F3  0.876733436055  [0.0%]  right
+  G3  0.62893081761  [0.0%]  right
+  H3  0.0662557781202  [0.0%]  right
+  I3  'n/a (no prior period)'  [0.0%]  right
+  J3  0.0743243243243  [0.0%]  right
+  K3  'n/a (no prior period)'  [0.0%]  right
+  L3  4100  [#,##0]  right
+  M3  -0.0238095238095  [0.0%]  right
+  N3  -0.74213836478  [0.0%]  right
+  O3  'n/a (no prior period)'  [0.0%]  right
+  P3  2.74418604651  [0.00"x"]  fill FFC7CE  text 9C0006  right
+  Q3  0.0535714285714  [0.0%]  right
+  R3  -0.0851063829787  [0.0%]  right
+  S3  -0.00431654676259  [0.0%]  right
+  T3  38.9232  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  U3  30.406779661  [0.0" mo"]  right
   A4  'Q1 2025'
   B4  7270  [#,##0]  right
   C4  350  [#,##0]  right
-  D4  0.936416184971  [0.0%]  fill FFC7CE  text 9C0006  right
-  E4  0.867052023121  [0.0%]  right
-  F4  0.621301775148  [0.0%]  right
-  G4  0.0505780346821  [0.0%]  right
-  H4  'n/a (no prior period)'  [0.0%]  right
-  I4  0.062893081761  [0.0%]  right
-  J4  'n/a (no prior period)'  [0.0%]  right
-  K4  3900  [#,##0]  right
-  L4  -0.0487804878049  [0.0%]  right
-  M4  -0.739644970414  [0.0%]  right
-  N4  'n/a (no prior period)'  [0.0%]  right
-  O4  3.57142857143  [0.00"x"]  fill FFC7CE  text 9C0006  right
-  P4  0.0869565217391  [0.0%]  right
-  Q4  -0.270833333333  [0.0%]  fill FFC7CE  text 9C0006  right
-  R4  -0.021534320323  [0.0%]  right
-  S4  43.6670807453  [0.0" mo"]  fill FFC7CE  text 9C0006  right
-  T4  25.704  [0.0" mo"]  right
+  D4  1250  [#,##0]  right
+  E4  0.936416184971  [0.0%]  fill FFC7CE  text 9C0006  right
+  F4  0.867052023121  [0.0%]  right
+  G4  0.621301775148  [0.0%]  right
+  H4  0.0505780346821  [0.0%]  right
+  I4  'n/a (no prior period)'  [0.0%]  right
+  J4  0.062893081761  [0.0%]  right
+  K4  'n/a (no prior period)'  [0.0%]  right
+  L4  3900  [#,##0]  right
+  M4  -0.0487804878049  [0.0%]  right
+  N4  -0.739644970414  [0.0%]  right
+  O4  'n/a (no prior period)'  [0.0%]  right
+  P4  3.57142857143  [0.00"x"]  fill FFC7CE  text 9C0006  right
+  Q4  0.0869565217391  [0.0%]  right
+  R4  -0.270833333333  [0.0%]  fill FFC7CE  text 9C0006  right
+  S4  -0.021534320323  [0.0%]  right
+  T4  43.6670807453  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  U4  25.704  [0.0" mo"]  right
   A5  'Q2 2025'
   B5  'data missing'  [#,##0]  fill D9D9D9  text 404040  right
   C5  'data missing'  [#,##0]  fill D9D9D9  text 404040  right
-  D5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  D5  'data missing'  [#,##0]  fill D9D9D9  text 404040  right
   E5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
   F5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
   G5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
   H5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
   I5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
   J5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  K5  'data missing'  [#,##0]  fill D9D9D9  text 404040  right
-  L5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  K5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  L5  'data missing'  [#,##0]  fill D9D9D9  text 404040  right
   M5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
   N5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  O5  'data missing'  [0.00"x"]  fill D9D9D9  text 404040  right
-  P5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  O5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  P5  'data missing'  [0.00"x"]  fill D9D9D9  text 404040  right
   Q5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
   R5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  S5  'data missing'  [0.0" mo"]  fill D9D9D9  text 404040  right
+  S5  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
   T5  'data missing'  [0.0" mo"]  fill D9D9D9  text 404040  right
+  U5  'data missing'  [0.0" mo"]  fill D9D9D9  text 404040  right
   A6  'Q3 2025'
   B6  7670  [#,##0]  right
   C6  150  [#,##0]  right
-  D6  0.882978723404  [0.0%]  fill FFC7CE  text 9C0006  right
-  E6  0.835106382979  [0.0%]  fill FFC7CE  text 9C0006  right
-  F6  0.6  [0.0%]  right
-  G6  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  H6  0.181818181818  [0.0%]  right
-  I6  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  J6  0.216216216216  [0.0%]  right
-  K6  3400  [#,##0]  right
-  L6  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  M6  -0.777777777778  [0.0%]  right
-  N6  -0.561561561562  [0.0%]  fill FFC7CE  text 9C0006  right
-  O6  9.33333333333  [0.00"x"]  fill FFC7CE  text 9C0006  right
-  P6  0.147540983607  [0.0%]  right
-  Q6  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  R6  -0.0858164481526  [0.0%]  right
-  S6  58.3783783784  [0.0" mo"]  fill FFC7CE  text 9C0006  right
-  T6  17.1214285714  [0.0" mo"]  right
+  D6  1400  [#,##0]  right
+  E6  0.882978723404  [0.0%]  fill FFC7CE  text 9C0006  right
+  F6  0.835106382979  [0.0%]  fill FFC7CE  text 9C0006  right
+  G6  0.6  [0.0%]  right
+  H6  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  I6  0.181818181818  [0.0%]  right
+  J6  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  K6  0.216216216216  [0.0%]  right
+  L6  3400  [#,##0]  right
+  M6  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  N6  -0.777777777778  [0.0%]  right
+  O6  -0.561561561562  [0.0%]  fill FFC7CE  text 9C0006  right
+  P6  9.33333333333  [0.00"x"]  fill FFC7CE  text 9C0006  right
+  Q6  0.147540983607  [0.0%]  right
+  R6  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  S6  -0.0858164481526  [0.0%]  right
+  T6  58.3783783784  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  U6  17.1214285714  [0.0" mo"]  right
   A7  'Q4 2025'
   B7  7700  [#,##0]  right
   C7  30  [#,##0]  right
-  D7  0.853976531943  [0.0%]  fill FFC7CE  text 9C0006  right
-  E7  0.812255541069  [0.0%]  fill FFC7CE  text 9C0006  right
-  F7  0.590163934426  [0.0%]  right
-  G7  0.00391134289439  [0.0%]  right
-  H7  0.112716763006  [0.0%]  right
-  I7  0.0166666666667  [0.0%]  right
-  J7  0.150943396226  [0.0%]  right
-  K7  3100  [#,##0]  right
-  L7  -0.0882352941176  [0.0%]  right
-  M7  -0.808743169399  [0.0%]  right
-  N7  -0.657799773172  [0.0%]  fill FFC7CE  text 9C0006  right
-  O7  49.3333333333  [0.00"x"]  fill FFC7CE  text 9C0006  right
-  P7  0.174603174603  [0.0%]  fill FFC7CE  text 9C0006  right
-  Q7  -0.9375  [0.0%]  fill FFC7CE  text 9C0006  right
-  R7  -0.13190529876  [0.0%]  right
-  S7  72.1505376344  [0.0" mo"]  fill FFC7CE  text 9C0006  right
-  T7  13.1959459459  [0.0" mo"]  right
+  D7  1480  [#,##0]  right
+  E7  0.853976531943  [0.0%]  fill FFC7CE  text 9C0006  right
+  F7  0.812255541069  [0.0%]  fill FFC7CE  text 9C0006  right
+  G7  0.590163934426  [0.0%]  right
+  H7  0.00391134289439  [0.0%]  right
+  I7  0.112716763006  [0.0%]  right
+  J7  0.0166666666667  [0.0%]  right
+  K7  0.150943396226  [0.0%]  right
+  L7  3100  [#,##0]  right
+  M7  -0.0882352941176  [0.0%]  right
+  N7  -0.808743169399  [0.0%]  right
+  O7  -0.657799773172  [0.0%]  fill FFC7CE  text 9C0006  right
+  P7  49.3333333333  [0.00"x"]  fill FFC7CE  text 9C0006  right
+  Q7  0.174603174603  [0.0%]  fill FFC7CE  text 9C0006  right
+  R7  -0.9375  [0.0%]  fill FFC7CE  text 9C0006  right
+  S7  -0.13190529876  [0.0%]  right
+  T7  72.1505376344  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  U7  13.1959459459  [0.0" mo"]  right
   A8  'Q1 2026'
   B8  7590  [#,##0]  right
   C8  -110  [#,##0]  right
-  D8  0.818181818182  [0.0%]  fill FFC7CE  text 9C0006  right
-  E8  0.781818181818  [0.0%]  fill FFC7CE  text 9C0006  right
-  F8  0.582417582418  [0.0%]  right
-  G8  -0.0142857142857  [0.0%]  right
-  H8  0.0440165061898  [0.0%]  right
-  I8  -0.00546448087432  [0.0%]  right
-  J8  0.0769230769231  [0.0%]  right
-  K8  2800  [#,##0]  right
-  L8  -0.0967741935484  [0.0%]  right
-  M8  -0.857142857143  [0.0%]  right
-  N8  -0.78021978022  [0.0%]  fill FFC7CE  text 9C0006  right
-  O8  '∞ (ARR shrank)'  [0.00"x"]  fill FFC7CE  text 9C0006  right
-  P8  0.181818181818  [0.0%]  fill FFC7CE  text 9C0006  right
-  Q8  -1.22916666667  [0.0%]  fill FFC7CE  text 9C0006  right
-  R8  -0.188235294118  [0.0%]  right
-  S8  96.1509433962  [0.0" mo"]  fill FFC7CE  text 9C0006  right
-  T8  9.51923076923  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  D8  1560  [#,##0]  right
+  E8  0.818181818182  [0.0%]  fill FFC7CE  text 9C0006  right
+  F8  0.781818181818  [0.0%]  fill FFC7CE  text 9C0006  right
+  G8  0.582417582418  [0.0%]  right
+  H8  -0.0142857142857  [0.0%]  right
+  I8  0.0440165061898  [0.0%]  right
+  J8  -0.00546448087432  [0.0%]  right
+  K8  0.0769230769231  [0.0%]  right
+  L8  2800  [#,##0]  right
+  M8  -0.0967741935484  [0.0%]  right
+  N8  -0.857142857143  [0.0%]  right
+  O8  -0.78021978022  [0.0%]  fill FFC7CE  text 9C0006  right
+  P8  '∞ (ARR shrank)'  [0.00"x"]  fill FFC7CE  text 9C0006  right
+  Q8  0.181818181818  [0.0%]  fill FFC7CE  text 9C0006  right
+  R8  -1.22916666667  [0.0%]  fill FFC7CE  text 9C0006  right
+  S8  -0.188235294118  [0.0%]  right
+  T8  96.1509433962  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  U8  9.51923076923  [0.0" mo"]  fill FFC7CE  text 9C0006  right
   A9  'Q2 2026'
   B9  7350  [#,##0]  right
   C9  -240  [#,##0]  right
-  D9  0.778656126482  [0.0%]  fill FFC7CE  text 9C0006  right
-  E9  0.747035573123  [0.0%]  fill FFC7CE  text 9C0006  right
-  F9  0.570621468927  [0.0%]  right
-  G9  -0.0316205533597  [0.0%]  right
-  H9  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  I9  -0.0274725274725  [0.0%]  right
-  J9  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  K9  2500  [#,##0]  right
-  L9  -0.107142857143  [0.0%]  right
-  M9  -0.932203389831  [0.0%]  right
-  N9  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
-  O9  '∞ (ARR shrank)'  [0.00"x"]  fill FFC7CE  text 9C0006  right
-  P9  0.195652173913  [0.0%]  fill FFC7CE  text 9C0006  right
-  Q9  -1.5  [0.0%]  fill FFC7CE  text 9C0006  right
-  R9  -0.252288911495  [0.0%]  right
-  S9  134.356435644  [0.0" mo"]  fill FFC7CE  text 9C0006  right
-  T9  6  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  D9  1650  [#,##0]  right
+  E9  0.778656126482  [0.0%]  fill FFC7CE  text 9C0006  right
+  F9  0.747035573123  [0.0%]  fill FFC7CE  text 9C0006  right
+  G9  0.570621468927  [0.0%]  right
+  H9  -0.0316205533597  [0.0%]  right
+  I9  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  J9  -0.0274725274725  [0.0%]  right
+  K9  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  L9  2500  [#,##0]  right
+  M9  -0.107142857143  [0.0%]  right
+  N9  -0.932203389831  [0.0%]  right
+  O9  'data missing'  [0.0%]  fill D9D9D9  text 404040  right
+  P9  '∞ (ARR shrank)'  [0.00"x"]  fill FFC7CE  text 9C0006  right
+  Q9  0.195652173913  [0.0%]  fill FFC7CE  text 9C0006  right
+  R9  -1.5  [0.0%]  fill FFC7CE  text 9C0006  right
+  S9  -0.252288911495  [0.0%]  right
+  T9  134.356435644  [0.0" mo"]  fill FFC7CE  text 9C0006  right
+  U9  6  [0.0" mo"]  fill FFC7CE  text 9C0006  right
 == Sheet Flags ==
   column widths: A 56, B 10, C 36, D 18, E 42, F 32
   frozen at: B2
@@ -256,39 +265,41 @@
   B2  'Q2 2025'
   A3  'Net new ARR ($K)'
   B3  'Q2 2025'
-  A4  'NRR (annualized)'
+  A4  'Net burn ($K)'
   B4  'Q2 2025'
-  A5  'GRR (annualized)'
+  A5  'NRR (annualized)'
   B5  'Q2 2025'
-  A6  'Gross margin'
+  A6  'GRR (annualized)'
   B6  'Q2 2025'
-  A7  'ARR growth QoQ'
-  B7  'Q2 2025, Q3 2025'
-  A8  'ARR growth YoY'
-  B8  'Q2 2025, Q2 2026'
-  A9  'Revenue growth QoQ'
-  B9  'Q2 2025, Q3 2025'
-  A10  'Revenue growth YoY'
-  B10  'Q2 2025, Q2 2026'
-  A11  'Pipeline ($K)'
-  B11  'Q2 2025'
-  A12  'Pipeline growth QoQ'
-  B12  'Q2 2025, Q3 2025'
-  A13  'FCF margin'
-  B13  'Q2 2025'
-  A14  'Rule of 40'
-  B14  'Q2 2025, Q2 2026'
-  A15  'Burn multiple'
-  B15  'Q2 2025'
-  A16  'Net burn vs budget'
+  A7  'Gross margin'
+  B7  'Q2 2025'
+  A8  'ARR growth QoQ'
+  B8  'Q2 2025, Q3 2025'
+  A9  'ARR growth YoY'
+  B9  'Q2 2025, Q2 2026'
+  A10  'Revenue growth QoQ'
+  B10  'Q2 2025, Q3 2025'
+  A11  'Revenue growth YoY'
+  B11  'Q2 2025, Q2 2026'
+  A12  'Pipeline ($K)'
+  B12  'Q2 2025'
+  A13  'Pipeline growth QoQ'
+  B13  'Q2 2025, Q3 2025'
+  A14  'FCF margin'
+  B14  'Q2 2025'
+  A15  'Rule of 40'
+  B15  'Q2 2025, Q2 2026'
+  A16  'Burn multiple'
   B16  'Q2 2025'
-  A17  'Net new ARR vs budget'
-  B17  'Q2 2025, Q3 2025'
-  A18  'Ending ARR vs budget'
-  B18  'Q2 2025'
-  A19  'CAC payback'
+  A17  'Net burn vs budget'
+  B17  'Q2 2025'
+  A18  'Net new ARR vs budget'
+  B18  'Q2 2025, Q3 2025'
+  A19  'Ending ARR vs budget'
   B19  'Q2 2025'
-  A20  'Runway at current burn'
+  A20  'CAC payback'
   B20  'Q2 2025'
-  A21  'Flag: Rule of 40'
-  B21  'Q2 2026'
+  A21  'Runway at current burn'
+  B21  'Q2 2025'
+  A22  'Flag: Rule of 40'
+  B22  'Q2 2026'

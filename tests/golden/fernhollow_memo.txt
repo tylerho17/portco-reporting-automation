@@ -33,7 +33,7 @@
   'Rule of 40: Cannot evaluate: missing input'  List Bullet, 9.5 pt, 334155, keep with next
   'NRR falling while pipeline rising: Passed (trips when NRR falls at least 1 pt and pipeline rises at every step, over the last 3 quarters)'  List Bullet, 9.5 pt, 334155
   'Data gaps (data missing)'  12 pt, bold, 0B2545, keep with next
-  'Q2 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  List Bullet, 9.5 pt, 334155, keep with next
+  'Q2 2025: Ending ARR ($K), Net new ARR ($K), Net burn ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  List Bullet, 9.5 pt, 334155, keep with next
   'Q2 2025 + Q3 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  List Bullet, 9.5 pt, 334155, keep with next
   'Q2 2025 + Q2 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  List Bullet, 9.5 pt, 334155, keep with next
   'Q2 2026: Flag: Rule of 40'  List Bullet, 9.5 pt, 334155
@@ -160,9 +160,9 @@
   the last 3 quarters)
   Data gaps (data missing)
   •
-  Q2 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline
-  ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current
-  burn
+  Q2 2025: Ending ARR ($K), Net new ARR ($K), Net burn ($K), NRR (annualized), GRR (annualized), Gross
+  margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback,
+  Runway at current burn
   •
   Q2 2025 + Q3 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget
   •

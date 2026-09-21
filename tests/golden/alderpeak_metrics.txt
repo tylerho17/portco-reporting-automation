@@ -1,186 +1,195 @@
 == Sheet Metrics ==
-  column widths: A 10, B 17, C 18, D 18, E 18, F 14, G 16, H 16, I 20, J 20, K 15, L 21, M 14, N 14, O 15, P 20, Q 23, R 22, S 14, T 24
+  column widths: A 10, B 17, C 18, D 15, E 18, F 18, G 14, H 16, I 16, J 20, K 20, L 15, M 21, N 14, O 14, P 15, Q 20, R 23, S 22, T 14, U 24
   frozen at: B2
   A1  'Quarter'  bold
   B1  'Ending ARR ($K)'  bold
   C1  'Net new ARR ($K)'  bold
-  D1  'NRR (annualized)'  bold
-  E1  'GRR (annualized)'  bold
-  F1  'Gross margin'  bold
-  G1  'ARR growth QoQ'  bold
-  H1  'ARR growth YoY'  bold
-  I1  'Revenue growth QoQ'  bold
-  J1  'Revenue growth YoY'  bold
-  K1  'Pipeline ($K)'  bold
-  L1  'Pipeline growth QoQ'  bold
-  M1  'FCF margin'  bold
-  N1  'Rule of 40'  bold
-  O1  'Burn multiple'  bold
-  P1  'Net burn vs budget'  bold
-  Q1  'Net new ARR vs budget'  bold
-  R1  'Ending ARR vs budget'  bold
-  S1  'CAC payback'  bold
-  T1  'Runway at current burn'  bold
+  D1  'Net burn ($K)'  bold
+  E1  'NRR (annualized)'  bold
+  F1  'GRR (annualized)'  bold
+  G1  'Gross margin'  bold
+  H1  'ARR growth QoQ'  bold
+  I1  'ARR growth YoY'  bold
+  J1  'Revenue growth QoQ'  bold
+  K1  'Revenue growth YoY'  bold
+  L1  'Pipeline ($K)'  bold
+  M1  'Pipeline growth QoQ'  bold
+  N1  'FCF margin'  bold
+  O1  'Rule of 40'  bold
+  P1  'Burn multiple'  bold
+  Q1  'Net burn vs budget'  bold
+  R1  'Net new ARR vs budget'  bold
+  S1  'Ending ARR vs budget'  bold
+  T1  'CAC payback'  bold
+  U1  'Runway at current burn'  bold
   A2  'Q3 2024'
   B2  9000  [#,##0]  right
   C2  1000  [#,##0]  right
-  D2  1.1  [0.0%]  right
-  E2  0.95  [0.0%]  right
-  F2  0.781553398058  [0.0%]  right
-  G2  'n/a (no prior period)'  [0.0%]  right
+  D2  700  [#,##0]  right
+  E2  1.1  [0.0%]  right
+  F2  0.95  [0.0%]  right
+  G2  0.781553398058  [0.0%]  right
   H2  'n/a (no prior period)'  [0.0%]  right
   I2  'n/a (no prior period)'  [0.0%]  right
   J2  'n/a (no prior period)'  [0.0%]  right
-  K2  3400  [#,##0]  right
-  L2  'n/a (no prior period)'  [0.0%]  right
-  M2  -0.339805825243  [0.0%]  right
-  N2  'n/a (no prior period)'  [0.0%]  right
-  O2  0.7  [0.00"x"]  right
-  P2  -0.0540540540541  [0.0%]  right
-  Q2  'n/a (no prior period)'  [0.0%]  right
-  R2  0.00558659217877  [0.0%]  right
-  S2  17.2732919255  [0.0" mo"]  right
-  T2  42.6857142857  [0.0" mo"]  right
+  K2  'n/a (no prior period)'  [0.0%]  right
+  L2  3400  [#,##0]  right
+  M2  'n/a (no prior period)'  [0.0%]  right
+  N2  -0.339805825243  [0.0%]  right
+  O2  'n/a (no prior period)'  [0.0%]  right
+  P2  0.7  [0.00"x"]  right
+  Q2  -0.0540540540541  [0.0%]  right
+  R2  'n/a (no prior period)'  [0.0%]  right
+  S2  0.00558659217877  [0.0%]  right
+  T2  17.2732919255  [0.0" mo"]  right
+  U2  42.6857142857  [0.0" mo"]  right
   A3  'Q4 2024'
   B3  10090  [#,##0]  right
   C3  1090  [#,##0]  right
-  D3  1.10222222222  [0.0%]  right
-  E3  0.951111111111  [0.0%]  right
-  F3  0.779220779221  [0.0%]  right
-  G3  0.121111111111  [0.0%]  right
-  H3  'n/a (no prior period)'  [0.0%]  right
-  I3  0.121359223301  [0.0%]  right
-  J3  'n/a (no prior period)'  [0.0%]  right
-  K3  3600  [#,##0]  right
-  L3  0.0588235294118  [0.0%]  right
-  M3  -0.268398268398  [0.0%]  right
-  N3  'n/a (no prior period)'  [0.0%]  right
-  O3  0.56880733945  [0.00"x"]  right
-  P3  -0.0606060606061  [0.0%]  right
-  Q3  0.0582524271845  [0.0%]  right
-  R3  0.0110220440882  [0.0%]  right
-  S3  17.5488372093  [0.0" mo"]  right
-  T3  45.1935483871  [0.0" mo"]  right
+  D3  620  [#,##0]  right
+  E3  1.10222222222  [0.0%]  right
+  F3  0.951111111111  [0.0%]  right
+  G3  0.779220779221  [0.0%]  right
+  H3  0.121111111111  [0.0%]  right
+  I3  'n/a (no prior period)'  [0.0%]  right
+  J3  0.121359223301  [0.0%]  right
+  K3  'n/a (no prior period)'  [0.0%]  right
+  L3  3600  [#,##0]  right
+  M3  0.0588235294118  [0.0%]  right
+  N3  -0.268398268398  [0.0%]  right
+  O3  'n/a (no prior period)'  [0.0%]  right
+  P3  0.56880733945  [0.00"x"]  right
+  Q3  -0.0606060606061  [0.0%]  right
+  R3  0.0582524271845  [0.0%]  right
+  S3  0.0110220440882  [0.0%]  right
+  T3  17.5488372093  [0.0" mo"]  right
+  U3  45.1935483871  [0.0" mo"]  right
   A4  'Q1 2025'
   B4  11250  [#,##0]  right
   C4  1160  [#,##0]  right
-  D4  1.09514370664  [0.0%]  right
-  E4  0.95242814668  [0.0%]  right
-  F4  0.779069767442  [0.0%]  right
-  G4  0.11496531219  [0.0%]  right
-  H4  'n/a (no prior period)'  [0.0%]  right
-  I4  0.116883116883  [0.0%]  right
-  J4  'n/a (no prior period)'  [0.0%]  right
-  K4  3850  [#,##0]  right
-  L4  0.0694444444444  [0.0%]  right
-  M4  -0.209302325581  [0.0%]  right
-  N4  'n/a (no prior period)'  [0.0%]  right
-  O4  0.465517241379  [0.00"x"]  right
-  P4  -0.0689655172414  [0.0%]  right
-  Q4  0.0357142857143  [0.0%]  right
-  R4  0.0135135135135  [0.0%]  right
-  S4  17.5794938352  [0.0" mo"]  right
-  T4  48.8888888889  [0.0" mo"]  right
+  D4  540  [#,##0]  right
+  E4  1.09514370664  [0.0%]  right
+  F4  0.95242814668  [0.0%]  right
+  G4  0.779069767442  [0.0%]  right
+  H4  0.11496531219  [0.0%]  right
+  I4  'n/a (no prior period)'  [0.0%]  right
+  J4  0.116883116883  [0.0%]  right
+  K4  'n/a (no prior period)'  [0.0%]  right
+  L4  3850  [#,##0]  right
+  M4  0.0694444444444  [0.0%]  right
+  N4  -0.209302325581  [0.0%]  right
+  O4  'n/a (no prior period)'  [0.0%]  right
+  P4  0.465517241379  [0.00"x"]  right
+  Q4  -0.0689655172414  [0.0%]  right
+  R4  0.0357142857143  [0.0%]  right
+  S4  0.0135135135135  [0.0%]  right
+  T4  17.5794938352  [0.0" mo"]  right
+  U4  48.8888888889  [0.0" mo"]  right
   A5  'Q2 2025'
   B5  12510  [#,##0]  right
   C5  1260  [#,##0]  right
-  D5  1.09955555556  [0.0%]  right
-  E5  0.953777777778  [0.0%]  right
-  F5  0.780487804878  [0.0%]  right
-  G5  0.112  [0.0%]  right
-  H5  'n/a (no prior period)'  [0.0%]  right
-  I5  0.112403100775  [0.0%]  right
-  J5  'n/a (no prior period)'  [0.0%]  right
-  K5  4100  [#,##0]  right
-  L5  0.0649350649351  [0.0%]  right
-  M5  -0.160278745645  [0.0%]  right
-  N5  'n/a (no prior period)'  [0.0%]  right
-  O5  0.365079365079  [0.00"x"]  right
-  P5  -0.08  [0.0%]  right
-  Q5  0.0327868852459  [0.0%]  right
-  R5  0.0154220779221  [0.0%]  right
-  S5  17.5714285714  [0.0" mo"]  right
-  T5  54.3913043478  [0.0" mo"]  right
+  D5  460  [#,##0]  right
+  E5  1.09955555556  [0.0%]  right
+  F5  0.953777777778  [0.0%]  right
+  G5  0.780487804878  [0.0%]  right
+  H5  0.112  [0.0%]  right
+  I5  'n/a (no prior period)'  [0.0%]  right
+  J5  0.112403100775  [0.0%]  right
+  K5  'n/a (no prior period)'  [0.0%]  right
+  L5  4100  [#,##0]  right
+  M5  0.0649350649351  [0.0%]  right
+  N5  -0.160278745645  [0.0%]  right
+  O5  'n/a (no prior period)'  [0.0%]  right
+  P5  0.365079365079  [0.00"x"]  right
+  Q5  -0.08  [0.0%]  right
+  R5  0.0327868852459  [0.0%]  right
+  S5  0.0154220779221  [0.0%]  right
+  T5  17.5714285714  [0.0" mo"]  right
+  U5  54.3913043478  [0.0" mo"]  right
   A6  'Q3 2025'
   B6  13850  [#,##0]  right
   C6  1340  [#,##0]  right
-  D6  1.09592326139  [0.0%]  right
-  E6  0.955235811351  [0.0%]  right
-  F6  0.779874213836  [0.0%]  right
-  G6  0.107114308553  [0.0%]  right
-  H6  0.538888888889  [0.0%]  right
-  I6  0.108013937282  [0.0%]  right
-  J6  0.543689320388  [0.0%]  right
-  K6  4400  [#,##0]  right
-  L6  0.0731707317073  [0.0%]  right
-  M6  -0.119496855346  [0.0%]  right
-  N6  0.424192465042  [0.0%]  right
-  O6  0.283582089552  [0.00"x"]  right
-  P6  -0.0952380952381  [0.0%]  right
-  Q6  0.0307692307692  [0.0%]  right
-  R6  0.0168869309838  [0.0%]  right
-  S6  17.6063895782  [0.0" mo"]  right
-  T6  62.8421052632  [0.0" mo"]  right
+  D6  380  [#,##0]  right
+  E6  1.09592326139  [0.0%]  right
+  F6  0.955235811351  [0.0%]  right
+  G6  0.779874213836  [0.0%]  right
+  H6  0.107114308553  [0.0%]  right
+  I6  0.538888888889  [0.0%]  right
+  J6  0.108013937282  [0.0%]  right
+  K6  0.543689320388  [0.0%]  right
+  L6  4400  [#,##0]  right
+  M6  0.0731707317073  [0.0%]  right
+  N6  -0.119496855346  [0.0%]  right
+  O6  0.424192465042  [0.0%]  right
+  P6  0.283582089552  [0.00"x"]  right
+  Q6  -0.0952380952381  [0.0%]  right
+  R6  0.0307692307692  [0.0%]  right
+  S6  0.0168869309838  [0.0%]  right
+  T6  17.6063895782  [0.0" mo"]  right
+  U6  62.8421052632  [0.0" mo"]  right
   A7  'Q4 2025'
   B7  15290  [#,##0]  right
   C7  1440  [#,##0]  right
-  D7  1.09819494585  [0.0%]  right
-  E7  0.956678700361  [0.0%]  right
-  F7  0.780626780627  [0.0%]  right
-  G7  0.103971119134  [0.0%]  right
-  H7  0.515361744301  [0.0%]  right
-  I7  0.103773584906  [0.0%]  right
-  J7  0.519480519481  [0.0%]  right
-  K7  4700  [#,##0]  right
-  L7  0.0681818181818  [0.0%]  right
-  M7  -0.0883190883191  [0.0%]  right
-  N7  0.431161431161  [0.0%]  right
-  O7  0.215277777778  [0.00"x"]  right
-  P7  -0.0882352941176  [0.0%]  right
-  Q7  0.0510948905109  [0.0%]  right
-  R7  0.0200133422282  [0.0%]  right
-  S7  17.6082282681  [0.0" mo"]  right
-  T7  74.0322580645  [0.0" mo"]  right
+  D7  310  [#,##0]  right
+  E7  1.09819494585  [0.0%]  right
+  F7  0.956678700361  [0.0%]  right
+  G7  0.780626780627  [0.0%]  right
+  H7  0.103971119134  [0.0%]  right
+  I7  0.515361744301  [0.0%]  right
+  J7  0.103773584906  [0.0%]  right
+  K7  0.519480519481  [0.0%]  right
+  L7  4700  [#,##0]  right
+  M7  0.0681818181818  [0.0%]  right
+  N7  -0.0883190883191  [0.0%]  right
+  O7  0.431161431161  [0.0%]  right
+  P7  0.215277777778  [0.00"x"]  right
+  Q7  -0.0882352941176  [0.0%]  right
+  R7  0.0510948905109  [0.0%]  right
+  S7  0.0200133422282  [0.0%]  right
+  T7  17.6082282681  [0.0" mo"]  right
+  U7  74.0322580645  [0.0" mo"]  right
   A8  'Q1 2026'
   B8  16820  [#,##0]  right
   C8  1530  [#,##0]  right
-  D8  1.09679529104  [0.0%]  right
-  E8  0.960758665795  [0.0%]  right
-  F8  0.779220779221  [0.0%]  right
-  G8  0.100065402224  [0.0%]  right
-  H8  0.495111111111  [0.0%]  right
-  I8  0.0968660968661  [0.0%]  right
-  J8  0.492248062016  [0.0%]  right
-  K8  5000  [#,##0]  right
-  L8  0.063829787234  [0.0%]  right
-  M8  -0.0649350649351  [0.0%]  right
-  N8  0.42731299708  [0.0%]  right
-  O8  0.16339869281  [0.00"x"]  right
-  P8  -0.0740740740741  [0.0%]  right
-  Q8  0.0479452054795  [0.0%]  right
-  R8  0.0224924012158  [0.0%]  right
-  S8  17.6568965517  [0.0" mo"]  right
-  T8  88.8  [0.0" mo"]  right
+  D8  250  [#,##0]  right
+  E8  1.09679529104  [0.0%]  right
+  F8  0.960758665795  [0.0%]  right
+  G8  0.779220779221  [0.0%]  right
+  H8  0.100065402224  [0.0%]  right
+  I8  0.495111111111  [0.0%]  right
+  J8  0.0968660968661  [0.0%]  right
+  K8  0.492248062016  [0.0%]  right
+  L8  5000  [#,##0]  right
+  M8  0.063829787234  [0.0%]  right
+  N8  -0.0649350649351  [0.0%]  right
+  O8  0.42731299708  [0.0%]  right
+  P8  0.16339869281  [0.00"x"]  right
+  Q8  -0.0740740740741  [0.0%]  right
+  R8  0.0479452054795  [0.0%]  right
+  S8  0.0224924012158  [0.0%]  right
+  T8  17.6568965517  [0.0" mo"]  right
+  U8  88.8  [0.0" mo"]  right
   A9  'Q2 2026'
   B9  18450  [#,##0]  right
   C9  1630  [#,##0]  right
-  D9  1.09750297265  [0.0%]  right
-  E9  0.959571938169  [0.0%]  right
-  F9  0.780141843972  [0.0%]  right
-  G9  0.0969084423306  [0.0%]  right
-  H9  0.474820143885  [0.0%]  right
-  I9  0.0987012987013  [0.0%]  right
-  J9  0.473867595819  [0.0%]  right
-  K9  5350  [#,##0]  right
-  L9  0.07  [0.0%]  right
-  M9  -0.0472813238771  [0.0%]  right
-  N9  0.426586271942  [0.0%]  right
-  O9  0.122699386503  [0.00"x"]  right
-  P9  -0.0909090909091  [0.0%]  right
-  Q9  0.0584415584416  [0.0%]  right
-  R9  0.0255697609783  [0.0%]  right
-  S9  17.651266766  [0.0" mo"]  right
-  T9  108  [0.0" mo"]  right
+  D9  200  [#,##0]  right
+  E9  1.09750297265  [0.0%]  right
+  F9  0.959571938169  [0.0%]  right
+  G9  0.780141843972  [0.0%]  right
+  H9  0.0969084423306  [0.0%]  right
+  I9  0.474820143885  [0.0%]  right
+  J9  0.0987012987013  [0.0%]  right
+  K9  0.473867595819  [0.0%]  right
+  L9  5350  [#,##0]  right
+  M9  0.07  [0.0%]  right
+  N9  -0.0472813238771  [0.0%]  right
+  O9  0.426586271942  [0.0%]  right
+  P9  0.122699386503  [0.00"x"]  right
+  Q9  -0.0909090909091  [0.0%]  right
+  R9  0.0584415584416  [0.0%]  right
+  S9  0.0255697609783  [0.0%]  right
+  T9  17.651266766  [0.0" mo"]  right
+  U9  108  [0.0" mo"]  right
 == Sheet Flags ==
   column widths: A 56, B 10, C 36, D 18, E 42, F 32
   frozen at: B2

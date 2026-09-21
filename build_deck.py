@@ -135,12 +135,15 @@ KPI_COLUMN_SHARES = [0.27, 0.14, 0.14, 0.21, 0.24]
 # Rows that aren't flags, shown first: (metric, the "vs budget" metric for its budget column or None).
 CONTEXT_ROWS = [("ending_arr", "arr_vs_budget"), ("arr_yoy", None), ("gross_margin", None)]
 
-# The appendix (--appendix): 19 metric rows and 8 quarter columns only fit at 12 pt with tighter cells
+# The appendix (--appendix): 20 metric rows and 8 quarter columns only fit at 12 pt with tighter cells
 # and short marks in place of the longer reason words; the key under the table spells them out.
+# 21 rows of one 12 pt line take 302 pt of the 342 pt below the title and above the key, so each
+# row's top and bottom margin together may be at most 1.9 pt: 0.01 in each is 1.4 pt (0.015 in, the
+# margin for 19 metric rows, is 2.2 pt and needed 348 pt once net burn made it 20).
 APPENDIX_MAX_QUARTERS = 8         # a longer workbook shows its last 8 (nine columns don't fit at 12 pt)
 APPENDIX_LABEL_SHARE = 0.18       # the metric-name column's share of the width; the quarters split the rest
 APPENDIX_CELL_MARGIN_X = Inches(0.05)
-APPENDIX_CELL_MARGIN_Y = Inches(0.015)
+APPENDIX_CELL_MARGIN_Y = Inches(0.01)
 APPENDIX_KEY_HEIGHT = Inches(0.55)   # two lines at 13 pt
 INFINITY_MARK = "∞"
 # Reason -> what an appendix cell shows. "data missing" fits a quarter column, so it keeps its words.

@@ -27,7 +27,7 @@ is the one thing each tests.
 
 The answer key, per company (worked out by hand from the numbers, never by running metrics.py):
 - true_data, blank_quarter, next_quarter_budget: what clean.py must read back
-- expected_latest: the latest quarter's metrics as hand formulas (NaN = no number): all 19 on
+- expected_latest: the latest quarter's metrics as hand formulas (NaN = no number): all 20 on
   Larkspur's numbers (so every formula is checked), the 8 flag metrics for the others
 - expected_runway_at_budget: runway at next quarter's budgeted burn
 - expected_flags: every flag's status in the latest quarter ("cannot evaluate: <reason>" says why)
@@ -110,6 +110,7 @@ LARKSPUR_NEXT_BUDGET = {"budget_new_arr": 1380, "budget_arr": 24100, "budget_net
 LARKSPUR_LATEST = {
     "ending_arr": 20520 + 1870,
     "net_new_arr": 1870,
+    "net_burn": 150,                       # an input shown as it came: the workbook's Q2 2026 cell
     "gross_margin": 4180 / 5360,
     "arr_qoq": 22390 / 20520 - 1,
     "arr_yoy": 22390 / 15500 - 1,

@@ -21,6 +21,7 @@ LATEST = "Q2 2026"
 
 # Q2 2026 metrics written as the same hand formulas you'd type into Excel.
 EXPECTED_LATEST = {
+    "net_burn": 3900,   # an input shown as it came: the workbook's Q2 2026 cell (the memo's questions quote it)
     "nrr": 1 + 4 * (580 - 260 - 510) / 25810,
     "grr": 1 - 4 * (260 + 510) / 25810,
     "burn_multiple": 3900 / (1850 + 580 - 260 - 510),

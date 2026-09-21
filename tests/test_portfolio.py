@@ -156,7 +156,7 @@ def test_one_row_per_workbook_with_each_companys_story(folders):
     assert list(rows) == ["Alderpeak", "Fernhollow", "Northwind"]
     assert rows["Northwind"]["latest"] == "Q2 2026"
     assert rows["Northwind"]["flags"] == "6 of 9 flags tripped"
-    assert rows["Northwind"]["gaps"] == "19 metrics/flags (blank: Q1 2025)"
+    assert rows["Northwind"]["gaps"] == "20 metrics/flags (blank: Q1 2025)"
     assert rows["Fernhollow"]["flags"] == "7 of 9 flags tripped, 1 cannot evaluate"
     assert rows["Alderpeak"]["flags"] == "0 of 9 flags tripped" and rows["Alderpeak"]["gaps"] == "none"
 

@@ -96,9 +96,9 @@ def test_every_metric_has_a_unit_a_downstream_tool_can_read():
 
 def test_one_metric_row_per_quarter_and_metric_quarter_by_quarter():
     rows = export.metric_rows(company_data("northwind"))
-    assert len(rows) == 8 * 19
+    assert len(rows) == 8 * 20
     assert all(list(row) == export.METRIC_FIELDS for row in rows)
-    assert [row["quarter"] for row in rows[:19]] == ["Q3 2024"] * 19
+    assert [row["quarter"] for row in rows[:20]] == ["Q3 2024"] * 20
     assert rows[0]["metric"] == "ending_arr" and rows[0]["label"] == "Ending ARR ($K)"
     assert {row["company"] for row in rows} == {"Northwind"}
 
@@ -248,7 +248,7 @@ def saved(tmp_path_factory):
 def test_the_metrics_csv_carries_every_workbook_cell(saved, name):
     excel, exports = saved[name]
     assert check_export.metric_problems(exports["metrics_csv"], excel) == []
-    assert len(exports["metrics_csv"]) == len(excel["metrics"]) == 8 * 19
+    assert len(exports["metrics_csv"]) == len(excel["metrics"]) == 8 * 20
 
 
 @pytest.mark.parametrize("name", COMPANIES)

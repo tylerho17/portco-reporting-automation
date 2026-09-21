@@ -223,6 +223,26 @@ def test_an_ai_number_that_is_in_the_payload_but_not_the_metrics_workbook_is_lis
     assert unlisted_numbers(summary, memo_data()) == [1200.0]
 
 
+def test_a_question_quoting_net_burn_in_dollars_passes_the_gate(tmp_path):
+    # Bug found in the night-two queue (check_memo.py on Alderpeak): a v6 question quotes net burn ("200"),
+    # which the metrics workbook didn't show, so the memo dropped the whole AI text. Now the workbook shows it.
+    actuals = three_quarters()
+    actuals["net_burn"] = [1560.0, 1650.0, 1737.0]
+    data = collect_deck_data("Testco", "testco.xlsx", actuals, None, TEST_CONFIG)
+    question = "Which cost lines make up net burn at $1,737K?"
+    assert {1560.0, 1650.0, 1737.0} <= workbook_numbers(data)
+    assert unlisted_numbers(summary_from(summary_dict(question=question)), data) == []
+    payload = build_payload("Testco", actuals, None, TEST_CONFIG)
+    summary, why = memo_analysis(write_analysis(tmp_path, summary_dict(question=question)), payload, data)
+    assert why is None and summary is not None
+
+
+def test_a_blank_net_burn_quarter_shows_data_missing_in_the_memo_data_gaps():
+    # The Data gaps section lists the metrics workbook's gaps, so a blank net burn is named there, not hidden.
+    text = all_text(memo_blocks(memo_data(blank="Q1 2026"), None))
+    assert "Net burn ($K)" in text.split("Data gaps")[1].split("Questions for management")[0]
+
+
 def test_the_gate_rejects_an_ai_number_the_metrics_workbook_does_not_show(tmp_path, payload):
     path = write_analysis(tmp_path, summary_dict(question="Which months of the $1,200K ending cash cover the 12.0 mo runway threshold?"))
     summary, why = memo_analysis(path, payload, memo_data())

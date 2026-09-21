@@ -589,7 +589,7 @@ def test_the_appendix_adds_one_slide_after_the_four(tmp_path):
 def test_the_appendix_has_every_metric_and_every_quarter(tmp_path):
     rows = appendix_rows(appendix(tmp_path))
     assert rows[0] == ["Metric", "Q4 2025", "Q1 2026", "Q2 2026"]
-    assert [row[0] for row in rows[1:]] == list(METRIC_LABELS.values())   # all 19, in metrics.py's order
+    assert [row[0] for row in rows[1:]] == list(METRIC_LABELS.values())   # all 20, in metrics.py's order
 
 
 def test_the_appendix_shows_numbers_in_the_deck_formats(tmp_path):

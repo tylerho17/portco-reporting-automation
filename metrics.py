@@ -44,16 +44,19 @@ REASON_DISPLAY = {
 # Labels: the one set of display names used by every output
 # ---------------------------------------------------------------------------
 
-# Raw inputs shown next to the metrics.
+# Raw inputs Claude sees that no metrics table shows (the cash chart on slide 2 shows ending cash).
 INPUT_LABELS = {
-    "net_burn": "Net burn ($K)",
     "ending_cash": "Ending cash ($K)",
 }
 
 # Metric column -> display name. Flag names are taken from here too, so they always match.
+# "net_burn" is a raw input carried into the table (like "pipeline"), not a computed metric and
+# not a flag: the AI's questions quote it in dollars, and every number in the memo must be one the
+# metrics workbook shows.
 METRIC_LABELS = {
     "ending_arr": "Ending ARR ($K)",
     "net_new_arr": "Net new ARR ($K)",
+    "net_burn": "Net burn ($K)",
     "nrr": "NRR (annualized)",
     "grr": "GRR (annualized)",
     "gross_margin": "Gross margin",
@@ -234,6 +237,7 @@ def back(quarters, *columns):
 METRIC_INPUTS = {
     "ending_arr": now("starting_arr", *ARR_FLOWS),
     "net_new_arr": now(*ARR_FLOWS),
+    "net_burn": now("net_burn"),
     "nrr": now("starting_arr", "expansion_arr", "contraction_arr", "churned_arr"),
     "grr": now("starting_arr", "contraction_arr", "churned_arr"),
     "gross_margin": now("gross_profit", "revenue"),
@@ -312,6 +316,7 @@ def metrics_table(actuals):
     metrics = pd.DataFrame({
         "ending_arr": arr,
         "net_new_arr": net_new_arr(actuals),
+        "net_burn": actuals["net_burn"],  # an input, carried over as it came (no flag reads this column)
         "nrr": nrr(actuals),
         "grr": grr(actuals),
         "gross_margin": gross_margin(actuals),

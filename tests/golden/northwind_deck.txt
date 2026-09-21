@@ -38,7 +38,7 @@
     '• NRR falling while pipeline rising: Tripped (trips when NRR falls by at least 1.0 pts and pipeline rises at every step over the last 3 quarters)'  12 pt 334155
   [Data gaps and risks] text at 6.84, 1.30 in, size 5.99 x 5.45 in
     'Data gaps (data missing)'  17 pt bold 0B2545
-    '• Q1 2025: Ending ARR ($K), Net new ARR ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  12 pt 334155
+    '• Q1 2025: Ending ARR ($K), Net new ARR ($K), Net burn ($K), NRR (annualized), GRR (annualized), Gross margin, Pipeline ($K), FCF margin, Burn multiple, Net burn vs budget, Ending ARR vs budget, CAC payback, Runway at current burn'  12 pt 334155
     '• Q1 2025 + Q2 2025: ARR growth QoQ, Revenue growth QoQ, Pipeline growth QoQ, Net new ARR vs budget'  12 pt 334155
     '• Q1 2025 + Q1 2026: ARR growth YoY, Revenue growth YoY, Rule of 40'  12 pt 334155
     'Risks (AI-drafted from computed metrics, review before use)'  12 pt bold 0B2545
